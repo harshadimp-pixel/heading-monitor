@@ -53,6 +53,39 @@ def decode_sensor_compass(payload: bytes) -> dict:
     return {"instance": inst, "time_ms": tms, "mag_mgauss": [x, y, z]}
 
 
+def decode_calibration_data(payload: bytes) -> dict:
+    """MSP_CALIBRATION_DATA (14), INAV layout (identical in 9.1.0, master @940b928 and
+    maintenance-10.x @fce6c94; fc_msp.c L1574-1603 at fce6c94):
+      u8 accCalibAxisFlags, accZero[3], accGain[3], magZero[3], u16 opflow_scale*256, magGain[3]
+    All axis values are int16 written with sbufWriteU16 -> decoded signed.  27 bytes.
+    Betaflight/ArduPilot layouts are NOT assumed (caller only interprets this for fc_variant INAV).
+    """
+    if len(payload) < 27:
+        raise ValueError(f"MSP_CALIBRATION_DATA payload too short: {len(payload)} < 27")
+    v = struct.unpack_from("<B3h3h3hH3h", payload, 0)
+    return {"acc_calib_axis_flags": v[0], "acc_zero": list(v[1:4]), "acc_gain": list(v[4:7]),
+            "mag_zero": list(v[7:10]), "opflow_scale_x256": v[10], "mag_gain": list(v[11:14])}
+
+
+INAV_NEUTRAL_MAGZERO = (0, 0, 0)
+INAV_NEUTRAL_MAGGAIN = (1024, 1024, 1024)   # settings.yaml maggain_* default; compass.c L389-390 "not calibrated" test
+
+
+def fc_mag_calibration_state(cal: dict | None, fc_variant: str | None):
+    """-> False (confirmed neutral), True (confirmed non-neutral) or 'unknown'.
+
+    False only when the FC is INAV AND magZero == (0,0,0) AND magGain == (1024,1024,1024) were read back.
+    'unknown' when: no reply / error reply / short payload (cal is None), FC is not INAV (layout not
+    verified), or magZero and magGain are all 0 (INAV build without USE_MAG writes zeros).
+    """
+    if cal is None or fc_variant != "INAV":
+        return "unknown"
+    zero, gain = tuple(cal["mag_zero"]), tuple(cal["mag_gain"])
+    if zero == (0, 0, 0) and gain == (0, 0, 0):
+        return "unknown"
+    return not (zero == INAV_NEUTRAL_MAGZERO and gain == INAV_NEUTRAL_MAGGAIN)
+
+
 @dataclass(frozen=True)
 class MagProfile:
     name: str

@@ -11,7 +11,7 @@ Non-blocking caveats: [`BLOCKERS.md`](../BLOCKERS.md) B3, B4.
 
 ## Safety and setup (applies to every item)
 * Bench only. **Remove the propellers**, disconnect the motor battery or keep the FC disarmed, and power it from USB.
-* The bridge sends only read-only MSP requests (`MSP_FC_VARIANT`, `MSP_ATTITUDE`, `MSP_RAW_IMU`). It never writes
+* The bridge sends only read-only MSP requests (`MSP_FC_VARIANT`, `MSP_CALIBRATION_DATA`, `MSP_ATTITUDE`, `MSP_RAW_IMU`). It never writes
   settings, reboots or flashes. Any FC configuration (FC_SETUP.md §2) is done by the owner in INAV Configurator.
 * Expected configuration: INAV on the Matek FC with `mag_hardware = MSP` and `align_mag = CW90`. CAN-L4-3100 TX2
   wired to a spare FC UART RX with MSP enabled. **INAV mag calibration left unset** (`magzero_x/y/z = 0`,
@@ -103,22 +103,36 @@ no declination).
 
 ---
 
-## HV4: Field magnitude and vertical sign (units µT, uncalibrated)
+## HV4: Neutral FC calibration, field magnitude and vertical sign (units µT)
 **Steps**
-1. Confirm in INAV CLI: `get magzero` → all 0 and `get maggain` → all 1024. If not, record the values and STOP (see BLOCKERS B3).
-2. Use the HV3 log (or record 30 s while turning slowly through all orientations).
-3. Compute |B| with the one-liner. Look up the local total field and inclination (NOAA WMM calculator, https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml).
+1. INAV CLI (owner, FC_SETUP.md §2 step 6): `get magzero` → all 0 and `get maggain` → all 1024. If not, either set
+   them neutral as in FC_SETUP.md §2 step 6 (then `save`) or record the values and STOP (see BLOCKERS B3).
+   Do **not** run the FC compass calibration. If the AP_Periph node is reachable (DroneCAN GUI Tool), note its
+   `COMPASS_OFS_X/Y/Z`, `COMPASS_DIA_X/Y/Z`, `COMPASS_ODI_X/Y/Z`, `COMPASS_SCALE` (neutral = 0 / 1 / 0 / 0).
+2. Close the CLI/Configurator, then check what the bridge reads back (read-only `MSP_CALIBRATION_DATA`):
+   ```
+   python -m firmware_bridge --port PORT --baud 115200 --count 5 --capture reports/hardware_logs/DATE_hv4_cal.capture.jsonl --out reports/hardware_logs/DATE_hv4_cal.jsonl
+   python -c "import json,sys;m=json.loads(open(sys.argv[1]).readline())['meta'];print(m['fc_mag_calibrated'],m.get('fc_mag_cal'),m['mag_quant_uT'])" reports/hardware_logs/DATE_hv4_cal.jsonl
+   ```
+3. Use the HV3 log (or record 30 s while turning slowly through all orientations).
+4. Compute |B| with the one-liner. Look up the local total field and inclination (NOAA WMM calculator, https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml).
 
-**Expected:** |B| is between 25 and 65 µT and within about ±20% of the local WMM total field (uncalibrated, hard-iron included).
-In the northern hemisphere, level, `mag_uT[2] > 0` (field points down).
+**Expected:** step 2 prints `False {'source': 'MSP_CALIBRATION_DATA', 'mag_zero': [0, 0, 0], 'mag_gain': [1024, 1024, 1024]} 0.1`
+(stderr also shows `fc_mag_calibrated=False`). |B| is between 25 and 65 µT and within about ±20% of the local WMM
+total field (uncalibrated, hard-iron included). In the northern hemisphere, level, `mag_uT[2] > 0` (field points down).
 
-**Pass:** |B| within the range above in ≥ 90% of samples and z sign as expected.
-**Fail:** |B| about 1000 (INAV calibration active, B3), about 10× too small or large (units not mGauss), or z sign reversed.
+**Pass:** step 2 shows `False` with the values matching the CLI read-back, |B| within the range above in ≥ 90% of
+samples, and the z sign as expected.
+**Fail:** `True` while the CLI shows neutral values (decoder/layout wrong, report to PM), `"unknown"` on INAV (message
+14 not answered), |B| about 1000 (INAV calibration active, B3), about 10× too small or large (units not mGauss), or
+z sign reversed.
 
 | Item | Value |
 |---|---|
+| CLI magzero / maggain read back | |
+| Bridge `fc_mag_calibrated` / `fc_mag_cal` / `mag_quant_uT` | |
+| AP_Periph node COMPASS_OFS / DIA / ODI / SCALE (if checked) | |
 | Local WMM total field (µT) / inclination | |
-| magzero / maggain read back | |
 | Measured median |B| (µT) | |
 | z sign (level) | |
 | Result (PASS/FAIL) | |

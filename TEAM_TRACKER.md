@@ -34,6 +34,7 @@ Status: TODO / IN-PROGRESS / BLOCKED / REVIEW / DONE
 - F6 UNCERTAIN: CAN-L4-3100 serial1 baud default, INAV `serial` CLI index/field order, USB VCP = serial port 0 on every Matek target.
 - F7 INAV native SPI RM3100 driver keeps raw24>>8 (3.41 uT/LSB, INAV #10746 closed / #10812 open); not our module but documented (profile inav-rm3100-spi).
 - F8 Betaflight: no RM3100 driver; scaling unknown (profile needs explicit factors).
+- F9 meta.fc_mag_calibrated covers the FC only (INAV via read-only MSP_CALIBRATION_DATA 14); AP_Periph node calibration and ArduPilot calibration not readable (unknown); refresh every 10 s; message-14 layout verified for INAV only.
 
 ## Limitations — T6 Testing
 - All T6 targets and results are [SIMULATED]; no hardware logs, so no [HARDWARE-VERIFIED] sign-off possible.
@@ -73,3 +74,4 @@ Status: TODO / IN-PROGRESS / BLOCKED / REVIEW / DONE
 - 2026-11-27 FW: T4 -> REVIEW (firmware_bridge + FC_SETUP.md; confirms S3/S4: MSP mag mG, accel converted to specific force FRD level (0,0,-1) g, pending hardware).
 - 2026-11-27 UI: T5 -> REVIEW (app/ backend+UI, 40 tests pass, LIMITATIONS U0-U10 in app/README.md; heading-only per PM).
 - 2026-11-27 FW: T4 follow-up: reports/HARDWARE_VALIDATION_CHECKLIST.md (HV1-HV8, NOT RUN), BLOCKERS B3 (maggain) + B4 (INAV 10 RC) non-blocking; MAVLink (pymavlink optional) deferred until Auditor T4 defects are closed.
+- 2026-11-27 FW: T4 bridge adds meta.mag_quant_uT (MSP 0.1) and meta.fc_mag_calibrated (false/true/unknown via read-only MSP_CALIBRATION_DATA); FC_SETUP neutral-calibration step (INAV + ArduPilot/AP_Periph); HV4 extended; F9 added; replay now skips schema-invalid Sample lines (T6 M3).

@@ -15,8 +15,9 @@ from datetime import datetime, timezone
 from typing import Iterator
 
 from . import msp
-from .sample import SampleBuilder
-from .scaling import FC_VARIANT_DEFAULT_PROFILE, decode_attitude, decode_raw_imu, decode_sensor_compass
+from .sample import SampleBuilder, validate_sample
+from .scaling import (FC_VARIANT_DEFAULT_PROFILE, decode_attitude, decode_calibration_data, decode_raw_imu,
+                      decode_sensor_compass)
 
 
 class BridgeError(RuntimeError):
@@ -75,15 +76,17 @@ class CaptureWriter:
 
 
 # Read-only MSP requests this bridge is allowed to send. Anything else is refused.
+# MSP_CALIBRATION_DATA (14) is an "out" (read) message in INAV mspFcProcessOutCommand; the write
+# counterpart MSP_SET_CALIBRATION_DATA (15) and MSP_MAG_CALIBRATION (206) are deliberately NOT allowed.
 ALLOWED_REQUESTS = frozenset({msp.MSP_API_VERSION, msp.MSP_FC_VARIANT, msp.MSP_FC_VERSION,
-                              msp.MSP_RAW_IMU, msp.MSP_ATTITUDE})
+                              msp.MSP_RAW_IMU, msp.MSP_ATTITUDE, msp.MSP_CALIBRATION_DATA})
 
 
 class Poller:
     def __init__(self, transport, builder_kwargs: dict, msp_version: int = 1, rate_hz: float = 20.0,
                  response_timeout: float = 0.25, capture: CaptureWriter | None = None,
                  passive: bool = False, auto_profile: bool = False, clock=time.monotonic,
-                 sleep=time.sleep):
+                 sleep=time.sleep, cal_refresh_s: float = 10.0):
         self.tr = transport
         self.version = msp_version
         self.period = 1.0 / rate_hz if rate_hz > 0 else 0.0
@@ -98,6 +101,8 @@ class Poller:
         self.builder = SampleBuilder(source=transport.kind, msp_version=msp_version, **self.builder_kwargs)
         self.attitude: dict | None = None
         self.raw_imu_errors = 0
+        self.cal_refresh_s = cal_refresh_s
+        self._last_cal_req: float | None = None
 
     def now(self) -> float:
         return self.clock() - self.t0
@@ -135,6 +140,7 @@ class Poller:
                     self.builder = SampleBuilder(source=self.tr.kind, msp_version=self.version,
                                                  **self.builder_kwargs)
                     self.builder.fc_variant = v
+                self.request_calibration()
                 if v == "ARDU":
                     _log("WARNING: ArduPilot's AP_MSP does not implement MSP_RAW_IMU; no mag over MSP. "
                          "Use MAVLink (see docs/firmware/FC_SETUP.md).")
@@ -142,6 +148,15 @@ class Poller:
         _log("no MSP_FC_VARIANT reply (continuing)")
         return None
 
+    def request_calibration(self) -> None:
+        """Read-only MSP_CALIBRATION_DATA for meta.fc_mag_calibrated (INAV only)."""
+        if self.builder.fc_variant != "INAV":
+            return
+        self._last_cal_req = self.clock()
+        self.send(msp.MSP_CALIBRATION_DATA)
+        frames = self._pump({msp.MSP_CALIBRATION_DATA}, self.clock() + max(self.timeout, 0.5))
+        self.frames_to_samples(frames, self.now())
+        _log(f"FC mag calibration: fc_mag_calibrated={self.builder.fc_mag_calibrated!r}")
     def frames_to_samples(self, frames, t: float) -> list[dict]:
         return frames_to_samples(frames, t, self.builder, self)
 
@@ -156,6 +171,10 @@ class Poller:
             if self.passive:
                 frames = self._pump(set(), cycle_start + max(self.period, 0.01))
             else:
+                if (self.builder.fc_variant == "INAV" and self._last_cal_req is not None
+                        and cycle_start - self._last_cal_req >= self.cal_refresh_s):
+                    self._last_cal_req = cycle_start
+                    self.send(msp.MSP_CALIBRATION_DATA)   # reply handled in frames_to_samples
                 self.send(msp.MSP_ATTITUDE)
                 self.send(msp.MSP_RAW_IMU)
                 frames = self._pump({msp.MSP_ATTITUDE, msp.MSP_RAW_IMU}, cycle_start + self.timeout)
@@ -186,9 +205,17 @@ def frames_to_samples(frames, t: float, builder: SampleBuilder, state) -> list[d
                 out.append(builder.from_raw_imu(t, raw, state.attitude))
             elif f.cmd == msp.MSP_RAW_IMU and f.is_error:
                 state.raw_imu_errors += 1
+            elif f.cmd == msp.MSP_CALIBRATION_DATA and f.direction == ">":
+                builder.set_fc_calibration(decode_calibration_data(f.payload))
+            elif f.cmd == msp.MSP_CALIBRATION_DATA and f.is_error:
+                builder.set_fc_calibration(None)
+            elif f.cmd == msp.MSP_FC_VARIANT and f.direction == ">" and len(f.payload) >= 4:
+                builder.fc_variant = f.payload[:4].decode("ascii", "replace")
             elif f.cmd == msp.MSP2_SENSOR_COMPASS and not f.is_error:
                 out.append(builder.from_sensor_compass(t, decode_sensor_compass(f.payload), state.attitude))
         except ValueError as e:  # short payload etc. - skip frame, keep going
+            if f.cmd == msp.MSP_CALIBRATION_DATA:
+                builder.set_fc_calibration(None)   # unreadable -> 'unknown'
             _log(f"skipping frame cmd={f.cmd}: {e}")
     return out
 
@@ -257,6 +284,10 @@ def _replay_jsonl(path, builder_kwargs, realtime, sleep):
                 meta["replayed_from"] = path
                 s["meta"] = meta
                 s["source"] = "replay"
+                errs = validate_sample(s)
+                if errs:  # never forward contract-violating samples (T6 M3)
+                    _log(f"{path}:{lineno}: invalid Sample skipped: {'; '.join(errs)}")
+                    continue
                 t0 = s["t"] if t0 is None else t0
                 _pace(realtime, sleep, s["t"], wall0, t0)
                 yield s

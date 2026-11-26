@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from numbers import Real
 
-from .scaling import MAG_PROFILES, PITCH_SIGN_BY_VARIANT, UT_PER_MGAUSS, MagProfile, to_body_frd
+from .scaling import MAG_PROFILES, fc_mag_calibration_state, PITCH_SIGN_BY_VARIANT, UT_PER_MGAUSS, MagProfile, to_body_frd
 
 SOURCES = ("sim", "replay", "hardware")
 
@@ -26,7 +26,17 @@ class SampleBuilder:
         self.msp_version = msp_version
         self.fc_variant: str | None = None
         self.body_frame = body_frame or self.profile.body_frame
+        self.fc_cal: dict | None = None          # last decoded MSP_CALIBRATION_DATA
+        self.fc_cal_source: str | None = None
         to_body_frd([0, 0, 0], self.body_frame)  # validate
+
+    def set_fc_calibration(self, cal: dict | None, source: str = "MSP_CALIBRATION_DATA") -> None:
+        self.fc_cal = cal
+        self.fc_cal_source = source if cal is not None else None
+
+    @property
+    def fc_mag_calibrated(self):
+        return fc_mag_calibration_state(self.fc_cal, self.fc_variant)
 
     def attitude_aero(self, att: dict) -> dict:
         """MSP_ATTITUDE (as decoded) -> aerospace convention (pitch + nose up)."""
@@ -39,8 +49,15 @@ class SampleBuilder:
             "mag_profile": self.profile.name,
             "body_frame_in": self.body_frame,
             "mag_ut_per_lsb": self.mag_scale,
+            # ARCHITECTURE.md 2026-11-27 "Quantised sources": step of the mag value as delivered (uT)
+            "mag_quant_uT": self.mag_scale,
+            # ARCHITECTURE.md 2026-11-27 "Single-calibration rule": True / False / "unknown"
+            "fc_mag_calibrated": self.fc_mag_calibrated,
             "scaling_uncertain": list(self.profile.uncertain),
         }
+        if self.fc_cal is not None:
+            m["fc_mag_cal"] = {"source": self.fc_cal_source, "mag_zero": self.fc_cal["mag_zero"],
+                               "mag_gain": self.fc_cal["mag_gain"]}
         if self.msp_version is not None:
             m["msp_version"] = self.msp_version
         if self.fc_variant:
@@ -73,6 +90,7 @@ class SampleBuilder:
         m = self._meta(msg="MSP2_SENSOR_COMPASS", msp_sensor_compass=msg, **meta)
         m["body_frame_in"] = "frd"  # message is defined front/right/down (msp_sensors.h)
         m["mag_ut_per_lsb"] = UT_PER_MGAUSS  # message is defined in mGauss regardless of profile
+        m["mag_quant_uT"] = UT_PER_MGAUSS
         m["scaling_uncertain"] = ["AP_Periph field includes node-side orientation/offsets; not hardware-checked."]
         s["meta"] = m
         return s

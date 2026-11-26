@@ -31,7 +31,7 @@ The `source` value comes from the transport **class**, never from a flag or from
 replayed Sample JSONL keeps the label it was recorded with in `meta.original_source`.
 
 ## Safety
-Live mode only sends read-only requests: `MSP_FC_VARIANT`, `MSP_ATTITUDE` and `MSP_RAW_IMU`. Any other command
+Live mode only sends read-only requests: `MSP_FC_VARIANT`, `MSP_CALIBRATION_DATA` (INAV only, at start and every 10 s), `MSP_ATTITUDE` and `MSP_RAW_IMU`. Any other command
 raises an error before anything is written (`bridge.ALLOWED_REQUESTS`). There is no `MSP_SET_*`, no reboot and
 no flashing.
 
@@ -42,6 +42,9 @@ no flashing.
   from north.
 * `meta` holds `msp_raw_imu` and `msp_attitude` (the untouched integers), `mag_profile`, `mag_ut_per_lsb`,
   `body_frame_in`, `scaling_uncertain`, `msp_version` and `fc_variant`.
+* `meta.mag_quant_uT`: the mag step in µT (0.1 on the MSP path). `meta.fc_mag_calibrated`: `false` only when INAV's
+  `magzero`=0 and `maggain`=1024 were read back via `MSP_CALIBRATION_DATA`, `true` if they differ, else `"unknown"`
+  (read values in `meta.fc_mag_cal`). See FC_SETUP.md §2 step 6 and §6.4.
 * `mag_raw` and `rm3100_cycle_count` are never set, because MSP does not carry RM3100 counts.
 
 ## Replay input formats (auto-detected)

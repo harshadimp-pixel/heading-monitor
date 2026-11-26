@@ -79,12 +79,37 @@ CAN-L4-3100 `5V` → FC 4.0–5.3 V, `G` → GND, `TX2` → a **spare FC UART RX
    `settings.yaml`). INAV 10 also has an auto-orientation step after calibration (`compass.c` L540-552).
 5. **Check it is detected.** In the CLI run `status`. The mag should be listed. In the Configurator Sensors tab the mag
    should update at ≥4 Hz; INAV drops the MSP mag after 250 ms without data (`compass_msp.c` L46, L82).
-6. **Calibration: important for the bridge.** INAV mag calibration (Configurator "Calibrate Magnetometer", 30 s
-   default `mag_calibration_time`) rewrites `magzero_*` and `maggain_*`. After that, `MSP_RAW_IMU` mag is
-   `(raw − zero)·1024/gain`, which is dimensionless and normalised to about 1024 per axis peak (`compass.c` L560).
-   **For µT output, keep `magzero_x/y/z = 0` and `maggain_x/y/z = 1024`** (the uncalibrated defaults), and let
-   `heading_core` calibrate. If the craft must fly with INAV's calibration, record those 6 values: the bridge
-   cannot undo the normalisation yet (LIMITATIONS).
+6. **Keep the FC mag calibration neutral (single-calibration rule, ARCHITECTURE.md 2026-11-27).** The app's
+   ellipsoid fit (`heading_core`) must be the only calibration. INAV mag calibration (Configurator "Calibrate
+   Magnetometer", stick command or `MSP_MAG_CALIBRATION`; 30 s default `mag_calibration_time`) rewrites
+   `magzero_*` and `maggain_*`. After that, `MSP_RAW_IMU` mag is `(raw − zero)·1024/gain`, which is
+   dimensionless and normalised to about 1024 per axis peak (`compass.c` L560). So:
+   ```
+   set magzero_x = 0
+   set magzero_y = 0
+   set magzero_z = 0
+   set maggain_x = 1024
+   set maggain_y = 1024
+   set maggain_z = 1024
+   save
+   ```
+   These are the defaults (`fc/settings.yaml`: `magzero_*` default 0, `maggain_*` default 1024; INAV itself treats
+   exactly this combination as "not calibrated", `compass.c` L389-390 at `master`). **Do not run the FC compass
+   calibration** afterwards. Check with `get magzero` / `get maggain`. INAV will report the compass as
+   uncalibrated (`COMPASS_CALIBRATED` state off), which is expected for this bench/monitoring setup; a craft that must
+   *navigate* with INAV needs INAV's own calibration and is outside the single-calibration rule (BLOCKERS B3).
+   The AP_Periph node also has calibration parameters (see Path B, step 2a); keep those neutral too, because
+   `MSP2_SENSOR_COMPASS` carries the node's corrected field.
+   **How the bridge reports it:** at start-up (after `MSP_FC_VARIANT` = `INAV`) and then every 10 s it sends the
+   read-only `MSP_CALIBRATION_DATA` (14). INAV answers it from `mspFcProcessOutCommand` (`fc_msp.c` L1574-1603 at
+   `fce6c94`; same layout at tag `9.1.0` and `master`): `u8 accCalibAxisFlags, accZero[3], accGain[3], magZero[3],
+   u16 opflow_scale·256, magGain[3]` (27 bytes, int16 LE). `meta.fc_mag_calibrated` is then:
+   `false` if magZero = (0,0,0) **and** magGain = (1024,1024,1024); `true` if they differ; `"unknown"` if there is no
+   reply, an error frame, a short payload, a non-INAV FC (layout not verified for Betaflight; ArduPilot's AP_MSP does
+   not implement message 14), or all-zero zero+gain (INAV build without `USE_MAG`). The read values are in
+   `meta.fc_mag_cal`. The bridge never sends `MSP_SET_CALIBRATION_DATA` (15), `MSP_MAG_CALIBRATION` (206),
+   `MSP_EEPROM_WRITE` (250) or `MSP2_COMMON_SET_SETTING` (0x1004); see `bridge.ALLOWED_REQUESTS`.
+   It cannot see the AP_Periph node's own calibration, so `false` means "FC neutral" only.
 7. **MSP over USB.** Nothing to do. INAV sets serial port config index 0 to `FUNCTION_MSP` by default
    (`io/serial.c` L123), and on Matek USB targets that is the USB VCP. Baud is ignored on VCP. Then run:
    `python -m firmware_bridge --port /dev/ttyACM0 --baud 115200` (Windows: `--port COM5`).
@@ -102,8 +127,19 @@ CAN-L4-3100 `5V` → FC 4.0–5.3 V, `G` → GND, `TX2` → a **spare FC UART RX
    COMPASS_AUTODEC = 1      # Matek page
    ```
    Reboot. The node's own orientation is fixed in its hwdef (`ROTATION_PITCH_180`). Set the FC-side
-   `COMPASS_ORIENT` (`AP_Compass.cpp` L182-187) for the mounting, or use the onboard compass calibration with
-   auto-rotation.
+   `COMPASS_ORIENT` (`AP_Compass.cpp` L182-187) for the mounting by hand (do not use the onboard calibration's
+   auto-rotation, because that calibration would also write offsets; see 2a).
+   **2a. Keep compass calibration neutral (single-calibration rule).** ArduPilot equivalents of INAV's
+   magzero/maggain, with their defaults (`AP_Compass.cpp` at `6034266`): `COMPASS_OFS_X/Y/Z = 0` (L106),
+   `COMPASS_DIA_X/Y/Z = 1` (L403), `COMPASS_ODI_X/Y/Z = 0` (L422), `COMPASS_SCALE = 0` ("If this is 0 then no
+   scaling is done", L589-594), `COMPASS_MOTCT = 0` and `COMPASS_MOT_X/Y/Z = 0` (L150, L178), plus
+   `COMPASS_LEARN = 0` (L119-124) so EKF/in-flight learning does not write offsets. Repeat for `COMPASS_OFS2_*`
+   etc. if a second compass is enabled. Do not run the onboard or large-vehicle compass calibration.
+   **The AP_Periph node** has the same `COMPASS_` parameter group (`Tools/AP_Periph/Parameters.cpp` L268-272), and
+   its published field already includes those corrections. Set the same neutral values on the node (DroneCAN GUI
+   Tool or Mission Planner's DroneCAN parameter page) and do not calibrate it. **UNCERTAIN:** ArduPilot's
+   pre-arm check will report the compass as not calibrated; that is acceptable on the bench (no arming), not for
+   flight. The bridge cannot read any of these yet (MAVLink not implemented), so it would report `"unknown"`.
 3. **Telemetry over USB:** SERIAL0 (USB, `SERIAL_ORDER OTG1 …` L102) defaults to MAVLink2
    (`AP_SerialManager.cpp` L37-38 `DEFAULT_SERIAL0_PROTOCOL SerialProtocol_MAVLink2`). Mag is in MAVLink
    `RAW_IMU`/`SCALED_IMU` `xmag..zmag`. ArduPilot sends `compass.get_field()` in **milligauss**
@@ -171,7 +207,16 @@ So the bridge maps INAV `MSP_RAW_IMU` acc, gyro and mag with **(x, −y, −z)**
 `test_roll_right_and_nose_up_signs`, `test_heading_from_converted_mag_level`. Use `--body-frame frd` to disable
 the mapping. `MSP2_SENSOR_COMPASS` is FRD by definition and is not remapped.
 
-### 6.4 Things the bridge does NOT emit
+### 6.4 Calibration and quantisation metadata
+Every emitted sample carries `meta.mag_quant_uT` (ARCHITECTURE.md 2026-11-27 "Quantised sources"): the step of the
+mag value as delivered, i.e. the profile scale: **0.1 µT** for the MSP compass path (`inav-msp-mag`, and
+`MSP2_SENSOR_COMPASS`), 256/75 ≈ 3.413 µT for `inav-rm3100-spi`, or `--mag-ut-per-lsb` for custom/Betaflight.
+`meta.fc_mag_calibrated` is `false` / `true` / `"unknown"` as described in §2 step 6. Sim (`--fake-fc`) and replay
+of `--capture` logs or raw MSP bytes derive both the same way (from recorded `MSP_FC_VARIANT` and
+`MSP_CALIBRATION_DATA` replies; `"unknown"` if they were not recorded). Replay of Sample JSONL keeps whatever
+`meta` the file had and never adds these keys.
+
+### 6.5 Things the bridge does NOT emit
 `mag_raw` and `rm3100_cycle_count` are never set. MSP values are not RM3100 counts: they are mGauss, or for the
 SPI driver raw24>>8 after alignment. The integers are kept in `meta.msp_raw_imu` for audit.
 
@@ -190,7 +235,8 @@ Full runnable procedure with commands, expected values, pass/fail criteria and r
   only. Every item in §7 / [HARDWARE_VALIDATION_CHECKLIST.md](../../reports/HARDWARE_VALIDATION_CHECKLIST.md) is open.
 * **L2** Body frame (§6.3) is a source derivation. The gyro sign is the weakest link (inferred, not traced to a
   driver). Betaflight frame is assumed identical (not checked).
-* **L3** INAV mag units are physical only while `magzero=0` and `maggain=1024`. After INAV calibration, values are
+* **L3** INAV mag units are physical only while `magzero=0` and `maggain=1024` (the bridge now *detects* this via
+  `MSP_CALIBRATION_DATA` and reports `meta.fc_mag_calibrated`, but does not correct for it). After INAV calibration, values are
   dimensionless and the bridge does not yet undo `maggain` (it would also need the alignment order, §6.1).
   Tracked as non-blocking [BLOCKERS.md](../../BLOCKERS.md) **B3**.
 * **L4** ArduPilot paths (B, C) need MAVLink. The bridge is MSP-only, and ArduPilot answers no `MSP_RAW_IMU`. MAVLink
@@ -203,3 +249,7 @@ Full runnable procedure with commands, expected values, pass/fail criteria and r
 * **L7** INAV MSP compass is `int16` mGauss (0.1 µT steps, ±3.27 G range). That is fine for heading. The research
   report estimates ≤0.29° worst case at |H| = 20 µT.
 * **L8** Betaflight: no RM3100 support verified; its scaling is unknown (profile requires explicit factors).
+* **L9** `meta.fc_mag_calibrated` covers the **FC** only (INAV, read via `MSP_CALIBRATION_DATA`). The AP_Periph
+  node's own `COMPASS_OFS/DIA/ODI/SCALE` are not visible over the FC's MSP, and for ArduPilot nothing is readable
+  without MAVLink, so those stay `"unknown"` / unchecked. The value is refreshed every 10 s, so a change on the FC
+  shows up within about 10 s. Message 14's layout is verified only for INAV (9.1.0, master, 10.x).

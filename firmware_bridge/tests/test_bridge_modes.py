@@ -170,3 +170,13 @@ def test_fake_fc_output_frame_convention():
         d = (hdg - s["fc_attitude_deg"]["yaw"] + 180) % 360 - 180
         assert abs(d) < 6     # fake yaw is integer degrees + one poll of lag at 90 deg/s
         assert s["gyro_dps"][2] == 90.0   # clockwise yaw positive about FRD z
+
+
+def test_replay_skips_schema_invalid_sample_lines(tmp_path, capfd):
+    f = tmp_path / "bad.jsonl"
+    rows = [{"t": 0, "source": "sim", "mag_uT": [1, 2]}, {"t": 0.1, "source": "sim", "mag_uT": ["a", 1, 2]},
+            {"t": "x", "source": "sim", "mag_uT": [1, 2, 3]}, {"t": 0.2, "source": "sim", "mag_uT": [20, 1, 40]}]
+    f.write_text("\n".join(json.dumps(r) for r in rows) + "\nnot json\n")
+    out = list(replay(str(f), BK))
+    assert [s["t"] for s in out] == [0.2] and validate_sample(out[0]) == []
+    assert "invalid Sample skipped" in capfd.readouterr().err
