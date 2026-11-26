@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-11-27
+- [pm] D7 (R8 wording): REQUIREMENTS.md R8 and README ground rule 2 updated to the accepted badge rules (ARCHITECTURE.md eacf8a2, c831574). The badge is derived from sample.source; HARDWARE only for a live serial transport; replayed hardware → 'REPLAY (recorded hardware)'; hardware via ingest → 'UNVERIFIED SOURCE'.
 - [math] sensor-spec TC19/§8.2 fix (Sim Dev report via PM): RM3100 CC200 LSB is 1/75 µT = 0.013333 µT (gain 75 LSB/µT, PNI-UM Table 3-1; datasheet '13 nT' is the rounded value), not 0.013. Code now uses exact 1/75 (RM3100_LSB_CC200_UT); TC19 quantisation sigma 0.0037528 -> 0.0038490 µT (+2.56%); no other expected values changed; test_cases.json regenerated, SPEC.pdf re-rendered; 23/23 pass.
 - [sim] Delivered output modes (--output-mode dronecan|msp: Matek CAN-L4-3100/AP_Periph model from source code), spec check vs T2 sensor spec (35 PASS / 44 N/A / 1 MISMATCH TC19 spec-side), optional misalignment + Gauss-Markov bias, 2 example logs; 151 sim tests pass [SIMULATED].
 - [hw] T1 audit follow-up: PNI manual + sales sheet re-downloaded and verified (66/66 automated checks, docs/hardware/VERIFICATION.md, verify_datasheet.py); SOURCES.md corrected; captcha/redirect downloads renamed INVALID (never cited); limitations L16-L17 added.

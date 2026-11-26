@@ -24,7 +24,7 @@ See also TEAM_RULES.md (owner rules, binding).
    or `[HARDWARE-VERIFIED]`. `[HARDWARE-VERIFIED]` requires a raw log from the physical RM3100/Matek
    FC committed under `reports/hardware_logs/` plus the auditor's sign-off. Nobody on this team has
    that yet, so no claim may carry it.
-2. The UI must show the active data source (SIMULATED / REPLAY / HARDWARE) at all times.
+2. The UI must show the active data source at all times. The badge is derived from the sample's `source` field: HARDWARE only for a live serial transport; replayed hardware is shown as 'REPLAY (recorded hardware)'; hardware via ingest is shown as 'UNVERIFIED SOURCE'; otherwise SIMULATED or REPLAY.
 3. Stick to the interfaces in `contracts/`. Changes go through the PM (note it in TEAM_TRACKER.md).
 4. Python 3.10+, standard tooling (`pip install -r requirements.txt`, `pytest`). Keep deps small.
 5. Update your row in `TEAM_TRACKER.md` when you start, block, or finish. Commit with your role as prefix,

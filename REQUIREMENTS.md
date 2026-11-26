@@ -10,7 +10,7 @@ Source: owner (Harshad Vora) instructions to PM & CTO; refined by PM. Changes re
 - R5. Show field magnitude, 3-axis field, a heading-quality indicator and warnings (interference, excessive tilt, uncalibrated).
 - R6. Data sources interchangeable through one Sample contract: simulator, recorded-log replay, live Matek FC over MSP (USB serial).
 - R7. Record sessions to JSONL/CSV.
-- R8. Persistent DATA SOURCE badge (SIMULATED / REPLAY / HARDWARE) driven only by the sample's `source` field.
+- R8. Persistent DATA SOURCE badge derived from the sample's `source` field: HARDWARE only for a live serial transport; replayed hardware → 'REPLAY (recorded hardware)'; hardware via ingest → 'UNVERIFIED SOURCE'; otherwise SIMULATED or REPLAY.
 
 ## Non-functional
 - N1. Runs locally on Linux with Python 3.10+, free/open-source dependencies only.
