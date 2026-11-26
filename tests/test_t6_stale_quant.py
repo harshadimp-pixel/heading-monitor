@@ -45,3 +45,20 @@ def test_E3b_frozen_still_detected_with_quant_meta(hc):
     w = set(outs[-1].get("warnings") or [])
     print("E3b frozen+meta last warnings", w, "quality", outs[-1]["quality"])
     assert w & STALE
+
+def test_E3b_stress_20_sessions_60s(hc):
+    """20 independent stationary sessions (random yaw), 60 s @ 20 Hz, 15 nT [DATASHEET], 0.1 uT quantisation, meta set.
+    A healthy stationary sensor must never be called stale."""
+    bad = []
+    for seed in range(20):
+        rng = np.random.default_rng(seed); yaw = rng.uniform(0, 360); m, a = body_vectors(yaw, 3, -2)
+        est = hc.HeadingEstimator(calibration=hc.Calibration()); n = 0
+        for i in range(1200):
+            mm = np.round((m + rng.normal(0, 0.015, 3)) / 0.1) * 0.1
+            aa = np.round((a + rng.normal(0, 0.002, 3)) * 512) / 512
+            o = call(est.update, {"t": i / 20, "source": "replay", "mag_uT": [round(float(x), 6) for x in mm],
+                                  "accel_g": aa.tolist(), "meta": {"mag_quant_uT": 0.1}})
+            n += bool(STALE & set(o.get("warnings") or []))
+        if n: bad.append((seed, round(yaw, 1), n))
+    print(f"E3b stress: {len(bad)}/20 sessions falsely stale (seed, yaw, flagged samples of 1200): {bad}")
+    assert not bad

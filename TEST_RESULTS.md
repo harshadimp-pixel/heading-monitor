@@ -14,6 +14,8 @@ Code: `git archive 403976b` export, plus T6 `tests/` (committed with this file).
 | 2026-11-27 | sim owner suite | `python -m pytest sim/tests` | 403976b | 80 passed | [SIMULATED] | T6 |
 | 2026-11-27 | firmware_bridge owner suite | `python -m pytest firmware_bridge/tests` | 403976b | 64 passed, 1 skipped (no pyserial); 65 passed with pyserial | [SIMULATED] hand-built frames | T6 |
 | 2026-11-27 | app owner suite | `python -m pytest app/tests` | 403976b | 40 passed | [SIMULATED] | T6 |
+| 2026-11-27 | T6 independent suite (all, incl. E3b stress) | `python -m pytest tests -q -s` | 0aaa066 | **104 passed, 1 failed** (E3b stress, D3) | [SIMULATED] | T6 |
+| 2026-11-27 | heading_core / sensor-spec / sim / firmware_bridge / app owner suites | `python -m pytest <suite>` | 0aaa066 | 67 / 23 / 80 / 65 / 40 passed | [SIMULATED] | T6 |
 | 2026-11-27 | firmware_bridge owner suite | same | 997d00f | 41 passed, 1 skipped | [SIMULATED] | T6 |
 | 2026-11-27 | T6 MSP replay of malformed Sample JSONL | `tests/test_t6_msp.py::test_M3_replay_malformed_sample_lines` | 997d00f → 403976b | FAIL (2/3 invalid emitted) → PASS | [SIMULATED] | T6 |
 
@@ -24,6 +26,6 @@ Key numbers [SIMULATED]:
 - **Repeatability:** spread 0.0° on identical input; sim output byte-identical per seed.
 - **MSP fuzz** (2000 streams): 98.8 % of valid frames recovered; 0 corrupted frames leaked into samples.
 - **Dashboard:** display vs core diff 0.0°; badge matched sample.source 10/10; 359.96 → "0.0".
-- **E3b (D3):** at 15 nT [DATASHEET] noise with 0.1 µT quantisation, 55/600 samples falsely MAG_STALE.
+- **E3b (D3):** at 15 nT [DATASHEET] noise with 0.1 µT quantisation. At 403976b: 55/600 samples falsely MAG_STALE. At 0aaa066: the single session is clean, but 4/20 sixty-second sessions are falsely stale.
 
 Inputs: [DATASHEET] RM3100 noise 15 nT and gain 75 LSB/µT (PNI UM Table 3-1). All IMU, interference and field parameters are [ASSUMED]; see verification_report.md §3.

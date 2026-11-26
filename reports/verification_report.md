@@ -1,7 +1,7 @@
 # T6 Verification Report — FINAL (v1.0)
 
-Auditor: Testing & Technical Auditor (T6). Run 2026-11-27 ~00:30 IST.
-**Code under test: commit `403976b`** (clean `git archive` export, so no uncommitted work-in-progress from other owners was included) plus T6's tests in `tests/`.
+Auditor: Testing & Technical Auditor (T6). Run 2026-11-27 ~00:30 IST, with T2 re-run at about 00:40 IST on **`0aaa066`** (includes Math's b7e28d0 quantised-MAG_STALE change).
+**Code under test: commit `403976b`, and `0aaa066` for the final re-run** (clean `git archive` export, so no uncommitted work-in-progress from other owners was included) plus T6's tests in `tests/`.
 Clean venv: `pip install -r requirements.txt`, giving numpy 2.5.5, pytest 9.2.0 and jsonschema 4.26.0. pyserial was added only for the firmware bridge's pty test.
 Raw logs (box scratch): `/workspace/audit/full_t6_403976b.log`, `full_summary_403976b.log`, `e3b*.log`, `claims_hwtag.log`.
 Executed commands and counts: see `TEST_RESULTS.md` (repo root).
@@ -13,7 +13,7 @@ Evidence labels: every accuracy or robustness result here is **[SIMULATED]**. RM
 | Deliverable | Owner | Verdict | Evidence (one line) |
 |---|---|---|---|
 | T1 hardware fact sheet (`docs/hardware/`) | HW Research | **PASS** | T6 re-read PNI RM3100 UM Table 3-1: gain 20/38/75 LSB/µT @ CC50/100/200, ±800 µT, noise 30/20/15 nT; these match `key_numbers.json` [DATASHEET]. LIMITATIONS L1-L17 are present. No unsupported claims. |
-| T2 heading_core + `docs/math/` | Math | **FAIL (one open MAJOR defect, D3)** | All 59 owner tests and 23 sensor-spec tests pass. All T6 heading, tilt, declination, calibration, filter and repeatability criteria pass, and D1 is fixed. However, E3b fails: a stationary RM3100 read through MSP (0.1 µT quantisation) is falsely flagged MAG_STALE (D3). |
+| T2 heading_core + `docs/math/` | Math | **FAIL (one open MAJOR defect, D3)** | At 0aaa066: 67 owner tests and 23 sensor-spec tests pass. All T6 heading, tilt, declination, calibration, filter and repeatability criteria pass, and D1 is fixed. b7e28d0 fixed the single 30 s E3b case, but the 20-session stress test still fails: in **4/20** healthy stationary 60 s MSP-quantised sessions the sensor is falsely flagged MAG_STALE (up to 591/1200 samples, quality 0.29). → D3 |
 | T3 simulator (`sim/`) | Sim | **PASS** | 80/80 owner tests pass. S1-S4 pass: 8 scenarios are schema-valid, sim truth agrees with the T6 reference model to ≤0.05 µT, output is byte-identical per seed, and gain matches the datasheet. |
 | T4 firmware_bridge + `docs/firmware/FC_SETUP.md` | FW | **PASS** | 64 pass + 1 skip, and the pty test passes with pyserial (65/65). T6 MSP tests: 16/16 pass, 0 corrupted frames leaked into samples over 2000 fuzz streams, and source labelling is correct. D4 (found at 997d00f) is fixed in 403976b. |
 | T5 app (`app/`) | UI | **PASS** | 40/40 owner tests pass. T6 ran the dashboard on its own PID-verified instance on an ephemeral port: 10/10 checks pass. Displayed heading equals the heading_core value (diff 0.0), 0/360 rounding is correct, the badge equals sample.source in 100% of records, and errors and STALE states are surfaced. LIMITATIONS U0-U10 are present. |
@@ -22,8 +22,8 @@ Evidence labels: every accuracy or robustness result here is **[SIMULATED]**. RM
 
 ## 2. Overall completion verdict
 **NOT APPROVED (yet).** The software runs end to end on simulated data: `python -m app --source sim` starts and serves, `python -m sim` emits samples, and `python -m firmware_bridge --fake-fc/--replay` emits valid samples. Every required report exists: FACTSHEET.md, HEADING_MATH.md, FC_SETUP.md, sim/README.md, app/README.md, firmware_bridge/README.md, TEST_PLAN.md, this report, and TEST_RESULTS.md.
-Approval is blocked by **one open MAJOR defect, D3 (T2)**. On the real hardware path (MSP, 0.1 µT steps), a healthy stationary sensor would be shown as stale or degraded.
-Once D3 is fixed and `tests/test_t6_stale_quant.py` passes, completion can be approved **for the virtual (simulated/replay) scope only**. Hardware performance remains unverified (see LIMITATIONS).
+Approval is blocked by **one open MAJOR defect, D3 (T2 / PM rule)**. On the real hardware path (MSP, 0.1 µT steps), a healthy stationary sensor would still be shown as MAG_STALE with quality 0.3 in about 1 of 5 one-minute stationary sessions (simulated).
+Once D3 is fixed and all of `tests/test_t6_stale_quant.py` passes, including the 20-session stress test,, completion can be approved **for the virtual (simulated/replay) scope only**. Hardware performance remains unverified (see LIMITATIONS).
 
 ## 3. Results per criterion (commit 403976b)
 | ID | Result | Evidence [SIMULATED] |
@@ -43,7 +43,8 @@ Once D3 is fixed and `tests/test_t6_stale_quant.py` passes, completion can be ap
 | E1 NaN/inf input | PASS | flagged; filter recovers within 1° |
 | E2 field out of range | PASS | FIELD_MAGNITUDE_OUT_OF_RANGE raised at ×0.3, ×2 and ×20 |
 | E3 frozen sensor (identical samples, 3 s) | PASS | SENSOR_STALE, quality 0.05 → **D1 closed** |
-| E3b quantised stationary must NOT be stale | **FAIL** | At σ = 15 nT [DATASHEET] with 0.1 µT steps: 55/600 samples flagged MAG_STALE (first at 4.6 s), min quality 0.296. Same result with and without `meta.mag_quant_uT`. At σ = 0.05 µT [ASSUMED]: 0/600. Frozen case with meta still flagged (PASS). → **D3** |
+| E3b stress (20 × 60 s, 0aaa066) | **FAIL** | 4/20 sessions falsely stale: (seed 5, yaw 289.8°, 48 flagged samples), (7, 225.0°, 591), (11, 46.3°, 129), (14, 299.2°, 345). All with meta.mag_quant_uT = 0.1 and noise 15 nT [DATASHEET]. |
+| E3b single 30 s session | 403976b: **FAIL**; 0aaa066: PASS (0/600 flagged, min quality 0.983) | At 403976b: At σ = 15 nT [DATASHEET] with 0.1 µT steps: 55/600 samples flagged MAG_STALE (first at 4.6 s), min quality 0.296. Same result with and without `meta.mag_quant_uT`. At σ = 0.05 µT [ASSUMED]: 0/600. Frozen case with meta still flagged (PASS). → **D3** |
 | E4 time anomalies | PASS | no crash; back within 1° |
 | E5 interference step 25 µT | PASS | flagged at the onset sample; 13.1° error during the disturbance (reported, not gated) |
 | E6 missing accel / malformed | PASS | NO_ACCEL plus level assumption; malformed input rejected |
@@ -88,7 +89,7 @@ The accel bias (0.01 g, about 0.57° of tilt) is the main contributor to the A1 
 |---|---|---|---|---|
 | D1 | MAJOR | T2 | **CLOSED** | Frozen sensor not flagged. Fixed in 758faeb; E3 passes in T6's own run at 403976b. |
 | D2 | MINOR | PM | **CLOSED** | Blanket commit. Verified: `.gitignore` covers caches; 0 tracked .pyc files; PM commits 0c66c38, fc91815 and 9d0552f touch only PM paths, plus the .pyc removal. |
-| D3 | MAJOR | T2 | **OPEN** | MAG_STALE false alarm on a stationary, MSP-quantised (0.1 µT) sensor at datasheet noise (55/600 samples, quality down to 0.30). `meta.mag_quant_uT` (now emitted by T4) is not consumed by heading_core. Design note: in T6's simulation of 60 s stationary runs (20 seeds), the longest bit-identical run had median 0.68 s and max 20.65 s, and 4 of 20 runs exceeded 5 s. The planned "5 s window" rule would therefore still false-alarm. Suggestion: when the source is quantised, flag MAG_STALE only if accel is also frozen, or reduce quality without raising a stale warning. |
+| D3 | MAJOR | T2 (design rule from PM decision fc91815) | **OPEN (partly fixed in b7e28d0)** | MAG_STALE false alarm on a stationary, MSP-quantised (0.1 µT) sensor at datasheet noise. At 403976b: 55/600 samples flagged, quality down to 0.30. After b7e28d0, which applies the "bit-identical ≥ 5 s" rule: the single session passes, but 4/20 sixty-second sessions still false-alarm (`tests/test_t6_stale_quant.py::test_E3b_stress_20_sessions_60s`). This is predicted by the run-length analysis below; the 5 s window in the PM rule is too short for 15 nT noise on a 100 nT grid. Design note: in T6's simulation of 60 s stationary runs (20 seeds), the longest bit-identical run had median 0.68 s and max 20.65 s, and 4 of 20 runs exceeded 5 s. The planned "5 s window" rule would therefore still false-alarm. Suggestion: when the source is quantised, flag MAG_STALE only if accel is also frozen, or reduce quality without raising a stale warning. |
 | D4 | MAJOR | T4 | **CLOSED** | `--replay` forwarded schema-invalid Sample lines (found at 997d00f); fixed in 403976b. |
 | D5 | MINOR | T6 | **CLOSED** (self-reported) | While re-running the T4 suite, T6 mistakenly ran `git checkout 997d00f --` in the shared repo, which detached HEAD for about 2 minutes. The UI developer's commit landed on the detached HEAD as 0525a82. T6 restored `main` and cherry-picked it as **84fc231** (author kept, tree identical, no content lost). Uncommitted work of other owners carried over intact. T6 now tests from `git archive` exports only. |
 
