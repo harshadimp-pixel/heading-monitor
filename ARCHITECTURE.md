@@ -39,8 +39,11 @@ class HeadingEstimator:
 ## Frames and units
 - Body frame NED-style: x forward, y right, z down. Magnetic field in microtesla (µT). Accel in g. Gyro in deg/s.
 - Heading: degrees clockwise from magnetic north (or true north when declination applied), range [0, 360).
+- Accelerometer is specific force in g: level and at rest reads (0, 0, -1) in the NED body frame (z down). Firmware bridge must convert FC output to this convention.
 - RM3100 raw counts are carried alongside µT when available, with the cycle-count used for conversion.
 
 ## Decisions log
 - 2026-11-26: Python reference implementation, web UI served locally; JSONL sample contract as the single seam
   between sources and core so sim and hardware are interchangeable.
+- 2026-11-27: jsonschema added to requirements. Sim may add extra `truth` keys (true_heading_deg, earth_field_body_uT, field_at_sensor_uT, interference_uT, motor_current_A, declination_deg); `truth.heading_deg` is magnetic heading. Run config carried in the first line's `meta` only. Accel sign convention fixed as above.
+- 2026-11-27: Hardware target per T1 is the Matek CAN-L4-3100 module (RM3100 behind AP_Periph); FC receives scaled field (DroneCAN Gauss / MSP mG), not raw counts. `mag_raw` is optional and absent on hardware.
