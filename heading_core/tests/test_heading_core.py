@@ -301,3 +301,43 @@ def test_random_estimates_always_valid():
         s = {"t": k * 0.02, "source": "replay", "mag_uT": rng.normal(0, 60, 3).tolist(),
              "accel_g": rng.normal(0, 1, 3).tolist(), "gyro_dps": rng.normal(0, 100, 3).tolist()}
         validate(e.update(s))
+
+
+@pytest.mark.parametrize("bad", [[float("nan"), 0, 40], [float("inf"), 1, 2], [0, 0, 0], [0, 0, 50]])
+def test_invalid_mag_ignored_and_filter_not_corrupted(bad):
+    from heading_core import WARN_INVALID_MAG
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    for k in range(20):
+        e.update(sample(k * 0.02, 45))
+    s = sample(0.4, 45)
+    s["mag_uT"] = bad
+    est = e.update(s)
+    validate(est)
+    assert WARN_INVALID_MAG in est["warnings"] and est["quality"] == 0
+    assert est["heading_deg"] == pytest.approx(45)
+    est = e.update(sample(0.42, 45))
+    assert est["heading_deg"] == pytest.approx(45) and WARN_INVALID_MAG not in est["warnings"]
+
+
+def test_nan_accel_falls_back():
+    s = sample(0.0, 45)
+    s["accel_g"] = [float("nan"), 0, -1]
+    est = HeadingEstimator(Calibration(field_uT=50.0)).update(s)
+    validate(est)
+    assert WARN_NO_ACCEL in est["warnings"] and math.isfinite(est["heading_deg"])
+
+
+def test_fit_drops_nonfinite_rows():
+    _, M, o, _ = _cal_dataset(seed=21)
+    M = M.copy()
+    M[3, 1] = np.nan
+    cal = Calibration.fit(M)
+    assert cal.n_samples == len(M) - 1 and np.allclose(cal.offset, o, atol=0.05)
+
+
+def test_filter_is_wrap_invariant():
+    def run(start):
+        e = HeadingEstimator(Calibration(field_uT=50.0))
+        return [angle_diff_deg(e.update(sample(k * 0.02, wrap360(start + 0.5 * k)))["heading_deg"],
+                               wrap360(start + 0.5 * k)) for k in range(80)]
+    assert np.allclose(run(350), run(170), atol=1e-6)

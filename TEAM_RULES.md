@@ -12,4 +12,4 @@
 10. Keep experiments virtual.
 11. Do not send routine updates to the owner.
 12. Report completion to the Project Manager Bot.
-13. Document all unresolved limitations (in your area's LIMITATIONS section and in TRACKER.md).
+13. Document all unresolved limitations (in your area's LIMITATIONS section and in TEAM_TRACKER.md).

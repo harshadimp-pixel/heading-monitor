@@ -1,0 +1,157 @@
+{
+  "step_table": [
+    {
+      "component_mGauss": 50,
+      "rm3100_lsb_mGauss": 0.1333,
+      "float16_step_mGauss": 0.0305,
+      "int16_step_mGauss": 1.0,
+      "inav_native_step_mGauss": 34.13
+    },
+    {
+      "component_mGauss": 150,
+      "rm3100_lsb_mGauss": 0.1333,
+      "float16_step_mGauss": 0.1221,
+      "int16_step_mGauss": 1.0,
+      "inav_native_step_mGauss": 34.13
+    },
+    {
+      "component_mGauss": 250,
+      "rm3100_lsb_mGauss": 0.1333,
+      "float16_step_mGauss": 0.2441,
+      "int16_step_mGauss": 1.0,
+      "inav_native_step_mGauss": 34.13
+    },
+    {
+      "component_mGauss": 450,
+      "rm3100_lsb_mGauss": 0.1333,
+      "float16_step_mGauss": 0.2441,
+      "int16_step_mGauss": 1.0,
+      "inav_native_step_mGauss": 34.13
+    },
+    {
+      "component_mGauss": 600,
+      "rm3100_lsb_mGauss": 0.1333,
+      "float16_step_mGauss": 0.4883,
+      "int16_step_mGauss": 1.0,
+      "inav_native_step_mGauss": 34.13
+    }
+  ],
+  "cases": [
+    {
+      "case": "H=20uT Z=40uT, no noise",
+      "paths": {
+        "A_raw_counts": {
+          "max_abs_err_deg": 0.025077646077249938,
+          "rms_err_deg": 0.010982297666475587
+        },
+        "B_ap_mgauss_f32": {
+          "max_abs_err_deg": 0.025078330923292924,
+          "rms_err_deg": 0.01098231643455172
+        },
+        "C_dronecan_f16": {
+          "max_abs_err_deg": 0.03346430999977201,
+          "rms_err_deg": 0.0122017614473854
+        },
+        "D_dronecan_hires_f32": {
+          "max_abs_err_deg": 0.02507861943286116,
+          "rms_err_deg": 0.010982272545901317
+        },
+        "E_int16_mgauss_after_f16": {
+          "max_abs_err_deg": 0.29052078244711765,
+          "rms_err_deg": 0.12041978761812808
+        },
+        "F_inav_native_int16": {
+          "max_abs_err_deg": 13.5,
+          "rms_err_deg": 5.82884670733325
+        }
+      }
+    },
+    {
+      "case": "H=20uT Z=40uT, 15 nT noise",
+      "paths": {
+        "A_raw_counts": {
+          "max_abs_err_deg": 0.16179129220387267,
+          "rms_err_deg": 0.04437649942175232
+        },
+        "B_ap_mgauss_f32": {
+          "max_abs_err_deg": 0.16179085393832793,
+          "rms_err_deg": 0.044376494234792015
+        },
+        "C_dronecan_f16": {
+          "max_abs_err_deg": 0.1690612488827128,
+          "rms_err_deg": 0.04481865664039069
+        },
+        "D_dronecan_hires_f32": {
+          "max_abs_err_deg": 0.16179265082689653,
+          "rms_err_deg": 0.04437651335993183
+        },
+        "E_int16_mgauss_after_f16": {
+          "max_abs_err_deg": 0.40830828609881564,
+          "rms_err_deg": 0.1269079872615644
+        },
+        "F_inav_native_int16": {
+          "max_abs_err_deg": 13.550000000000011,
+          "rms_err_deg": 5.828607676941995
+        }
+      }
+    },
+    {
+      "case": "H=5uT Z=55uT (high latitude), no noise",
+      "paths": {
+        "A_raw_counts": {
+          "max_abs_err_deg": 0.10485323858574702,
+          "rms_err_deg": 0.04423663486140488
+        },
+        "B_ap_mgauss_f32": {
+          "max_abs_err_deg": 0.10485214274001464,
+          "rms_err_deg": 0.04423662720777872
+        },
+        "C_dronecan_f16": {
+          "max_abs_err_deg": 0.11482474199263493,
+          "rms_err_deg": 0.04473007750673702
+        },
+        "D_dronecan_hires_f32": {
+          "max_abs_err_deg": 0.10485533701358918,
+          "rms_err_deg": 0.0442366496918232
+        },
+        "E_int16_mgauss_after_f16": {
+          "max_abs_err_deg": 1.145931949687423,
+          "rms_err_deg": 0.46925609315063616
+        },
+        "F_inav_native_int16": {
+          "max_abs_err_deg": 44.900000000000034,
+          "rms_err_deg": 22.606573104931222
+        }
+      }
+    },
+    {
+      "case": "H=5uT Z=55uT (high latitude), 15 nT noise",
+      "paths": {
+        "A_raw_counts": {
+          "max_abs_err_deg": 0.6889493545776588,
+          "rms_err_deg": 0.1768426236332407
+        },
+        "B_ap_mgauss_f32": {
+          "max_abs_err_deg": 0.6889486818639341,
+          "rms_err_deg": 0.17684262616422758
+        },
+        "C_dronecan_f16": {
+          "max_abs_err_deg": 0.687194781239981,
+          "rms_err_deg": 0.1767975950596172
+        },
+        "D_dronecan_hires_f32": {
+          "max_abs_err_deg": 0.6889496529115036,
+          "rms_err_deg": 0.17684260918495748
+        },
+        "E_int16_mgauss_after_f16": {
+          "max_abs_err_deg": 1.577398222799701,
+          "rms_err_deg": 0.49434244748822315
+        },
+        "F_inav_native_int16": {
+          "max_abs_err_deg": 45.0,
+          "rms_err_deg": 22.638936219812578
+        }
+      }
+    }
+  ]
+}

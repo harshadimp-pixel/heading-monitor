@@ -16,7 +16,8 @@ from .config import CoreConfig
 from .heading import (angle_diff_deg, heading_from_level, level_frame_field,
                       roll_pitch_from_accel, tilt_deg, wrap360)
 from .warnings_codes import (WARN_DIP_ANOMALY, WARN_FIELD_MAGNITUDE, WARN_HIGH_NOISE,
-                             WARN_NO_ACCEL, WARN_NOT_CALIBRATED, WARN_TILT_TOO_LARGE)
+                             WARN_NO_ACCEL, WARN_NOT_CALIBRATED, WARN_TILT_TOO_LARGE,
+                             WARN_INVALID_MAG)
 
 
 def _lin_quality(dev: float, tol: float) -> float:
@@ -67,6 +68,9 @@ class HeadingEstimator:
         t = float(sample["t"])
         m = np.asarray(sample["mag_uT"], dtype=float).reshape(3)
 
+        mag_finite = bool(np.all(np.isfinite(m)))
+        if not mag_finite:
+            m = np.zeros(3)
         # 1. calibration
         if self.calibration is not None:
             b = np.asarray(self.calibration.apply(m))
@@ -82,13 +86,15 @@ class HeadingEstimator:
         accel = sample.get("accel_g")
         att = sample.get("fc_attitude_deg") or {}
         try:
-            if accel is not None:
+            if accel is not None and np.all(np.isfinite(np.asarray(accel, dtype=float))):
                 roll, pitch = roll_pitch_from_accel(accel, cfg.accel_convention)
             elif "roll" in att and "pitch" in att:
                 roll, pitch = float(att["roll"]), float(att["pitch"])
             else:
                 have_tilt = False
-        except ValueError:
+        except (ValueError, TypeError):
+            have_tilt = False
+        if not (math.isfinite(roll) and math.isfinite(pitch)):
             have_tilt = False
         if not have_tilt:
             roll = pitch = 0.0
@@ -107,7 +113,11 @@ class HeadingEstimator:
         if field_dev > cfg.field_tolerance_frac:
             warnings.append(WARN_FIELD_MAGNITUDE)
         horiz = math.hypot(xh, yh)
-        heading_valid = horiz > 1e-9
+        heading_valid = mag_finite and horiz > 1e-9
+        if not heading_valid:
+            warnings.append(WARN_INVALID_MAG)
+            if WARN_FIELD_MAGNITUDE not in warnings:
+                warnings.append(WARN_FIELD_MAGNITUDE)
         if heading_valid:
             psi_raw = heading_from_level(xh, yh, self.declination_deg)
         else:
@@ -120,7 +130,17 @@ class HeadingEstimator:
                 warnings.append(WARN_DIP_ANOMALY)
             q_dip = _lin_quality(ddip, cfg.dip_tolerance_deg)
 
-        # 4. smoothing (wrap-safe)
+        # 4. smoothing (wrap-safe). Invalid samples leave the filter state untouched.
+        if not heading_valid:
+            q_out = 0.0
+            psi_hold = self._psi if self._psi is not None else 0.0
+            self.last_debug = {"raw_mag_uT": np.asarray(sample["mag_uT"], dtype=float).tolist(),
+                               "invalid": True}
+            return {"t": t, "source": sample["source"], "heading_deg": wrap360(psi_hold),
+                    "heading_raw_deg": wrap360(psi_hold), "roll_deg": float(roll),
+                    "pitch_deg": float(pitch), "field_uT": field if math.isfinite(field) else 0.0,
+                    "calibrated": calibrated, "quality": q_out, "warnings": warnings}
+        q_field = _lin_quality(field_dev, cfg.field_tolerance_frac)
         dt = None if self._t is None else t - self._t
         if dt is not None and (dt <= 0 or dt > cfg.max_dt_s):
             self.reset()
@@ -135,12 +155,10 @@ class HeadingEstimator:
                 psi_pred = wrap360(psi_pred + psi_dot * dt)
         innov = 0.0 if psi_pred is None else angle_diff_deg(psi_raw, psi_pred)
         mode = cfg.smoothing
-        if not heading_valid:
-            psi = psi_raw
-        elif mode == "none" or psi_pred is None:
+        if mode == "none" or psi_pred is None:
             psi = psi_raw
         elif mode == "complementary":
-            psi = wrap360(psi_pred + cfg.alpha * innov)
+            psi = wrap360(psi_pred + cfg.alpha * q_field * innov)  # de-weight disturbed field
         elif mode == "circular_mean":
             psi = psi_raw  # replaced below
         else:
@@ -161,7 +179,7 @@ class HeadingEstimator:
             warnings.append(WARN_HIGH_NOISE)
 
         # 6. quality
-        q = _lin_quality(field_dev, cfg.field_tolerance_frac)
+        q = q_field
         q *= _lin_quality(tilt, cfg.max_tilt_deg)
         q *= q_dip
         q *= _lin_quality(noise, cfg.noise_warn_deg)
@@ -169,8 +187,6 @@ class HeadingEstimator:
             q *= cfg.uncalibrated_quality_factor
         if not have_tilt:
             q *= cfg.no_accel_quality_factor
-        if not heading_valid:
-            q = 0.0
         q = float(min(1.0, max(0.0, q)))
 
         self.last_debug = {"field_vec_uT": b.tolist(), "raw_mag_uT": m.tolist(), "dip_deg": dip,

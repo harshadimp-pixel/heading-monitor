@@ -11,13 +11,13 @@ from .heading import tilt_compensated_heading, roll_pitch_from_accel, wrap360, a
 from .estimator import HeadingEstimator
 from .warnings_codes import (
     WARN_NOT_CALIBRATED, WARN_FIELD_MAGNITUDE, WARN_TILT_TOO_LARGE, WARN_NO_ACCEL,
-    WARN_DIP_ANOMALY, WARN_HIGH_NOISE, ALL_WARNINGS,
+    WARN_DIP_ANOMALY, WARN_HIGH_NOISE, WARN_INVALID_MAG, ALL_WARNINGS,
 )
 
 __all__ = [
     "Calibration", "tilt_compensated_heading", "HeadingEstimator", "CoreConfig",
     "NOMINAL_FIELD_UT", "roll_pitch_from_accel", "wrap360", "angle_diff_deg",
     "WARN_NOT_CALIBRATED", "WARN_FIELD_MAGNITUDE", "WARN_TILT_TOO_LARGE", "WARN_NO_ACCEL",
-    "WARN_DIP_ANOMALY", "WARN_HIGH_NOISE", "ALL_WARNINGS",
+    "WARN_DIP_ANOMALY", "WARN_HIGH_NOISE", "WARN_INVALID_MAG", "ALL_WARNINGS",
 ]
 __version__ = "0.1.0"

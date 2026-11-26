@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Heading Monitor</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>Virtual Heading Monitor</h1>
+    <div class="sub">RM3100 magnetometer + Matek FC &middot; T5 dashboard</div>
+  </div>
+  <div class="badge-wrap">
+    <div class="badge-label">DATA SOURCE</div>
+    <div id="sourceBadge" class="source-badge none" title="Taken only from the source field of the latest sample">NO DATA</div>
+    <div id="sourceSub" class="badge-sub">from sample.source &middot; waiting</div>
+  </div>
+  <div class="conn">
+    <div><span id="connDot" class="dot bad"></span><span id="connText">connecting…</span></div>
+    <div class="small" id="transportText">transport: –</div>
+    <div class="small" id="backendText">heading_core: –</div>
+  </div>
+</header>
+<div id="evidenceBanner" class="evidence">Evidence label: values shown are only as good as their source. Nothing here is [HARDWARE-VERIFIED].</div>
+
+<main class="grid">
+  <!-- HEADING -->
+  <section class="panel heading-panel" id="panelHeading">
+    <h2>Heading <span class="tag">orientation &middot; magnetometer</span></h2>
+    <div class="heading-body">
+      <svg id="compass" viewBox="-160 -160 320 320" role="img" aria-label="Compass rose: measured vs reference heading"></svg>
+      <div class="heading-readout">
+        <div class="metric big">
+          <div class="label" id="headingLabel">Measured heading (calibrated, magnetic)</div>
+          <div class="value" id="headingValue">Unknown</div>
+          <div class="hint" id="headingHint"></div>
+        </div>
+        <div class="metric">
+          <div class="label">Raw heading (uncalibrated)</div>
+          <div class="value mid" id="rawHeadingValue">Unknown</div>
+        </div>
+        <div class="metric">
+          <div class="label">Reference heading (user-selected)</div>
+          <div class="ref-row">
+            <input id="refNumber" type="number" min="0" max="359.9" step="0.1" placeholder="not set" aria-label="Reference heading degrees">
+            <button id="refSet">Set</button>
+            <button id="refUseCurrent" title="Use the current measured heading">Use current</button>
+            <button id="refClear" class="ghost">Clear</button>
+          </div>
+          <input id="refSlider" type="range" min="0" max="359" step="1" value="0" aria-label="Reference heading slider">
+          <div class="hint">Tip: click the compass rose to set the reference.</div>
+        </div>
+        <div class="metric">
+          <div class="label">Deviation (measured − reference, ±180°)</div>
+          <div class="value mid" id="deviationValue">Unknown</div>
+        </div>
+        <div class="legend">
+          <span><i class="sw measured"></i>Measured (calibrated)</span>
+          <span><i class="sw raw"></i>Raw</span>
+          <span><i class="sw reference"></i>Reference</span>
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>Heading is orientation, not direction of travel.</b> It is the direction the sensor's
+      forward (x) axis points, measured clockwise from magnetic north (true north only if a declination is configured).
+      A vehicle can point one way and move another (wind, drift, reversing), and heading says nothing about where it is.</p>
+  </section>
+
+  <!-- STATUS / ACCURACY -->
+  <section class="panel" id="panelStatus">
+    <h2>Sensor status &amp; accuracy</h2>
+    <div class="kv"><span>Sensor status</span><b id="sensorStatus" class="pill unknown">Unknown</b></div>
+    <div class="hint" id="sensorReason"></div>
+    <div class="kv"><span>Last sample</span><b id="lastAge">Unknown</b></div>
+    <div class="kv"><span>Data rate</span><b id="rateValue">Unknown</b></div>
+    <div class="kv"><span>Samples accepted / invalid</span><b id="countsValue">–</b></div>
+    <h3>Measurement accuracy</h3>
+    <div class="kv"><span>Quality (heading_core, 0–1)</span><b id="qualityValue">Unknown</b></div>
+    <div class="qbar"><div id="qualityBar"></div></div>
+    <div class="kv"><span>Short-term noise (1σ)</span><b id="noiseValue">Unknown</b></div>
+    <div class="kv"><span>Calibration</span><b id="calState">Unknown</b></div>
+    <div class="kv"><span>Calibration residual</span><b id="calResidual">Unknown</b></div>
+    <div class="kv" id="simErrRow"><span>Error vs sim truth <span class="tag sim">SIMULATED</span></span><b id="simErr">Unknown</b></div>
+    <p class="note small">Noise is precision (sample-to-sample scatter), not absolute accuracy. Absolute accuracy is
+      Unknown without an independent reference; the sim-truth error exists only for simulated data.</p>
+    <h3>Warnings</h3>
+    <ul id="warnings" class="warnings"><li class="muted">Unknown</li></ul>
+  </section>
+
+  <!-- ATTITUDE -->
+  <section class="panel" id="panelAttitude">
+    <h2>Roll / pitch <span class="tag">tilt &middot; accelerometer</span></h2>
+    <canvas id="horizon" width="260" height="200" aria-label="Roll and pitch indicator"></canvas>
+    <div class="kv"><span>Roll</span><b id="rollValue">Unknown</b></div>
+    <div class="kv"><span>Pitch</span><b id="pitchValue">Unknown</b></div>
+    <p class="note small">Tilt is used to tilt-compensate the heading. It is not movement.</p>
+  </section>
+
+  <!-- MOVEMENT -->
+  <section class="panel unknown-panel" id="panelMovement">
+    <h2>Movement <span class="tag gps">GPS only</span></h2>
+    <div class="kv"><span>Course over ground</span><b id="cogValue" class="unk">Unknown</b></div>
+    <div class="kv"><span>Ground speed</span><b id="speedValue" class="unk">Unknown</b></div>
+    <p class="note"><b>Movement is not heading.</b> Direction and speed of travel can only come from a
+      position source such as GPS. The magnetometer cannot measure them, and the app never derives them from heading.</p>
+  </section>
+
+  <!-- POSITION -->
+  <section class="panel unknown-panel" id="panelPosition">
+    <h2>Geographic position <span class="tag gps">GPS only</span></h2>
+    <div class="kv"><span>GPS availability</span><b id="gpsStatus" class="pill unknown">Unknown</b></div>
+    <div class="kv"><span>Latitude</span><b id="latValue" class="unk">Unknown</b></div>
+    <div class="kv"><span>Longitude</span><b id="lonValue" class="unk">Unknown</b></div>
+    <p class="note" id="gpsNote">Position is not heading. Latitude and longitude come only from GPS.</p>
+  </section>
+
+  <!-- FIELD -->
+  <section class="panel wide" id="panelField">
+    <h2>Magnetic field <span class="tag">µT &middot; body frame (x fwd, y right, z down)</span></h2>
+    <div class="field-nums">
+      <div class="metric"><div class="label">Bx</div><div class="value mid" id="bx">Unknown</div></div>
+      <div class="metric"><div class="label">By</div><div class="value mid" id="by">Unknown</div></div>
+      <div class="metric"><div class="label">Bz</div><div class="value mid" id="bz">Unknown</div></div>
+      <div class="metric"><div class="label">|B| raw</div><div class="value mid" id="bmag">Unknown</div></div>
+      <div class="metric"><div class="label">|B| calibrated</div><div class="value mid" id="bmagCal">Unknown</div></div>
+    </div>
+    <canvas id="fieldChart" class="chart" height="200"></canvas>
+    <div class="legend"><span><i class="sw bx"></i>Bx</span><span><i class="sw by"></i>By</span><span><i class="sw bz"></i>Bz</span><span><i class="sw bm"></i>|B| raw</span></div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="panel wide" id="panelHistory">
+    <h2>Heading history
+      <select id="windowSel" aria-label="History window">
+        <option value="30">30 s</option><option value="60" selected>60 s</option>
+        <option value="180">3 min</option><option value="300">5 min</option>
+      </select>
+    </h2>
+    <canvas id="headingChart" class="chart" height="200"></canvas>
+    <div class="legend"><span><i class="sw measured"></i>Measured</span><span><i class="sw raw"></i>Raw</span><span><i class="sw reference"></i>Reference</span><span><i class="sw truth"></i>Sim truth</span><span class="muted">gaps = no data</span></div>
+    <h3>Recent samples</h3>
+    <div class="table-wrap">
+      <table id="samplesTable">
+        <thead><tr><th>Time (local)</th><th>Source</th><th>Heading °</th><th>Raw °</th><th>Ref °</th><th>Dev °</th>
+          <th>Bx</th><th>By</th><th>Bz</th><th>|B|</th><th>Quality</th><th>Status</th><th>GPS</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CALIBRATION -->
+  <section class="panel" id="panelCalib">
+    <h2>Calibration wizard</h2>
+    <ol class="steps">
+      <li>Start collecting, then rotate the sensor through as many orientations as possible (a full yaw turn at several tilts).</li>
+      <li>Fit: calls <code>heading_core.Calibration.fit</code> (hard + soft iron).</li>
+      <li>Review, apply, and save as JSON.</li>
+    </ol>
+    <div class="btn-row">
+      <button id="calStart">Start collecting</button>
+      <button id="calStop" class="ghost">Stop</button>
+      <button id="calFit">Fit</button>
+      <button id="calApply" disabled>Apply</button>
+      <button id="calClear" class="ghost">Remove calibration</button>
+    </div>
+    <div class="kv"><span>Samples</span><b id="calN">0</b></div>
+    <div class="qbar"><div id="calProgress"></div></div>
+    <div class="kv"><span>Heading coverage (30° bins)</span><b id="calBins">0/12</b></div>
+    <div class="kv"><span>Axis-sign octants covered</span><b id="calOct">0/8</b></div>
+    <pre id="calResult" class="calresult">No fit yet.</pre>
+    <div class="btn-row">
+      <input id="calName" placeholder="file name" value="calibration">
+      <button id="calSave">Save JSON</button>
+      <a id="calDownload" class="btn ghost" href="/api/calib/current" download>Download</a>
+    </div>
+    <div class="btn-row">
+      <select id="calFiles"><option value="">saved files…</option></select>
+      <button id="calLoad">Load</button>
+      <label class="btn ghost">Upload JSON<input id="calUpload" type="file" accept=".json,application/json" hidden></label>
+    </div>
+    <div id="calMsg" class="hint"></div>
+  </section>
+
+  <!-- RECORDING -->
+  <section class="panel" id="panelRecord">
+    <h2>Recording &amp; export</h2>
+    <div class="btn-row">
+      <a class="btn" href="/api/export.csv" id="exportCsv">Export history CSV</a>
+    </div>
+    <p class="note small">Exports the in-memory history (last 6000 samples). Empty cells mean Unknown / not reported.</p>
+    <div class="btn-row">
+      <button id="recCsv">Record CSV</button>
+      <button id="recJsonl">Record JSONL</button>
+      <button id="recStop" class="ghost" disabled>Stop</button>
+    </div>
+    <div class="kv"><span>Recording</span><b id="recState">off</b></div>
+    <p class="note small">JSONL recordings contain the original contract Samples and can be replayed with
+      <code>--source replay:&lt;file&gt;</code>.</p>
+    <ul id="recList" class="files"></ul>
+  </section>
+
+  <!-- TEST CONTROLS -->
+  <section class="panel test-panel" id="panelTest">
+    <h2>Test controls <span class="tag warn">app-side only</span></h2>
+    <p class="note small">These drop samples inside the app to exercise Unknown/stale handling. They do not
+      change the simulator or the sensor.</p>
+    <div class="btn-row">
+      <button id="pauseBtn">Pause intake</button>
+      <button id="dropoutBtn">Inject 5 s dropout</button>
+    </div>
+    <div class="kv"><span>Intake</span><b id="intakeState">–</b></div>
+    <div class="kv"><span>Last error</span><b id="lastError" class="small">none</b></div>
+  </section>
+</main>
+<footer>Headings: degrees clockwise from north, range [0, 360). Unknown = not measured, not reported, or stale (&gt; <span id="staleS">2</span> s old).</footer>
+<script src="/app.js"></script>
+</body>
+</html>
