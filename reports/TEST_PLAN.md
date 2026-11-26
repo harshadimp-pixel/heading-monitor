@@ -40,6 +40,7 @@ Applies to: `/workspace/heading-monitor` (README.md rules, ARCHITECTURE.md inter
 | E1 | NaN / inf input | Sample with NaN/inf in mag or accel | no crash; no NaN in heading_deg; warning emitted or sample rejected |
 | E2 | Saturation / out-of-range | |B| outside [25, 70] uT (or RM3100 +/-800 uT range limit) | `field`-magnitude warning raised, quality reduced |
 | E3 | Disconnected sensor | all-zero mag vector, or constant identical samples for > 1 s | warning / quality = 0 / estimate marked invalid; no division-by-zero |
+| E3b | Quantised stationary (added 2026-11-27, PM) | stationary sensor, 0.1 uT MSP quantisation, noise 15 nT [DATASHEET] and 0.05 uT [ASSUMED], 30 s @ 20 Hz | 0 SENSOR_STALE/MAG_STALE warnings; exactly identical samples must still be flagged |
 | E4 | Stale / non-monotonic data | timestamp repeated or going backwards, gap > 0.5 s | no crash; filter not corrupted (next valid sample within 1 deg of truth after settle) |
 | E5 | Magnetic interference | step disturbance of 10-30 uT (motor_interference scenario) | warning raised within 0.2 s of onset; heading error documented |
 | E6 | Malformed sample | missing `accel_g`, wrong-length vectors, wrong types, unknown `source` | missing accel -> `no accel`-type warning and level assumption; malformed -> rejected with error, no crash |
@@ -56,7 +57,7 @@ Applies to: `/workspace/heading-monitor` (README.md rules, ARCHITECTURE.md inter
 | M2 | MSP robustness | 10 000 fuzzed streams: bad checksum, truncated, oversized length, random garbage, frames split across reads, error frames (`$M!`) | 0 crashes/hangs; 0 bad-checksum frames accepted; all valid frames after garbage recovered |
 | M3 | Bridge source labelling | `--replay` emits only `source="replay"`; any fake/loopback emits `"sim"`; `"hardware"` only when a live serial port is opened | 100% |
 | M4 | Unit scaling | mag scaling per firmware (INAV/Betaflight/ArduPilot) documented and cited; applied scaling matches doc | match |
-| U1 | App startup | `python -m app --source sim` and `--source replay:<file>` start, serve HTTP 200 on :8080 within 10 s | pass |
+| U1 | App startup | T6's own instance on an ephemeral port; listener PID verified == launched PID (`ss -ltnp`); HTTP 200 + sim records; port released on shutdown | pass |
 | U2 | Source badge | Badge text is SIMULATED / REPLAY / HARDWARE and equals the mapping of `sample.source` for 100% of pushed frames, including after switching source; never inferred | 100% |
 | U3 | Dashboard accuracy | Value pushed to/displayed by UI == `HeadingEstimate.heading_deg` (same input) after documented rounding; 359.6 displays as 360 or 0 consistently and never as "360.0" if range is [0,360) | |diff| <= display resolution / 2 |
 | U4 | Units & fields | field in uT, tilt in deg, labels present; warnings from core shown | pass |

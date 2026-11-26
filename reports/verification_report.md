@@ -1,81 +1,143 @@
-# T6 Verification Report — PRELIMINARY (Phase 1 complete, Phase 2 partial)
+# T6 Verification Report — FINAL (v1.0)
 
-Auditor: Testing & Technical Auditor (T6). Run: 2026-11-27 00:05 IST on repo HEAD `912476c` **plus uncommitted
-working-tree changes of other owners** (T2/T4/T5 are still IN-PROGRESS, so results for them are provisional and will be re-run at REVIEW).
-Every result below is `[SIMULATED]` (or `[DATASHEET]` where marked). Nothing is `[HARDWARE-VERIFIED]`: `reports/hardware_logs/` does not exist.
+Auditor: Testing & Technical Auditor (T6). Run 2026-11-27 ~00:30 IST.
+**Code under test: commit `403976b`** (clean `git archive` export, so no uncommitted work-in-progress from other owners was included) plus T6's tests in `tests/`.
+Clean venv: `pip install -r requirements.txt`, giving numpy 2.5.5, pytest 9.2.0 and jsonschema 4.26.0. pyserial was added only for the firmware bridge's pty test.
+Raw logs (box scratch): `/workspace/audit/full_t6_403976b.log`, `full_summary_403976b.log`, `e3b*.log`, `claims_hwtag.log`.
+Executed commands and counts: see `TEST_RESULTS.md` (repo root).
 
-Command: `python3 -m pytest tests -v -s` → **71 passed, 2 failed, 1 skipped** (35.8 s). Full log: `/workspace/audit/phase1_final_run.log` (box scratch).
-Owner suites re-run by T6: `pytest sim/tests` 80 passed; `pytest heading_core/tests` 54 passed; `pytest docs/math/sensor-spec` 23 passed;
-`app/tests`, `firmware_bridge/tests`: empty (no tests yet).
+Evidence labels: every accuracy or robustness result here is **[SIMULATED]**. RM3100 constants are **[DATASHEET]**. MSP scaling is **[SOURCE-CODE]**.
+**Nothing is [HARDWARE-VERIFIED]:** `reports/hardware_logs/` does not exist.
 
-## Status of deliverables
-| Task | Owner | Tracker status | T6 verdict now |
+## 1. Verdict per deliverable
+| Deliverable | Owner | Verdict | Evidence (one line) |
 |---|---|---|---|
-| T1 hardware fact sheet | HW Research | REVIEW | **PASS (provisional)** – gain 20/38/75 LSB/µT @ CC 50/100/200, range ±800 µT, noise 30/20/15 nT re-read by T6 in PNI RM3100 User Manual Table 3-1 and match `key_numbers.json`; LIMITATIONS present (L1-L15); no unsupported claims. Note: `/workspace/hwsrc/RM3100-RM2100-Sensor-Suite-User-Manual.pdf` is a 233-byte captcha HTML page, not a PDF (failed download) – do not cite it. |
-| T2 heading_core | Math | IN-PROGRESS | **Not final.** All heading/tilt/declination/calibration criteria pass; E3 fails (D1). |
-| T3 simulator | Sim | REVIEW | **PASS** – S1 (8 scenarios schema-valid, monotonic t, 500 samples/10 s), S2 truth vs T6 refmodel ≤0.05 µT, S3 byte-identical per seed, S4 scaling matches datasheet gain, 80 owner tests pass, LIMITATIONS present. |
-| T4 firmware_bridge | FW | IN-PROGRESS | **NOT RUN** – no parser tests yet; no FC_SETUP.md yet. |
-| T5 app | UI | IN-PROGRESS | **Not final** – U1 smoke passes (`python -m app --source sim` serves :8080); U2-U5 not yet implemented by T6; no LIMITATIONS section yet. |
+| T1 hardware fact sheet (`docs/hardware/`) | HW Research | **PASS** | T6 re-read PNI RM3100 UM Table 3-1: gain 20/38/75 LSB/µT @ CC50/100/200, ±800 µT, noise 30/20/15 nT; these match `key_numbers.json` [DATASHEET]. LIMITATIONS L1-L17 are present. No unsupported claims. |
+| T2 heading_core + `docs/math/` | Math | **FAIL (one open MAJOR defect, D3)** | All 59 owner tests and 23 sensor-spec tests pass. All T6 heading, tilt, declination, calibration, filter and repeatability criteria pass, and D1 is fixed. However, E3b fails: a stationary RM3100 read through MSP (0.1 µT quantisation) is falsely flagged MAG_STALE (D3). |
+| T3 simulator (`sim/`) | Sim | **PASS** | 80/80 owner tests pass. S1-S4 pass: 8 scenarios are schema-valid, sim truth agrees with the T6 reference model to ≤0.05 µT, output is byte-identical per seed, and gain matches the datasheet. |
+| T4 firmware_bridge + `docs/firmware/FC_SETUP.md` | FW | **PASS** | 64 pass + 1 skip, and the pty test passes with pyserial (65/65). T6 MSP tests: 16/16 pass, 0 corrupted frames leaked into samples over 2000 fuzz streams, and source labelling is correct. D4 (found at 997d00f) is fixed in 403976b. |
+| T5 app (`app/`) | UI | **PASS** | 40/40 owner tests pass. T6 ran the dashboard on its own PID-verified instance on an ephemeral port: 10/10 checks pass. Displayed heading equals the heading_core value (diff 0.0), 0/360 rounding is correct, the badge equals sample.source in 100% of records, and errors and STALE states are surfaced. LIMITATIONS U0-U10 are present. |
+| PM docs (README, ARCHITECTURE, contracts, TEAM_TRACKER, REQUIREMENTS, BLOCKERS, PROJECT_STATUS) | PM | **PASS** | Contracts are consistent with all producers (schema validation passed everywhere). D2 is fixed and verified. No unsupported claims. |
+| T6 (this report, TEST_PLAN, tests, TEST_RESULTS) | QA | complete | Self-reported process incident D5 (see §6). |
 
-## Results per criterion
-| ID | Result | Evidence |
+## 2. Overall completion verdict
+**NOT APPROVED (yet).** The software runs end to end on simulated data: `python -m app --source sim` starts and serves, `python -m sim` emits samples, and `python -m firmware_bridge --fake-fc/--replay` emits valid samples. Every required report exists: FACTSHEET.md, HEADING_MATH.md, FC_SETUP.md, sim/README.md, app/README.md, firmware_bridge/README.md, TEST_PLAN.md, this report, and TEST_RESULTS.md.
+Approval is blocked by **one open MAJOR defect, D3 (T2)**. On the real hardware path (MSP, 0.1 µT steps), a healthy stationary sensor would be shown as stale or degraded.
+Once D3 is fixed and `tests/test_t6_stale_quant.py` passes, completion can be approved **for the virtual (simulated/replay) scope only**. Hardware performance remains unverified (see LIMITATIONS).
+
+## 3. Results per criterion (commit 403976b)
+| ID | Result | Evidence [SIMULATED] |
 |---|---|---|
-| H1 level sweep 0..359 | PASS | max err ≤ 0.01° vs T6 reference model |
+| H1 level sweep 0..359 | PASS | max err ≤ 0.01° vs the T6 reference model (itself checked against a textbook formula to 1e-6°) |
 | H2 cardinals / clockwise | PASS | N=0, E=90, S=180, W=270 |
-| H3 range [0,360) | PASS | 10 000 random attitudes, 359.999/0.001 edge cases |
-| H4 tilt ±30°, noise-free | PASS | ≤ 0.1° over 4 inclinations × 24 yaws × 13×13 tilt grid |
-| H5 tilt, noisy | PASS | RMSE 0.628°, max 2.317° (0.15 µT, 0.005 g, seed 42) |
-| H6 declination | PASS | d ∈ {-30,-1.5,0,0.5,15,180}; 359+2 → 1.0 |
-| H7 degenerate geometry | PASS | no crash / NaN-or-error for vertical field, zero field, accel along x |
-| C1 hard iron | PASS | est (35.004, -21.998, 40.003) vs true (35, -22, 40) µT |
-| C2 soft iron | PASS | |B| rel std 0.31 %, direction err 0.251° rms |
+| H3 output range | PASS | 10 000 random attitudes all in [0,360); edge cases 359.999 and 0.001 handled |
+| H4 tilt ±30°, noise-free | PASS | ≤ 0.1° (inclination 20/40/60/70°, 24 yaws, 13×13 tilt grid) |
+| H5 tilt, noisy | PASS | RMSE 0.628°, max 2.317° |
+| H6 declination | PASS | d ∈ {-30,-1.5,0,0.5,15,180}; 359° + 2° → 1.0° |
+| H7 degenerate geometry | PASS | no crash; each case returns either a NaN or error, or a flagged result |
+| C1 hard iron | PASS | estimated (35.004, -21.998, 40.003) vs true (35, -22, 40) µT |
+| C2 soft iron | PASS | relative std of |B| 0.31 %, direction error 0.251° rms |
 | C3 calibrated heading | PASS | 0.354° RMSE calibrated vs 82.4° uncalibrated |
-| C4 fit robustness | PASS | <10 pts and yaw-only data raise ValueError; NaN rows dropped, fit still good |
-| C5 serialization | PASS | round-trip diff ≤ 1e-9 |
-| E1 NaN/inf mag/accel | PASS | no NaN output, flagged, filter recovers within 1° |
-| E2 field out of range (×0.3, ×2, ×20) | PASS | FIELD_MAGNITUDE warning |
-| E3 frozen / stuck sensor (3 s identical) | **FAIL** | warnings [] and quality 1.0 → **D1** |
-| E4 time anomalies | PASS | backwards / repeated t and 2 s gap: no crash, back within 1° |
-| E5 interference step 25 µT | PASS | flagged at onset sample; heading error during disturbance 13.1° (reported) |
-| E6 missing accel / malformed | PASS | NO_ACCEL + level assumption; malformed rejected or schema-valid |
-| F1 wrap-around smoothing | PASS | identical behaviour across 0/360 and 180 (diff 1.4e-13); lag 4.5° on 25°/s ramp (tuning, reported) |
-| F2 step 90° | PASS | settles within 1° after 42 samples (0.84 s @ 50 Hz) |
-| K1 schema + source passthrough | PASS | sim/replay/hardware all passed through unchanged |
+| C4 fit robustness | PASS | <10 points or yaw-only data → ValueError; NaN rows dropped and the fit is still good |
+| C5 serialisation | PASS | round-trip diff ≤ 1e-9 |
+| E1 NaN/inf input | PASS | flagged; filter recovers within 1° |
+| E2 field out of range | PASS | FIELD_MAGNITUDE_OUT_OF_RANGE raised at ×0.3, ×2 and ×20 |
+| E3 frozen sensor (identical samples, 3 s) | PASS | SENSOR_STALE, quality 0.05 → **D1 closed** |
+| E3b quantised stationary must NOT be stale | **FAIL** | At σ = 15 nT [DATASHEET] with 0.1 µT steps: 55/600 samples flagged MAG_STALE (first at 4.6 s), min quality 0.296. Same result with and without `meta.mag_quant_uT`. At σ = 0.05 µT [ASSUMED]: 0/600. Frozen case with meta still flagged (PASS). → **D3** |
+| E4 time anomalies | PASS | no crash; back within 1° |
+| E5 interference step 25 µT | PASS | flagged at the onset sample; 13.1° error during the disturbance (reported, not gated) |
+| E6 missing accel / malformed | PASS | NO_ACCEL plus level assumption; malformed input rejected |
+| F1 wrap-invariant smoothing | PASS | behaviour identical across 0/360 and 180 (diff 1.4e-13); 4.5° lag on a 25°/s ramp (tuning property, reported) |
+| F2 step 90° | PASS | within 1° after 42 samples (0.84 s at 50 Hz) |
+| K1 schema + source passthrough | PASS | |
 | R1 repeatability, identical input ×5 | PASS | spread 0.0° |
-| A1/R2 end-to-end, 5 seeds, 20 s | PASS | RMSE mean±std: static 0.371±0.254, yaw_spin 0.527±0.241, tilted_spin 0.549±0.226, hard_iron 0.528±0.243, soft_iron 0.527±0.242 (calibrated from separate calibration_dance), high_noise 0.846±0.229 |
-| A1 motor_interference | PASS (flag) | warnings raised; RMSE 16.3° during interference (expected; no target) |
-| S1-S4 sim | PASS | see T3 row |
-| M1-M3 MSP | NOT RUN | firmware_bridge in progress; T6 frame builders (v1 XOR, v2 CRC8 DVB-S2) ready in tests/msp_frames.py |
-| U1 app starts | PASS | HTTP 200 on :8080 within 10 s |
-| U2-U5 dashboard | NOT RUN | pending T5 REVIEW |
-| Q1 claims audit | PASS so far | see below |
-| Q3 LIMITATIONS sections | FAIL (pending) | missing in app/ (T5 in progress) |
+| A1/R2 end-to-end, 5 seeds × 20 s | PASS | RMSE mean±std: static 0.371±0.254, yaw_spin 0.527±0.241, tilted_spin 0.549±0.226, hard_iron 0.528±0.243, soft_iron 0.527±0.242 (calibrated from a separate calibration_dance), high_noise 0.846±0.229 |
+| A1 motor_interference | PASS (flag) | warnings raised; RMSE 16.3° during interference (no target) |
+| S1-S4 simulator | PASS | see T3 row |
+| M1 decode exact (v1, v2) | PASS | RAW_IMU and ATTITUDE payloads decoded exactly; bridge encoder byte-identical to the T6 encoder (CRC-8/DVB-S2 check value 0xBC verified) |
+| M2 robustness | PASS | byte-by-byte and random chunking OK; bad XOR and bad CRC rejected; every payload single-bit flip rejected; truncated → resync; short length mismatch rejected; error frames reported. Fuzz over 2000 streams: 98.8 % of valid frames recovered. 4 corrupted v2 frames passed the 8-bit CRC (size-byte collisions, inherent 1/256); **0 leaked** into samples or attitude (payload-length check). |
+| M2 long-length resync | OBSERVATION | A corrupted length byte claiming 200 bytes holds back the 3 following valid frames until 156 more bytes arrive. Live polling: a few cycles of delay. End of a binary replay: those frames are lost. Not gated. |
+| M3 source labelling + schema | PASS | `--fake-fc` → 50/50 samples with source=sim, schema-valid. `--replay` of hardware-labelled JSONL → source=replay with `original_source` kept. Binary replay with garbage → 4/4 valid. Malformed Sample lines: at 997d00f, 2 of 3 emitted lines were schema-invalid (**D4**); at 403976b they are skipped (**D4 closed**). |
+| M4 INAV scaling | PASS | 512 LSB/g, mGauss → 0.1 µT, FLU→FRD (x,-y,-z): level → accel (0,0,-1) g [SOURCE-CODE, not hardware-checked] |
+| U1 app starts (own instance) | PASS | Ephemeral port; `ss -ltnp` listener PID == PID launched by T6 (e.g. pid 82508, port 60061); 29 sim records in 1.5 s; port released after shutdown. **The earlier Phase-1 U1 PASS is withdrawn:** it may have hit the UI developer's :8080 instance. |
+| U2 source badge | PASS | Records cycling through sim/replay/hardware: badge (the UI's own `headingmath.js` in Node) maps exactly in 10/10. Non-contract values ("SIMULATED", "", null, "sensor", "HARDWARE") → no badge (NO DATA); nothing is inferred. |
+| U3 displayed value | PASS | App `heading_deg` vs a fresh heading_core fed the same samples: max diff 0.0°. Steady display: 359.96 → "0.0", 359.94 → "359.9", 0.04 → "0.0", 0.06 → "0.1", 180 → "180.0", 89.95 → "90.0"; "360.0" never shown. |
+| U4 errors / quality / staleness | PASS | 3× field → FIELD_MAGNITUDE_OUT_OF_RANGE, quality 0.003. 2-element mag → HTTP 422, counted invalid. 2.2 s silence with `--stale 1.5` → sensor_status STALE. |
+| U5 CSV export | PASS | export equals history to ≤ 1e-6 |
+| Q1a hardware tag | PASS | 0 applied tags; 19 mentions excluded and each confirmed by hand (§5) |
+| Q1b positioning / navigation | PASS | 0 rejected (§5) |
+| Q3 LIMITATIONS present | PASS | docs/hardware, docs/math, sim, docs/firmware, firmware_bridge, app |
 
-## Math recomputation (T6, independent)
-TC12: 1000·sin2° = 34.8995 m, 1000·cos2° = 999.3908 m, 2000·sin1° = 34.9048 m (match). TC18: 1000·sin1° = 17.4524 m; white-noise
-approx 10·√100·rad(2°) = 3.4907 m (match). TC08 dipole: 7.407 / 3.704 / 0.926 µT (match). T1 gain table re-read from PDF (match).
+### Accuracy-figure inputs, kept separate (PM request)
+**[DATASHEET]:** RM3100 noise 15 nT rms and gain 75 LSB/µT at CC200; range ±800 µT. Source: PNI RM3100 User Manual Table 3-1, re-read by T6 in `/workspace/hwsrc/RM3100-User-Manual.pdf`.
+**[SOURCE-CODE]:** MSP mag quantisation 0.1 µT (int16 mGauss) and accel 1/512 g, per `firmware_bridge/scaling.py` and FC_SETUP.md §6 (INAV source).
+**[ASSUMED]** (no external source; sim constants or T6 choices):
+- accel noise 0.003 g and accel bias σ 0.01 g
+- gyro noise 0.05 °/s and gyro bias σ 0.3 °/s
+- FC attitude noise 0.3°
+- high_noise scenario: env noise 1.0 µT and IMU ×5
+- hard-iron (25,-15,10) µT and the soft-iron matrices
+- motor k (0.8,-0.4,1.5) µT/A
+- Earth field 50 µT, inclination 60°, declination 0
+- T6 tests: 0.15 µT / 0.005 g noise in H5 and C1-C3, 0.002 g accel and 0.05 µT environment noise in E3b
 
-## Claims audit (Q1) – statements implying position / distance / navigation / hardware performance
-Automated scan (`tests/test_t6_claims.py`) + manual read. **No unsupported claim found so far; nothing rejected yet.**
-- `docs/math/sensor-spec/` TC12/TC17/TC18 (“Dead-reckoning cross-track error…”, “dead reckoning in lat/lon”): **accepted as analysis
-  only** – it quantifies how heading error would propagate *if* a velocity source existed; SPEC.md §4.6 states position is
-  unobservable from heading alone. Condition: this code must never be surfaced in the app as a position/distance feature.
-- `docs/hardware/FACTSHEET.md` 329/331/349 “distance”: physical separation guidance for interference, not measurement. OK.
-- `app/hub.py:29`: “position and movement are Unknown. Nothing is inferred from heading.” Correct.
-- All docs state nothing is `[HARDWARE-VERIFIED]`. OK.
+The accel bias (0.01 g, about 0.57° of tilt) is the main contributor to the A1 RMSE figures.
 
-## TEAM_RULES compliance (Q3)
-- Rule 3 (shared repo): all work found in repo. Rule 13 (LIMITATIONS): present for T1 (FACTSHEET §8 + tracker), T3 (sim/README + tracker),
-  T2 sensor-spec (S1-S9), FW research doc; **missing for app/** (in progress).
-- Process note (D2): commit 7313846 `[pm]` used a blanket add and committed T6's uncommitted test files and `tests/__pycache__/*.pyc`.
+## 4. Defects
+| ID | Sev | Owner | Status | Summary |
+|---|---|---|---|---|
+| D1 | MAJOR | T2 | **CLOSED** | Frozen sensor not flagged. Fixed in 758faeb; E3 passes in T6's own run at 403976b. |
+| D2 | MINOR | PM | **CLOSED** | Blanket commit. Verified: `.gitignore` covers caches; 0 tracked .pyc files; PM commits 0c66c38, fc91815 and 9d0552f touch only PM paths, plus the .pyc removal. |
+| D3 | MAJOR | T2 | **OPEN** | MAG_STALE false alarm on a stationary, MSP-quantised (0.1 µT) sensor at datasheet noise (55/600 samples, quality down to 0.30). `meta.mag_quant_uT` (now emitted by T4) is not consumed by heading_core. Design note: in T6's simulation of 60 s stationary runs (20 seeds), the longest bit-identical run had median 0.68 s and max 20.65 s, and 4 of 20 runs exceeded 5 s. The planned "5 s window" rule would therefore still false-alarm. Suggestion: when the source is quantised, flag MAG_STALE only if accel is also frozen, or reduce quality without raising a stale warning. |
+| D4 | MAJOR | T4 | **CLOSED** | `--replay` forwarded schema-invalid Sample lines (found at 997d00f); fixed in 403976b. |
+| D5 | MINOR | T6 | **CLOSED** (self-reported) | While re-running the T4 suite, T6 mistakenly ran `git checkout 997d00f --` in the shared repo, which detached HEAD for about 2 minutes. The UI developer's commit landed on the detached HEAD as 0525a82. T6 restored `main` and cherry-picked it as **84fc231** (author kept, tree identical, no content lost). Uncommitted work of other owners carried over intact. T6 now tests from `git archive` exports only. |
 
-## Defects
-- **D1 (MAJOR, T2)** E3: 3 s of bit-identical samples (frozen/disconnected sensor returning last value) produce no warning and quality 1.0.
-  A real RM3100 always shows count-level noise; a stuck value should raise e.g. STALE_DATA and drop quality.
-- **D2 (MINOR, PM)** blanket `git add` committed other owners' WIP and .pyc files; use path-scoped adds.
+## 5. Claims audit
+**Rule for the hardware tag** (implemented in `tests/test_t6_claims.py`, with a self-test): a line containing "[HARDWARE-VERIFIED]" / "hardware-verified" / "hardware verified" counts as a *mention* only if the same line contains a rule or negation cue (no, not, nothing, none, never, nobody, cannot, require(s/d), until, before any, must not, may not, only if/when/after, without a, is/are not, carries). Every other occurrence counts as *applied* and fails while `reports/hardware_logs/` is empty. The self-test confirms that "RMSE 0.4° [HARDWARE-VERIFIED]" and a table cell "HARDWARE-VERIFIED" are still caught.
 
-## LIMITATIONS (T6)
-1. Preliminary: T2, T4, T5 not in REVIEW; their results will be re-run. 2. All accuracy figures are [SIMULATED] against an
-idealised model; none transfer to the physical RM3100/Matek FC. 3. MSP and dashboard (U2-U5) criteria not yet executed.
-4. Exact Matek FC model unknown (T1 L1). 5. No hardware logs exist, so no [HARDWARE-VERIFIED] sign-off is possible.
-6. Project completion **cannot be approved yet**: T4 deliverable and FC_SETUP.md, app LIMITATIONS, dashboard checks, and final T2 are pending.
+T6 confirmed all 19 excluded mentions by hand; each states that nothing is hardware-verified or explains the rule:
+- README.md:24
+- BLOCKERS.md:5
+- PROJECT_STATUS.md:16
+- TEAM_TRACKER.md:11 and :40
+- REQUIREMENTS.md:19
+- HARDWARE_VALIDATION_CHECKLIST.md:4
+- FC_SETUP.md:3 and :199
+- HEADING_MATH.md:6
+- FACTSHEET.md:6 and :357
+- key_numbers.json:2
+- app/README.md:151 ("Nothing here is hardware-verified.")
+- app.js:207
+- index.html:26
+- firmware_bridge/README.md:5
+- scaling.py:5
+- sim/README.md:8
+
+**Positioning / distance / GPS-independent navigation: no claim rejected.** Reviewed:
+- docs/math/sensor-spec TC12/TC17/TC18 and HEADING_MATH.md: dead-reckoning figures are error analysis only, with a binding scope rule (§1 and L17). T6 recomputed 34.8995 m, 999.3908 m, 34.9048 m and 17.4524 m.
+- app/README §U0, index.html, app.js: "Heading is orientation, not movement or position"; position, coordinates, speed, course and distance removed.
+- ARCHITECTURE.md:54 and contracts: optional `gps` object is availability-only, with no coordinates.
+- FC_SETUP.md: no accuracy or position claims. "Fine for heading" for 0.1 µT steps is supported by the [SIMULATED] quantisation study in docs/firmware.
+
+**Hardware-performance statements without a hardware log:** none found. Every hardware-related number is tagged [DATASHEET], [SOURCE-CODE] or [DERIVED], and explicitly unverified.
+
+## 6. TEAM_RULES compliance
+| Rule | Finding |
+|---|---|
+| 1 independent roles | Respected. One violation, by T6: D5 (accidental HEAD detach), now repaired. |
+| 3 shared repo | All deliverables are in the repo. |
+| 4 research before assuming | T1, T4 and T2 cite pinned sources; the datasheet was verified by T1 (66/66) and independently by T6. |
+| 5 execute & verify | Every owner suite re-run by T6 passes. Owner-reported counts match T6's runs: T2 59, T3 80, T4 64+1 (65 with pyserial), T5 40, sensor-spec 23. |
+| 7 no fabrication | No owner figure contradicted. T6 recomputed the math-spec numbers and the datasheet table. |
+| 8/9 free tools, no spend | Dependencies: numpy, pytest, jsonschema, optional pyserial (all free). |
+| 10 virtual only | Yes; no hardware was touched. |
+| 13 LIMITATIONS | Present in every area and in TEAM_TRACKER.md. |
+
+## LIMITATIONS (T6, unresolved)
+1. All results are [SIMULATED] against an idealised uniform-field model. **None transfer to the physical RM3100 or Matek FC.** No hardware log exists, so [HARDWARE-VERIFIED] sign-off is impossible. See reports/HARDWARE_VALIDATION_CHECKLIST.md (not run).
+2. Exact Matek FC model and firmware are unknown (T1 L1). INAV axis convention, mag scaling and pitch sign are [SOURCE-CODE] derivations only.
+3. MSP tests use hand-built frames; real FC timing, rate limits and partial reads over USB are untested. The long-length resync delay (§3 M2) is unquantified on a live link.
+4. Dashboard checks used the app's ingest mode, the UI's own `headingmath.js` run in Node, and the UI developer's headless-Chrome test. T6 did not visually inspect the rendered pixels, and did not assess human readability.
+5. App ingest mode accepts the client-declared `source`, so a client POSTing source="hardware" gets a HARDWARE badge. This is contract-compliant, but the ingest endpoint should only be fed by the bridge.
+6. F1 lag (4.5° on a 25°/s ramp) and E5 error during interference (13°) are reported, not gated.
+7. T6 numeric targets are T6 proposals and have not been reviewed by the owner.
