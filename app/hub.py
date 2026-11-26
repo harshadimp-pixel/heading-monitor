@@ -25,14 +25,14 @@ STALE_AFTER_S = 2.0
 HISTORY_LEN = 6000
 DEGRADING_WARNINGS = {"FIELD_MAGNITUDE_OUT_OF_RANGE", "TILT_TOO_LARGE", "DIP_ANGLE_ANOMALY",
                       "HIGH_NOISE"}
-GPS_NOTE = ("The Sample contract (contracts/sample.schema.json v0.1) has no GPS fields, so GPS "
-            "availability, position and movement are Unknown. Nothing is inferred from heading.")
+GPS_NOTE = ("The Sample contract has no GPS fields, so GPS availability is Unknown. "
+            "Nothing is inferred from heading.")
 
 CSV_COLUMNS = ["recv_time_iso", "t", "source", "heading_deg", "heading_raw_deg", "reference_deg",
                "deviation_deg", "roll_deg", "pitch_deg", "bx_uT", "by_uT", "bz_uT",
                "field_raw_uT", "field_cal_uT", "calibrated", "quality", "noise_1sigma_deg",
                "warnings", "sensor_status", "estimator_backend", "truth_heading_deg_sim_only",
-               "gps_status", "lat_deg", "lon_deg", "course_over_ground_deg", "speed_mps"]
+               "gps_status", "mag_raw_x", "mag_raw_y", "mag_raw_z"]
 
 
 def _iso(ms: float) -> str:
@@ -46,6 +46,7 @@ def _num(v, nd=3):
 def record_to_row(r: dict) -> list:
     """CSV row. Empty cell = unknown / not reported. gps_status is the literal 'unknown'."""
     mag = r.get("mag_uT") or [None] * 3
+    raw = r.get("mag_raw") if isinstance(r.get("mag_raw"), list) else ["", "", ""]   # optional
     return [r["recv_time_iso"], r.get("t"), r.get("source"), _num(r.get("heading_deg")),
             _num(r.get("heading_raw_deg")), _num(r.get("reference_deg")),
             _num(r.get("deviation_deg")), _num(r.get("roll_deg")), _num(r.get("pitch_deg")),
@@ -53,7 +54,7 @@ def record_to_row(r: dict) -> list:
             _num(r.get("field_uT")), "" if r.get("calibrated") is None else str(r["calibrated"]).lower(),
             _num(r.get("quality")), _num(r.get("noise_1sigma_deg")),
             ";".join(r.get("warnings") or []), r.get("sensor_status", ""), r.get("estimator_backend", ""),
-            _num(r.get("truth_heading_deg")), r.get("gps_status", "unknown"), "", "", "", ""]
+            _num(r.get("truth_heading_deg")), r.get("gps_status", "unknown"), *raw]
 
 
 def safe_name(name: str, ext: str) -> str:
@@ -62,8 +63,9 @@ def safe_name(name: str, ext: str) -> str:
 
 
 class Hub:
-    def __init__(self, source_spec: str, declination_deg: float = 0.0):
+    def __init__(self, source_spec: str, declination_deg: float = 0.0, stale_after_s: float = STALE_AFTER_S):
         self.lock = threading.RLock()
+        self.stale_after_s = float(stale_after_s)
         self.source_spec = source_spec
         self.core = CoreAdapter(declination_deg)
         self.history = collections.deque(maxlen=HISTORY_LEN)
@@ -138,6 +140,7 @@ class Hub:
         mag = s["mag_uT"]
         r = {"seq": self.seq, "recv_ms": ms, "recv_time_iso": _iso(ms), "t": s["t"],
              "source": s["source"], "mag_uT": mag, "accel_g": s.get("accel_g"),
+             "mag_raw": s.get("mag_raw"), "rm3100_cycle_count": s.get("rm3100_cycle_count"),
              "field_raw_uT": math.sqrt(sum(v * v for v in mag)),
              "estimator_backend": backend, "error": est_err,
              "truth_heading_deg": (s.get("truth") or {}).get("heading_deg") if s["source"] == "sim" else None,
@@ -246,8 +249,8 @@ class Hub:
         if not isinstance(doc, dict):
             raise ValueError("calibration JSON must be an object")
         cal = doc.get("calibration", doc)
-        if not isinstance(cal, dict) or "offset" not in cal:
-            raise ValueError("calibration JSON needs an 'offset' field")
+        if not isinstance(cal, dict) or not ({"offset", "offset_uT"} & set(cal)):
+            raise ValueError("calibration JSON needs an 'offset_uT' (or 'offset') field")
         self.apply_calibration(cal, doc.get("fit_backend", "loaded-file"))
 
     @staticmethod
@@ -308,8 +311,8 @@ class Hub:
                 sensor, why = "NO DATA", "no valid sample received yet"
                 if src_state == "fault":
                     sensor, why = "FAULT", self.source_status.get("detail", "")
-            elif age > STALE_AFTER_S:
-                sensor, why = "STALE", f"no sample for {age:.1f} s (timeout {STALE_AFTER_S} s)"
+            elif age > self.stale_after_s:
+                sensor, why = "STALE", f"no sample for {age:.1f} s (timeout {self.stale_after_s} s)"
                 if src_state == "fault":
                     sensor, why = "FAULT", self.source_status.get("detail", "")
             else:
@@ -322,7 +325,7 @@ class Hub:
                 "source_status": self.source_status,
                 "latest_sample_source": self.latest["source"] if self.latest else None,
                 "last_sample_age_s": age,
-                "stale_after_s": STALE_AFTER_S,
+                "stale_after_s": self.stale_after_s,
                 "rate_hz": rate,
                 "sensor_status": sensor,
                 "sensor_status_reason": why,

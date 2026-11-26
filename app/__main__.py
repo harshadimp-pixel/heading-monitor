@@ -24,13 +24,15 @@ def main(argv=None):
     ap.add_argument("--loop", action="store_true", help="loop replay file")
     ap.add_argument("--declination", type=float, default=0.0,
                     help="magnetic declination in deg (east +). 0 = headings are MAGNETIC")
+    ap.add_argument("--stale", type=float, default=2.0,
+                    help="seconds without samples before values show Unknown/STALE (default 2)")
     ap.add_argument("--calibration", default=None, help="calibration JSON file to load at start")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-    hub = Hub(a.source, declination_deg=a.declination)
+    hub = Hub(a.source, declination_deg=a.declination, stale_after_s=a.stale)
     if a.calibration:
         import json
         with open(a.calibration) as f:

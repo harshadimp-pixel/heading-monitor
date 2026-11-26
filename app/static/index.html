@@ -23,7 +23,7 @@
     <div class="small" id="backendText">heading_core: –</div>
   </div>
 </header>
-<div id="evidenceBanner" class="evidence">Evidence label: values shown are only as good as their source. Nothing here is [HARDWARE-VERIFIED].</div>
+<div id="evidenceBanner" class="evidence">Evidence label: values shown are only as good as their source. Nothing here is hardware-verified.</div>
 
 <main class="grid">
   <!-- HEADING -->
@@ -63,9 +63,9 @@
         </div>
       </div>
     </div>
-    <p class="note"><b>Heading is orientation, not direction of travel.</b> It is the direction the sensor's
+    <p class="note"><b>Heading is orientation, not movement or position.</b> It is the direction the sensor's
       forward (x) axis points, measured clockwise from magnetic north (true north only if a declination is configured).
-      A vehicle can point one way and move another (wind, drift, reversing), and heading says nothing about where it is.</p>
+      A vehicle can point one way and travel another (wind, drift, reversing).</p>
   </section>
 
   <!-- STATUS / ACCURACY -->
@@ -98,22 +98,11 @@
     <p class="note small">Tilt is used to tilt-compensate the heading. It is not movement.</p>
   </section>
 
-  <!-- MOVEMENT -->
-  <section class="panel unknown-panel" id="panelMovement">
-    <h2>Movement <span class="tag gps">GPS only</span></h2>
-    <div class="kv"><span>Course over ground</span><b id="cogValue" class="unk">Unknown</b></div>
-    <div class="kv"><span>Ground speed</span><b id="speedValue" class="unk">Unknown</b></div>
-    <p class="note"><b>Movement is not heading.</b> Direction and speed of travel can only come from a
-      position source such as GPS. The magnetometer cannot measure them, and the app never derives them from heading.</p>
-  </section>
-
-  <!-- POSITION -->
-  <section class="panel unknown-panel" id="panelPosition">
-    <h2>Geographic position <span class="tag gps">GPS only</span></h2>
-    <div class="kv"><span>GPS availability</span><b id="gpsStatus" class="pill unknown">Unknown</b></div>
-    <div class="kv"><span>Latitude</span><b id="latValue" class="unk">Unknown</b></div>
-    <div class="kv"><span>Longitude</span><b id="lonValue" class="unk">Unknown</b></div>
-    <p class="note" id="gpsNote">Position is not heading. Latitude and longitude come only from GPS.</p>
+  <!-- GPS AVAILABILITY (status only) -->
+  <section class="panel unknown-panel" id="panelGps">
+    <h2>GPS availability <span class="tag gps">status only</span></h2>
+    <div class="kv"><span>GPS</span><b id="gpsStatus" class="pill unknown">Unknown</b></div>
+    <p class="note" id="gpsNote">This app shows heading only. Heading is orientation, not movement or position.</p>
   </section>
 
   <!-- FIELD -->
@@ -126,6 +115,7 @@
       <div class="metric"><div class="label">|B| raw</div><div class="value mid" id="bmag">Unknown</div></div>
       <div class="metric"><div class="label">|B| calibrated</div><div class="value mid" id="bmagCal">Unknown</div></div>
     </div>
+    <div class="kv"><span>RM3100 raw counts (mag_raw, optional)</span><b id="magRaw">Unknown</b></div>
     <canvas id="fieldChart" class="chart" height="200"></canvas>
     <div class="legend"><span><i class="sw bx"></i>Bx</span><span><i class="sw by"></i>By</span><span><i class="sw bz"></i>Bz</span><span><i class="sw bm"></i>|B| raw</span></div>
   </section>
@@ -144,7 +134,7 @@
     <div class="table-wrap">
       <table id="samplesTable">
         <thead><tr><th>Time (local)</th><th>Source</th><th>Heading °</th><th>Raw °</th><th>Ref °</th><th>Dev °</th>
-          <th>Bx</th><th>By</th><th>Bz</th><th>|B|</th><th>Quality</th><th>Status</th><th>GPS</th></tr></thead>
+          <th>Bx</th><th>By</th><th>Bz</th><th>|B|</th><th>Quality</th><th>Status</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -215,6 +205,7 @@
   </section>
 </main>
 <footer>Headings: degrees clockwise from north, range [0, 360). Unknown = not measured, not reported, or stale (&gt; <span id="staleS">2</span> s old).</footer>
+<script src="/headingmath.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

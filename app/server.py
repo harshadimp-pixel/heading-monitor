@@ -3,6 +3,7 @@
 Routes (JSON unless noted):
   GET  /                      UI (static/)
   GET  /ws                    WebSocket: {"type":"hello"|"update", "status":..., "records":[...]}
+  GET  /api/health            liveness: {"ok": true, ...}
   GET  /api/status            current status
   GET  /api/history?since=N   recent records (max 2000)
   GET  /api/export.csv        history ring buffer as CSV (text/csv)
@@ -123,6 +124,11 @@ def make_handler(hub: Hub, bc: Broadcaster):
             try:
                 if p == "/ws":
                     return self._websocket()
+                if p == "/api/health":
+                    st = hub.status()
+                    return self._json({"ok": True, "app": "heading-monitor T5", "source_spec": hub.source_spec,
+                                       "sensor_status": st["sensor_status"],
+                                       "estimator_backend": st["core"]["estimator_backend"]})
                 if p == "/api/status":
                     return self._json(hub.status())
                 if p == "/api/history":

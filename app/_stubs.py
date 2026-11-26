@@ -100,8 +100,9 @@ class StubCalibration:
 
     @staticmethod
     def from_dict(d):
-        return StubCalibration(d.get("offset"), d.get("soft_iron"), d.get("field_uT"),
-                               d.get("residual_rms"), d.get("n_samples", 0))
+        # accepts both the stub keys and heading_core's keys (offset_uT / residual_rms_uT)
+        return StubCalibration(d.get("offset", d.get("offset_uT")), d.get("soft_iron"), d.get("field_uT"),
+                               d.get("residual_rms", d.get("residual_rms_uT")), d.get("n_samples", 0))
 
 
 # ---------------------------------------------------------------- estimator
@@ -166,6 +167,7 @@ class StubSim:
         d = math.radians(dip_deg)
         self.earth = [b0 * math.cos(d), 0.0, b0 * math.sin(d)]
         self.noise = 0.15 * (6 if scenario == "noisy" else 1)
+        self.accel_noise = 0.005
         self.hard_iron = [8.0, -5.0, 3.0] if scenario in ("hard_iron", "slow_yaw_spin", "tilted_spin") else [0.0, 0.0, 0.0]
 
     @staticmethod
@@ -194,7 +196,7 @@ class StubSim:
         mag = [sum(Rt[i][k] * self.earth[k] for k in range(3)) + self.hard_iron[i]
                + self.rng.gauss(0, self.noise) for i in range(3)]
         grav = [0.0, 0.0, 1.0]
-        acc = [-sum(Rt[i][k] * grav[k] for k in range(3)) + self.rng.gauss(0, 0.005) for i in range(3)]
+        acc = [-sum(Rt[i][k] * grav[k] for k in range(3)) + self.rng.gauss(0, self.accel_noise) for i in range(3)]
         return {"t": round(t, 4), "source": "sim", "mag_uT": [round(v, 4) for v in mag],
                 "accel_g": [round(v, 5) for v in acc],
                 "truth": {"heading_deg": round(wrap360(yaw), 3), "roll_deg": round(roll, 3),

@@ -24,7 +24,7 @@ code{background:#0f1720;padding:1px 4px;border-radius:4px;font-size:12px}
 .panel.wide{grid-column:span 6}
 .heading-panel{grid-column:span 8}
 #panelStatus{grid-column:span 4}
-#panelAttitude,#panelMovement,#panelPosition{grid-column:span 4}
+#panelAttitude,#panelGps{grid-column:span 4}
 #panelCalib,#panelRecord,#panelTest{grid-column:span 4}
 h2{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 h3{margin:14px 0 6px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
@@ -80,5 +80,5 @@ td.unk{color:var(--muted);font-style:italic}
 .test-panel{border-color:#5b4a06}
 .small{font-size:11.5px}.muted{color:var(--muted)}
 footer{color:var(--muted);font-size:12px;padding:6px 20px 20px}
-@media (max-width:1200px){.heading-panel,.panel.wide{grid-column:span 12}#panelStatus,#panelAttitude,#panelMovement,#panelPosition,#panelCalib,#panelRecord,#panelTest{grid-column:span 6}}
-@media (max-width:760px){.panel,.heading-panel,.panel.wide,#panelStatus,#panelAttitude,#panelMovement,#panelPosition,#panelCalib,#panelRecord,#panelTest{grid-column:span 12}.field-nums{grid-template-columns:repeat(3,1fr)}.source-badge{font-size:20px;min-width:0}.badge-wrap{margin-left:0}}
+@media (max-width:1200px){.heading-panel,.panel.wide{grid-column:span 12}#panelStatus,#panelAttitude,#panelGps,#panelCalib,#panelRecord,#panelTest{grid-column:span 6}}
+@media (max-width:760px){.panel,.heading-panel,.panel.wide,#panelStatus,#panelAttitude,#panelGps,#panelCalib,#panelRecord,#panelTest{grid-column:span 12}.field-nums{grid-template-columns:repeat(3,1fr)}.source-badge{font-size:20px;min-width:0}.badge-wrap{margin-left:0}}

@@ -1,0 +1,4 @@
+recordings/
+calibrations/
+__pycache__/
+*.pyc

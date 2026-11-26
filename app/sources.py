@@ -46,6 +46,10 @@ def validate_sample(s) -> str | None:
                     or not all(isinstance(x, (int, float)) and not isinstance(x, bool)
                                and math.isfinite(x) for x in v)):
                 return f"{k} must be 3 finite numbers"
+    if "mag_raw" in s and s["mag_raw"] is not None:   # OPTIONAL: absent on CAN-L4-3100 / DroneCAN streams
+        v = s["mag_raw"]
+        if not isinstance(v, list) or len(v) != 3 or not all(isinstance(x, int) and not isinstance(x, bool) for x in v):
+            return "mag_raw, when present, must be 3 integers"
     return None
 
 
