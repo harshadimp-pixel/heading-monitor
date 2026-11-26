@@ -170,6 +170,14 @@ Frames: NED, body x forward, y right, z down; ZYX Euler (yaw, pitch, roll), yaw 
     sources, WMM, navigation and geodesy, which the sim doesn't model). One MISMATCH is logged: TC19 quantisation σ, where
     the spec's LSB of 0.013 µT differs from the sim's 1/75 µT. The spec's temperature terms (k_T, k_off) and random-walk bias
     are not modelled; misalignment and Gauss-Markov bias are, but are off by default.
+14. **The DroneCAN mode models the deprecated message `uavcan.equipment.ahrs.MagneticFieldStrength` (1001)**, because that is
+    what AP_Periph sends at the pinned commit. 1002 `MagneticFieldStrength2` isn't modelled, and neither is the
+    HiRes message (`AP_PERIPH_MAG_HIRES` builds only). If a future AP_Periph switches messages, the encoding here must be revisited.
+15. **The MSP ≤ 25 Hz rate is INFERRED from AP_Periph source code, not verified.** `compass.read()` is only called from
+    `can_mag_update()`, which is rate-limited. It needs a hardware log to confirm.
+16. **The firmware on our CAN-L4-3100 (MatekL431-GPS vs -Periph, version) is unknown, and only the owner can answer it.** The PM tracks it as
+    blocker **B2** in `BLOCKERS.md`. It decides whether MSP output exists at all and whether the 25 Hz cap applies unchanged.
+17. **TC19 spec mismatch is pending** with the Maths Scientist (spec step 0.013 µT vs sim 1/75 µT); see LIMITATIONS 13.
 
 ## Tests
 `python -m pytest sim/tests -q` covers schema validation (every scenario, CLI output and example logs), determinism
