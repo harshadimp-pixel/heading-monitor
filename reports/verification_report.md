@@ -1,4 +1,4 @@
-# T6 Verification Report — FINAL (v3.0, after the D6 re-test)
+# T6 Verification Report — FINAL (v3.0, after the D6 re-test; v3.1 addendum §2c)
 
 Auditor: Testing & Technical Auditor (T6). Updated 2026-11-27 at about 01:30 IST.
 **Code under test:** clean `git archive` exports (never the shared working tree).
@@ -69,6 +69,20 @@ The approval covers the virtual scope only. Every number is [SIMULATED]/[REPLAYE
 - **R8: deviates from the literal wording, consistent with its intent.** R8 says the badge is "(SIMULATED / REPLAY / HARDWARE) driven only by the sample's `source` field". The app now shows five labels, keyed on `sample.source` and refined by `meta.original_source` and the transport. For ingest `hardware` the badge (UNVERIFIED SOURCE) does not equal the plain mapping of `sample.source` (HARDWARE). Every deviation is in the conservative direction: it never upgrades data to live or hardware. It is required by N4 and the README "show the active data source" rule, and the PM decided it explicitly (ARCHITECTURE eacf8a2, c831574).
 - **Gap:** REQUIREMENTS.md R8 ("Changes require a CHANGELOG entry"), README rule 2 and CHANGELOG were not updated → **D7 (MINOR, PM)**. Suggested R8 wording: "badge derived from sample.source; HARDWARE only for a live serial transport; replayed hardware → 'REPLAY (recorded hardware)'; hardware via ingest → 'UNVERIFIED SOURCE'". Not blocking: this is a documentation consistency fix, and the behaviour is verified.
 - T6 test U2/U3 (pure `badgeLabel` mapping) is unchanged and passes. The displayed badge is covered by A8b, A9a/b and A10b.
+
+## 2c. v3.1 addendum (2026-11-27 ~01:40 IST): D7 re-check, push check, FINAL_REPORT check
+
+Sections 0 and 1 above are the v3.0 text and are left unchanged, because `reports/FINAL_REPORT.md` §9 quotes §0 verbatim (checked: the quote is identical). Since 0c25062 the only commits are a88e8d1 (T6 reports) and 2564266 (PM: CHANGELOG.md, PROJECT_STATUS.md, README.md, REQUIREMENTS.md, TEAM_TRACKER.md, reports/FINAL_REPORT.md). No code, tests or contracts changed, so the suite result 513 passed / 44 skipped / 0 failed at 0c25062 stands. Only `tests/test_t6_claims.py` was re-run, on a clean export of 2564266: 4 passed (FINAL_REPORT.md is in scope, with 0 applied hardware tags and 0 navigation claims).
+
+**D7: CLOSED.** The new REQUIREMENTS.md R8, README rule 2 and CHANGELOG entry say that the badge comes from `sample.source`, that HARDWARE is shown only for a live serial transport, that replayed hardware shows as 'REPLAY (recorded hardware)', that hardware via ingest shows as 'UNVERIFIED SOURCE', and that everything else shows as SIMULATED or REPLAY. This matches the `badgeInfo` behaviour T6 tested (A8, A8b, A10a and A10b): no path upgrades replayed or ingest data to live. It adds no position, navigation or hardware-performance claim. Two notes, not defects:
+- 'REPLAY (recorded simulator)' and NO DATA are not named; both are covered by "otherwise SIMULATED or REPLAY".
+- "Live serial transport" means the transport type. A virtual pty fed by the fake FC also counts (**L-SER**, LIMITATIONS item 6), and the requirement text does not repeat that caveat.
+
+With D7 closed, the PM docs deliverable is **PASS**.
+
+**Push:** `git ls-remote origin main` = 2564266, and a88e8d1 is its parent (`git merge-base --is-ancestor`). This was a read-only check.
+
+**FINAL_REPORT.md (PM-owned, not edited by T6):** its T6 verdict, figures and evidence labels are accurate. Minor wording issues were reported to the PM separately. Overall verdict unchanged: **PASS (virtual scope only)**; completion APPROVED for that scope only; nothing is hardware-verified.
 
 ## 2. D3 re-test and regression check (PM request, f31784a / c942d6f)
 - PM claim "499 passed, 45 skipped, 0 failed at c942d6f": **reproduced**. T6 got 501 passed / 44 skipped at c942d6f, which includes 2 extra T6 tests written during this re-test: 499 + 2. The 45th skip is `firmware_bridge/tests/test_bridge_modes.py` (pty serial), which skips when pyserial is absent (INSTALL.md:80). T6 has pyserial, and that test passes.
@@ -167,7 +181,7 @@ The accel bias (0.01 g, about 0.57° of tilt) is the main contributor to the A1 
 | D4 | MAJOR | T4 | **CLOSED** | Bridge replay forwarded schema-invalid lines; fixed 403976b. |
 | D5 | MINOR | T6 | **CLOSED** (self-reported) | Accidental HEAD detach; repaired (84fc231). |
 | D6 | CRITICAL | T5 + PM | **CLOSED** (fix 0ca6b0f; decisions eacf8a2, c831574; T6 re-test at f058c9a/0c25062) | A replayed hardware-labelled log was shown as HARDWARE + "Live hardware samples." (found at 471724e). Now 'REPLAY (recorded hardware)' with a not-live banner; the relabel cannot be bypassed (A10a). |
-| D7 | MINOR | PM | **OPEN (non-blocking)** | REQUIREMENTS R8 / README rule 2 / CHANGELOG not updated for the accepted badge rules (5 labels; ingest hardware → UNVERIFIED SOURCE; replayed hardware → REPLAY (recorded hardware)). See §2b. |
+| D7 | MINOR | PM | **CLOSED** (re-checked at 2564266, §2c) | REQUIREMENTS R8 / README rule 2 / CHANGELOG not updated for the accepted badge rules (5 labels; ingest hardware → UNVERIFIED SOURCE; replayed hardware → REPLAY (recorded hardware)). See §2b. |
 
 ## 5. Claims audit → `reports/audit/claims_audit.md`
 At 0c25062: 0 applied hardware tags (44 mentions, new ones confirmed by hand; 30 at dc3123a); 0 hardware-performance claims; 0 positioning, distance or GPS-independent navigation claims (89 inventory lines adjudicated). The GPS indicator is availability-only, with coordinates stripped. Runtime claim issue: D6.

@@ -6,6 +6,13 @@ Every result carries an evidence label. Maintained by the Testing & Technical Au
 Environment: Linux box, Python 3.13.5. Clean venv built from `requirements.txt` (numpy 2.5.5, pytest 9.2.0, jsonschema 4.26.0), plus pyserial; Google Chrome 156 headless; Node.
 Code: clean `git archive <sha>` exports (never the shared working tree), plus T6 `tests/` as committed with this file. Latest run by T6 on 2026-11-27, 00:40–01:10 IST.
 
+## v3.1 addendum (D7 re-check): 2026-11-27 ~01:40 IST
+| Date (IST) | Test / suite | Command | Commit | Result | Evidence |
+|---|---|---|---|---|---|
+| 2026-11-27 01:38 | Claims audit (incl. new reports/FINAL_REPORT.md) | `python -m pytest tests/test_t6_claims.py -q -s` on clean export | 2564266 | 4 passed; 0 applied hardware tags, 0 nav claims | [SOURCE-CODE] |
+
+Since 0c25062 only docs changed (a88e8d1, 2564266), so the full suites were not re-run; 513 passed / 44 skipped / 0 failed at 0c25062 stands.
+
 ## Latest run (final verification v3.0, D6 re-test) — 2026-11-27 ~01:15–01:30 IST
 | Date (IST) | Test / suite | Command | Commit | Result | Evidence |
 |---|---|---|---|---|---|
