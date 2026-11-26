@@ -1,14 +1,14 @@
 # Project Status — Virtual Heading Monitor (RM3100 + Matek FC)
 
-**Last updated:** 2026-11-27 01:14 IST by PM & CTO
-**Overall:** 🟡 IN PROGRESS — T1–T6: T1 REVIEW, T2 REVIEW, T3 REVIEW, T4 REVIEW, T5 REVIEW, T6 REVIEW. T6 final verification is a CONDITIONAL PASS; completion is not approved until D6 is fixed and A8/A8b are re-run green. T7 is IN-PROGRESS. No result is [HARDWARE-VERIFIED].
+**Last updated:** 2026-11-27 01:16 IST by PM & CTO
+**Overall:** 🟡 IN PROGRESS — T1–T6 are in REVIEW. CRITICAL defect D6 is REVIEW (fixed by UI per ARCHITECTURE D6 decision; awaiting T6 re-run of A8/A8b, Auditor closes). T6 final verification is a CONDITIONAL PASS; completion is not approved until D6 is fixed and A8/A8b are re-run green. T7 is IN-PROGRESS. No result is [HARDWARE-VERIFIED].
 
 ## Phase
 | Phase | Status |
 |---|---|
 | 0. Scaffold repo, contracts, rules | DONE |
 | 1. Research + core modules (T1–T4) | REVIEW |
-| 2. Application (T5) | REVIEW |
+| 2. Application (T5) | REVIEW (D6 CRITICAL REVIEW (fixed by UI per ARCHITECTURE D6 decision; awaiting T6 re-run of A8/A8b, Auditor closes)) |
 | 3. Independent verification (T6) | REVIEW — CONDITIONAL PASS; completion not approved until D6 is fixed |
 | 4. Integration + consolidated report (T7) | IN PROGRESS |
 
@@ -24,11 +24,13 @@
 | T7 | IN-PROGRESS | Integration, review, consolidated report to owner |
 | T8 | IN-PROGRESS | owner assigned this role 2026-11-26; no code ownership |
 
-## Open defects
-None.
+## Unresolved defects
+| ID | Severity | Status | Summary |
+|---|---|---|---|
+| D6 | CRITICAL | REVIEW (fixed by UI per ARCHITECTURE D6 decision; awaiting T6 re-run of A8/A8b, Auditor closes) | Defect (CRITICAL, per TEST_PLAN: wrong source badge): `python -m app --source replay:<file>` with samples `source:"hardware"` shows badge HARDWARE and banner "Live hardware samples." (T6 integration A8/A8b, reports/audit/integration_results.md; DOM… |
 
 ## Closed defects
-D1 (MAJOR, CLOSED), D2 (MINOR, CLOSED), D3 (MAJOR, CLOSED), D4 (MAJOR, CLOSED), D5 (MINOR, CLOSED), D6 (CRITICAL, UNKNOWN).
+D1 (MAJOR, CLOSED), D2 (MINOR, CLOSED), D3 (MAJOR, CLOSED), D4 (MAJOR, CLOSED), D5 (MINOR, CLOSED).
 
 ## Open blockers
 | ID | Status | Summary |
