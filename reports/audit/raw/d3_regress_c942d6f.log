@@ -1,0 +1,10 @@
+F1 mag-only frozen, quant meta: first stale flag at (0.5, ['SENSOR_STALE']); final warnings ['SENSOR_STALE', 'NO_ACCEL'] quality 0.035
+F2 mag-only frozen, no meta, off-grid float: first stale flag at (0.5, ['SENSOR_STALE']); final warnings ['SENSOR_STALE', 'NO_ACCEL'] quality 0.035
+F3 mag-only frozen, no meta, on 0.1 grid (inference): first stale flag at (0.5, ['SENSOR_STALE']); final warnings ['SENSOR_STALE', 'NO_ACCEL'] quality 0.035
+F4 mag+accel all frozen, quant meta: first stale flag at (0.5, ['SENSOR_STALE']); final warnings ['SENSOR_STALE'] quality 0.050
+F5 frozen mag, live accel noise, no gyro, no meta off-grid: first stale flag at (0.5, ['MAG_STALE']); final warnings ['MAG_STALE'] quality 0.296
+F6 frozen mag, live accel noise, no gyro, quant meta (stationary): first stale flag at None; final warnings [] quality 0.988
+F7 frozen mag, accel pitch +10 deg over 5 s, no gyro, quant meta: first stale flag at (1.7, ['MAG_STALE']); final warnings ['MAG_STALE'] quality 0.275
+F8 frozen mag, live accel, gyro 20 dps yaw, quant meta: first stale flag at (0.2, ['MAG_STALE']); final warnings ['MAG_STALE', 'HIGH_NOISE'] quality 0.024
+F9 frozen mag, live accel, gyro 0.5 dps (below deadband), quant meta: first stale flag at None; final warnings [] quality 0.982
+F10 frozen mag during a level 20 dps yaw turn, NO gyro, quant meta (accel unchanged by yaw): first stale flag at None; final warnings [] quality 0.990

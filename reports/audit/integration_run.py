@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""T6 integrated end-to-end audit harness (black-box). Usage: python integration_run.py <repo_root> <out_dir>
+Every app instance is started fresh by this script on an ephemeral port; the listening PID is verified with `ss`
+to be the PID launched here, and the instance is shut down afterwards. All data is [SIMULATED] or [REPLAYED]."""
+import json, os, re, shutil, socket, subprocess, sys, time, urllib.request, urllib.error
+
+ROOT, OUT = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
+os.makedirs(OUT, exist_ok=True)
+PY = sys.executable
+RESULTS = []
+MAP = {"sim": "SIMULATED", "replay": "REPLAY", "hardware": "HARDWARE"}
+
+def rec(step, cmd, ok, summary, raw):
+    RESULTS.append({"step": step, "cmd": cmd, "pass": bool(ok), "summary": summary, "raw": raw[-3000:]})
+    print(("PASS " if ok else "FAIL ") + step + " :: " + summary, flush=True)
+
+def free_port():
+    s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
+
+def listener_pid(port):
+    o = subprocess.run(["ss", "-ltnpH", f"sport = :{port}"], capture_output=True, text=True).stdout
+    m = re.search(r"pid=(\d+)", o); return int(m.group(1)) if m else None
+
+def http(port, path, obj=None, raw=False):
+    url = f"http://127.0.0.1:{port}{path}"
+    req = urllib.request.Request(url, data=None if obj is None else json.dumps(obj).encode(),
+                                 headers={"Content-Type": "application/json"}, method="GET" if obj is None else "POST")
+    try:
+        b = urllib.request.urlopen(req, timeout=5).read()
+    except urllib.error.HTTPError as e:
+        b = e.read()
+    return b.decode() if raw else json.loads(b or b"{}")
+
+class App:
+    def __init__(self, *args):
+        self.port = free_port()
+        self.cmd = [PY, "-m", "app", "--host", "127.0.0.1", "--port", str(self.port), *args]
+        self.p = subprocess.Popen(self.cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for _ in range(75):
+            time.sleep(0.2)
+            if self.p.poll() is not None: break
+            if listener_pid(self.port): break
+        self.pid_ok = listener_pid(self.port) == self.p.pid
+    def cmdline(self): return " ".join(self.cmd[1:]).replace(PY, "python")
+    def close(self):
+        self.p.terminate()
+        try: out = self.p.communicate(timeout=5)[0]
+        except subprocess.TimeoutExpired: self.p.kill(); out = self.p.communicate()[0]
+        self.released = listener_pid(self.port) is None
+        return out or ""
+    def hist(self): return http(self.port, "/api/history?since=0")["records"]
+    def status(self): return http(self.port, "/api/status")
+
+def wdiff(a, b): return (a - b + 180) % 360 - 180
+
+def wait(pred, t=15):
+    end = time.time() + t
+    while time.time() < end:
+        try:
+            if pred(): return True
+        except Exception: pass
+        time.sleep(0.25)
+    return False
+
+# ---------- A1: sim -> heading_core -> app for every scenario
+scen = subprocess.run([PY, "-m", "sim", "--list-scenarios"], cwd=ROOT, capture_output=True, text=True).stdout
+names = re.findall(r"^\s*([a-z_]+)\b", scen, re.M)
+names = [n for n in names if n not in ("scenarios", "name")] or ["static"]
+for n in names:
+    a = App("--source", f"sim:{n}", "--rate", "50", "--seed", "3")
+    try:
+        wait(lambda: len(a.hist()) >= 150, 20)
+        r = a.hist(); st = a.status()
+        srcs = {x["source"] for x in r}
+        back = {x.get("estimator_backend") for x in r}
+        errs = [wdiff(x["heading_deg"], x["truth_heading_deg"]) for x in r[50:] if x.get("truth_heading_deg") is not None and x.get("heading_deg") is not None]
+        rmse = (sum(e * e for e in errs) / len(errs)) ** 0.5 if errs else float("nan")
+        warns = sorted({w for x in r for w in (x.get("warnings") or [])})
+        inrange = all(x.get("heading_deg") is not None and 0 <= x["heading_deg"] < 360 for x in r)
+        ok = a.pid_ok and len(r) >= 150 and srcs == {"sim"} and back == {"heading_core"} and inrange
+        summ = (f"pid_ok={a.pid_ok} records={len(r)} sources={sorted(srcs)} badge={MAP.get(next(iter(srcs)), None) if len(srcs)==1 else srcs} "
+                f"backend={sorted(back)} RMSE_vs_truth(after 1 s, uncalibrated app)={rmse:.2f} deg warnings={warns} sim_status={st['source_status'].get('backend')}")
+    finally:
+        out = a.close()
+    rec(f"A1 sim:{n} -> heading_core -> app", a.cmdline(), ok and a.released, summ + f" port_released={a.released}", out)
+
+# ---------- A1b: motor_interference with a short sim duration so the current profile actually plays out in the app
+if "--sim-duration" in subprocess.run([PY, "-m", "app", "--help"], cwd=ROOT, capture_output=True, text=True).stdout:
+    a = App("--source", "sim:motor_interference", "--rate", "20", "--seed", "3", "--sim-duration", "10", "--stale", "60")
+    try:
+        wait(lambda: len(a.hist()) >= 195, 25)
+        r = a.hist()
+        extra = sorted({w for x in r for w in (x.get("warnings") or [])} - {"NOT_CALIBRATED"})
+        errs = [abs(wdiff(x["heading_deg"], x["truth_heading_deg"])) for x in r if x.get("truth_heading_deg") is not None and x.get("heading_deg") is not None]
+        flagged_bad = [x for x in r if x.get("truth_heading_deg") is not None and abs(wdiff(x["heading_deg"], x["truth_heading_deg"])) > 5]
+        unflagged_bad = [x for x in flagged_bad if not (set(x.get("warnings") or []) - {"NOT_CALIBRATED"})]
+        ok = a.pid_ok and len(r) >= 150 and bool(extra)
+        summ = (f"pid_ok={a.pid_ok} records={len(r)} warnings_seen={extra} max|err|={max(errs):.1f} deg "
+                f"samples err>5deg={len(flagged_bad)} of which without any warning={len(unflagged_bad)}")
+    finally:
+        out = a.close()
+    rec("A1b sim:motor_interference (--sim-duration 10) -> app: interference must be warned", a.cmdline(), ok, summ, out)
+
+# ---------- A2: replay of every sim example log
+for f in sorted(os.listdir(os.path.join(ROOT, "sim", "examples"))):
+    if not f.endswith(".jsonl"): continue
+    path = os.path.join(ROOT, "sim", "examples", f)
+    nlines = sum(1 for l in open(path) if l.strip())
+    a = App("--source", f"replay:{path}", "--speed", "20")
+    try:
+        wait(lambda: a.status()["source_status"]["state"] == "ended", 30)
+        r = a.hist(); st = a.status()
+        srcs = sorted({x["source"] for x in r})
+        ok = a.pid_ok and len(r) == min(nlines, 2000) - 0 and all(x.get("heading_deg") is not None for x in r)
+        summ = (f"pid_ok={a.pid_ok} file_lines={nlines} records={len(r)} invalid={st['counts'].get('invalid')} sample.source={srcs} "
+                f"badge={[MAP[s] for s in srcs if s in MAP]} state={st['source_status']['state']}")
+    finally:
+        out = a.close()
+    rec(f"A2 replay sim/examples/{f}", a.cmdline().replace(ROOT + "/", ""), ok, summ, out)
+
+# ---------- A3: firmware --capture of fake-FC, replayed via firmware_bridge --replay, then into the app
+cap, fake_out, rep_out = (os.path.join(OUT, x) for x in ("fake_capture.jsonl", "fake_samples.jsonl", "capture_replayed.jsonl"))
+c1 = [PY, "-m", "firmware_bridge", "--fake-fc", "--count", "60", "--capture", cap, "--out", fake_out]
+p1 = subprocess.run(c1, cwd=ROOT, capture_output=True, text=True)
+c2 = [PY, "-m", "firmware_bridge", "--replay", cap, "--out", rep_out]
+p2 = subprocess.run(c2, cwd=ROOT, capture_output=True, text=True)
+fs = [json.loads(l) for l in open(fake_out)] if os.path.exists(fake_out) else []
+rs = [json.loads(l) for l in open(rep_out)] if os.path.exists(rep_out) else []
+same = len(fs) == len(rs) and all(a_["mag_uT"] == b_["mag_uT"] for a_, b_ in zip(fs, rs))
+hdr = json.loads(open(cap).readline()) if os.path.exists(cap) else {}
+ok = p1.returncode == 0 and p2.returncode == 0 and len(fs) == 60 and same and {s["source"] for s in fs} == {"sim"} and {s["source"] for s in rs} == {"replay"} and hdr.get("source") == "sim"
+rec("A3a fake-FC --capture -> firmware_bridge --replay", "python -m firmware_bridge --fake-fc --count 60 --capture fake_capture.jsonl --out fake_samples.jsonl ; python -m firmware_bridge --replay fake_capture.jsonl --out capture_replayed.jsonl",
+    ok, f"rc={p1.returncode}/{p2.returncode} capture_header_source={hdr.get('source')} live={len(fs)} (source {sorted({s['source'] for s in fs})}) replayed={len(rs)} (source {sorted({s['source'] for s in rs})}) mag bit-identical={same}",
+    p1.stderr + p2.stderr)
+a = App("--source", f"replay:{rep_out}", "--speed", "20")
+try:
+    wait(lambda: a.status()["source_status"]["state"] == "ended", 20)
+    r = a.hist(); srcs = sorted({x["source"] for x in r})
+    ok = a.pid_ok and len(r) == len(rs) and srcs == ["replay"]
+    summ = f"pid_ok={a.pid_ok} records={len(r)} sample.source={srcs} badge={[MAP[s] for s in srcs]} heading[0..3]={[round(x['heading_deg'],1) for x in r[:3]]}"
+finally:
+    out = a.close()
+rec("A3b capture replay -> app", a.cmdline().replace(OUT + "/", "<out>/"), ok, summ, out)
+
+# ---------- A4: fake-FC MSP stream through firmware_bridge into the app (ingest); badge must be SIMULATED, never HARDWARE
+a = App("--source", "ingest", "--stale", "30")
+try:
+    bridge = subprocess.Popen([PY, "-m", "firmware_bridge", "--fake-fc", "--count", "100"], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    acc = 0; rej = []
+    for line in bridge.stdout:
+        resp = http(a.port, "/api/sample", json.loads(line)); acc += resp.get("accepted", 0)
+        if resp.get("errors"): rej += resp["errors"]
+    bridge.wait()
+    r = a.hist(); srcs = sorted({x["source"] for x in r}); st = a.status()
+    ok = a.pid_ok and acc == 100 and srcs == ["sim"] and "hardware" not in srcs and st["latest_sample_source"] == "sim"
+    summ = f"pid_ok={a.pid_ok} posted=100 accepted={acc} rejected={rej[:3]} sources={srcs} badge={[MAP[s] for s in srcs]} heading range={min(x['heading_deg'] for x in r):.1f}..{max(x['heading_deg'] for x in r):.1f}"
+finally:
+    out = a.close()
+rec("A4 firmware_bridge --fake-fc | POST -> app (ingest)", "python -m firmware_bridge --fake-fc --count 100 | POST each line to /api/sample ; " + a.cmdline(), ok, summ, out)
+
+# ---------- A5: calibration wizard flow
+a = App("--source", "sim:calibration_dance", "--rate", "50", "--seed", "5")
+log = []
+try:
+    log.append(("start", http(a.port, "/api/calib/start", {})))
+    done = wait(lambda: a.status()["wizard"]["n"] >= a.status()["wizard"]["target"], 40)
+    log.append(("stop", http(a.port, "/api/calib/stop", {})))
+    wz = a.status()["wizard"]
+    fit = http(a.port, "/api/calib/fit", {}); log.append(("fit", {k: fit.get(k) for k in ("ok", "backend", "error")}))
+    ap = http(a.port, "/api/calib/apply", {}); log.append(("apply", ap))
+    time.sleep(1.5)
+    r = a.hist()[-50:]
+    cal_flag = all(x.get("calibrated") for x in r)
+    errs = [wdiff(x["heading_deg"], x["truth_heading_deg"]) for x in r if x.get("truth_heading_deg") is not None]
+    rmse = (sum(e * e for e in errs) / len(errs)) ** 0.5 if errs else float("nan")
+    sv = http(a.port, "/api/calib/save", {"name": "t6_audit_cal"}); log.append(("save", sv))
+    lst = http(a.port, "/api/calib/list"); log.append(("list", lst))
+    http(a.port, "/api/calib/clear", {}); time.sleep(0.6)
+    cleared = a.status()["calibration"]["active"]
+    ld = http(a.port, "/api/calib/load", {"name": "t6_audit_cal"}); log.append(("load", ld)); time.sleep(0.6)
+    reloaded = a.status()["calibration"]["active"]
+    params = (fit.get("calibration") or {})
+    off = params.get("offset_uT")
+    ok = a.pid_ok and done and fit.get("ok") and cal_flag and rmse <= 3.0 and cleared is False and reloaded is True
+    summ = (f"pid_ok={a.pid_ok} collected n={wz['n']}/{wz['target']} bins={wz['heading_bins_covered']}/{wz['heading_bins_total']} octants={wz['octants_covered']}/{wz['octants_total']} "
+            f"fit ok={fit.get('ok')} backend={fit.get('backend')} offset_uT={off} (sim truth hard-iron [12,-8,5]) | after apply: calibrated={cal_flag}, RMSE vs truth last 50={rmse:.2f} deg | "
+            f"clear -> active={cleared}; load -> active={reloaded}")
+finally:
+    out = a.close()
+    try: os.remove(os.path.join(ROOT, "app", "calibrations", "t6_audit_cal.json"))
+    except OSError: pass
+rec("A5 calibration wizard start/stop/fit/apply/save/clear/load", a.cmdline(), ok, summ, json.dumps(log, default=str)[:2500] + "\n" + out)
+
+# ---------- A6: frozen data and stale (no data) via ingest
+a = App("--source", "ingest", "--stale", "1.5")
+try:
+    s0 = {"t": 0, "source": "sim", "mag_uT": [25.0, -3.0, 43.0], "accel_g": [0.0, 0.0, -1.0]}
+    for i in range(60): http(a.port, "/api/sample", dict(s0, t=i * 0.05))
+    r = a.hist(); last = r[-1]; st = a.status()
+    frozen_ok = any(w in (last.get("warnings") or []) for w in ("SENSOR_STALE", "MAG_STALE")) and last["quality"] < 0.2
+    time.sleep(2.2); st2 = a.status()
+    stale_ok = st2["sensor_status"] != "OK"
+    ok = a.pid_ok and frozen_ok and stale_ok
+    summ = (f"pid_ok={a.pid_ok} 3 s identical samples -> warnings={last.get('warnings')} quality={last['quality']:.3f} sensor_status={st['sensor_status']}; "
+            f"then 2.2 s silence (stale 1.5 s) -> sensor_status={st2['sensor_status']} reason={st2.get('sensor_status_reason')!r}")
+finally:
+    out = a.close()
+rec("A6 frozen + stale data", a.cmdline() + " ; POST 60 identical samples, then silence", ok, summ, out)
+
+# ---------- A7: serial to a missing port
+a = App("--source", "serial:/dev/ttyT6_DOES_NOT_EXIST")
+try:
+    time.sleep(3)
+    alive = a.p.poll() is None
+    st = a.status() if alive else {}
+    r = a.hist() if alive else []
+    ok = a.pid_ok and alive and st.get("source_status", {}).get("state") in ("fault", "ended", "error") and not r and st.get("sensor_status") != "OK"
+    summ = (f"pid_ok={a.pid_ok} app alive={alive} source_status={st.get('source_status')} sensor_status={st.get('sensor_status')} "
+            f"records={len(r)} (no HARDWARE samples fabricated)")
+finally:
+    out = a.close()
+pb = subprocess.run([PY, "-m", "firmware_bridge", "--port", "/dev/ttyT6_DOES_NOT_EXIST"], cwd=ROOT, capture_output=True, text=True, timeout=30)
+ok2 = pb.returncode != 0 and not pb.stdout.strip()
+rec("A7 serial to missing port (app)", a.cmdline(), ok, summ, out)
+rec("A7b firmware_bridge --port missing", "python -m firmware_bridge --port /dev/ttyT6_DOES_NOT_EXIST", ok2,
+    f"rc={pb.returncode} stdout_lines={len(pb.stdout.splitlines())} stderr={pb.stderr.strip()[:300]!r}", pb.stderr)
+
+# ---------- A8: hardware-labelled log replayed through the app (badge semantics)
+hw = os.path.join(OUT, "hw_labelled.jsonl")
+with open(hw, "w") as f:
+    for i in range(20): f.write(json.dumps({"t": i * 0.05, "source": "hardware", "mag_uT": [25.0, -3.0 + 0.01 * i, 43.0], "accel_g": [0, 0, -1]}) + "\n")
+a = App("--source", f"replay:{hw}", "--speed", "20")
+try:
+    wait(lambda: a.status()["source_status"]["state"] == "ended", 15)
+    r = a.hist(); srcs = sorted({x["source"] for x in r})
+    ok = srcs == ["replay"]
+    summ = f"pid_ok={a.pid_ok} file sample.source=hardware -> app records source={srcs} -> badge={[MAP.get(s) for s in srcs]} (active data source is a REPLAY of a file)"
+finally:
+    out = a.close()
+rec("A8 app replay of a hardware-labelled log: badge must not read HARDWARE", a.cmdline().replace(OUT + "/", "<out>/"), ok, summ, out)
+
+# ---------- A9: UI render check in headless Chrome (sim and ingest-with-warning)
+chrome = next((shutil.which(c) for c in ("google-chrome", "chromium", "chromium-browser") if shutil.which(c)), None)
+def dom(url, want):
+    d = ""
+    for _ in range(5):
+        d = subprocess.run([chrome, "--headless=new", "--no-sandbox", "--disable-gpu", "--virtual-time-budget=5000", "--dump-dom", url],
+                           capture_output=True, text=True, timeout=90).stdout
+        if want(d): break
+    return d
+def text(d, id_):
+    if id_ == "warnings":  # <ul id="warnings"> holds several <li>; take the whole list, not just the first item
+        m = re.search(r'id="warnings"[^>]*>(.*?)</ul>', d, re.S)
+        return " | ".join(x.strip() for x in re.findall(r"<li[^>]*>(.*?)</li>", m.group(1), re.S)) if m else None
+    m = re.search(r'id="%s"[^>]*>(.*?)</' % id_, d, re.S); return re.sub(r"<[^>]+>", " ", m.group(1)).strip() if m else None
+if chrome:
+    ver = subprocess.run([chrome, "--version"], capture_output=True, text=True).stdout.strip()
+    a = App("--source", "sim:yaw_spin", "--stale", "60")
+    try:
+        wait(lambda: len(a.hist()) > 20, 10)
+        d = dom(f"http://127.0.0.1:{a.port}/", lambda d: 'class="source-badge sim"' in d)
+        badge, head, gps, warn = text(d, "sourceBadge"), text(d, "headingValue"), text(d, "gpsStatus"), text(d, "warnings")
+        ok = a.pid_ok and badge == "SIMULATED" and bool(re.match(r"^\d{1,3}\.\d° [NESW]{1,3}$", head or "")) and gps == "Unknown" and warn is not None
+        summ = f"{ver}; pid_ok={a.pid_ok} sourceBadge={badge!r} headingValue={head!r} gpsStatus={gps!r} warnings={warn!r}"
+        open(os.path.join(OUT, "ui_dom_sim.html"), "w").write(d)
+    finally:
+        out = a.close()
+    rec("A9a UI render (headless Chrome, sim)", f"{a.cmdline()} ; google-chrome --headless=new --dump-dom http://127.0.0.1:<port>/", ok, summ, out)
+    a = App("--source", "ingest", "--stale", "600")
+    try:
+        import threading
+        stop = threading.Event()
+        def feed():  # keep data fresh while the headless browser renders (ingest has no own clock)
+            i = 0
+            while not stop.is_set():
+                try:
+                    http(a.port, "/api/sample", {"t": i * 0.05, "source": "replay", "mag_uT": [75.0, -9.0 + 0.1 * (i % 3), 129.0], "accel_g": [0, 0, -1]})
+                    fed[0] += 1
+                except Exception as e:
+                    feed_err.append(repr(e))
+                i += 1; time.sleep(0.05)
+        fed, feed_err = [0], []
+        th = threading.Thread(target=feed, daemon=True); th.start()
+        wait(lambda: any("FIELD_MAGNITUDE" in w for w in (a.hist()[-1].get("warnings") or [])) if a.hist() else False, 15)
+        d = dom(f"http://127.0.0.1:{a.port}/", lambda d: "FIELD_MAGNITUDE" in d)
+        stop.set(); th.join(2)
+        exp = a.hist()[-1]
+        badge, head, warn = text(d, "sourceBadge"), text(d, "headingValue"), text(d, "warnings")
+        shown = float(re.match(r"([\d.]+)", head).group(1)) if head and re.match(r"[\d.]+", head) else None
+        ok = a.pid_ok and badge == "REPLAY" and "FIELD_MAGNITUDE_OUT_OF_RANGE" in (warn or "") and shown is not None and abs(wdiff(shown, exp["heading_deg"])) <= 0.5
+        summ = f"pid_ok={a.pid_ok} fed={fed[0]} feed_errors={feed_err[:2]} sourceBadge={badge!r} headingValue={head!r} (api heading_deg={exp['heading_deg']:.3f}) warnings={warn!r}"
+        open(os.path.join(OUT, "ui_dom_warning.html"), "w").write(d)
+    finally:
+        out = a.close()
+    rec("A9b UI render (headless Chrome, 3x field -> warning)", a.cmdline() + " ; POST |B|~150 uT samples at 20 Hz continuously during render ; dump-dom", ok, summ, out)
+    # A8b: what the browser shows for a replayed hardware-labelled file (badge + evidence banner)
+    a = App("--source", f"replay:{hw}", "--speed", "1", "--loop", "--stale", "60")
+    try:
+        wait(lambda: len(a.hist()) > 5, 10)
+        d = dom(f"http://127.0.0.1:{a.port}/", lambda d: "source-badge none" not in d)
+        badge, banner, transport = text(d, "sourceBadge"), text(d, "evidenceBanner"), text(d, "transportText")
+        ok = a.pid_ok and badge != "HARDWARE"
+        summ = f"pid_ok={a.pid_ok} sourceBadge={badge!r} evidenceBanner={banner!r} transportText={transport!r}"
+        open(os.path.join(OUT, "ui_dom_hw_replay.html"), "w").write(d)
+    finally:
+        out = a.close()
+    rec("A8b UI render of a replayed hardware-labelled log (headless Chrome)", a.cmdline().replace(OUT + "/", "<out>/") + " ; dump-dom", ok, summ, out)
+else:
+    rec("A9 UI render", "-", False, "NOT RUN: no headless Chrome available", "")
+
+json.dump(RESULTS, open(os.path.join(OUT, "integration_results.json"), "w"), indent=1)
+print(f"TOTAL {sum(r['pass'] for r in RESULTS)}/{len(RESULTS)} passed")
