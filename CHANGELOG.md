@@ -12,3 +12,4 @@
 - [pm] Project scaffold: README, ARCHITECTURE, contracts (Sample, HeadingEstimate), tracker.
 - [pm] Owner's team working rules added (TEAM_RULES.md). Six specialists briefed (T1–T6).
 - [pm] .gitignore for caches; jsonschema added; accel sign convention + sim truth keys fixed in ARCHITECTURE.md.
+- [pm] T2 review decisions: warning codes frozen, optional kwargs approved, single-calibration rule, quantisation-aware MAG_STALE.
