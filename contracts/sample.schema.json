@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sample",
+  "type": "object",
+  "required": ["t", "source", "mag_uT"],
+  "properties": {
+    "t": {"type": "number", "description": "seconds, monotonic"},
+    "source": {"enum": ["sim", "replay", "hardware"]},
+    "mag_uT": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+    "mag_raw": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+    "rm3100_cycle_count": {"type": "integer"},
+    "accel_g": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+    "gyro_dps": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+    "fc_attitude_deg": {"type": "object", "properties": {"roll": {"type": "number"}, "pitch": {"type": "number"}, "yaw": {"type": "number"}}},
+    "truth": {"type": "object", "description": "sim only: ground truth for testing", "properties": {"heading_deg": {"type": "number"}, "roll_deg": {"type": "number"}, "pitch_deg": {"type": "number"}}},
+    "meta": {"type": "object"}
+  }
+}

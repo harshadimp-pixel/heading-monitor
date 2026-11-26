@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HeadingEstimate",
+  "type": "object",
+  "required": ["t", "source", "heading_deg", "calibrated"],
+  "properties": {
+    "t": {"type": "number"},
+    "source": {"enum": ["sim", "replay", "hardware"]},
+    "heading_deg": {"type": "number", "minimum": 0, "exclusiveMaximum": 360},
+    "heading_raw_deg": {"type": "number"},
+    "roll_deg": {"type": "number"}, "pitch_deg": {"type": "number"},
+    "field_uT": {"type": "number", "description": "calibrated field magnitude"},
+    "calibrated": {"type": "boolean"},
+    "quality": {"type": "number", "minimum": 0, "maximum": 1},
+    "warnings": {"type": "array", "items": {"type": "string"}}
+  }
+}
