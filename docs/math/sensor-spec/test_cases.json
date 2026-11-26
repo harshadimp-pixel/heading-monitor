@@ -867,15 +867,16 @@
       "title": "Quantisation noise and RM3100-class noise mapped to heading (H = 25 uT)",
       "inputs": {
         "lsb_uT": [
-          0.013,
+          0.013333333333333334,
           0.15
         ],
+        "lsb_note": "lsb_uT[0] = 1/75 uT exactly (RM3100 gain 75 LSB/uT @ CC200)",
         "rm3100_noise_cc200_uT": 0.015,
         "H_uT": 25.0
       },
       "expected": {
         "quant_sigma_uT": [
-          0.0037528,
+          0.0038490017945975057,
           0.0433013
         ],
         "rm3100_sigma_psi_deg": 0.0343775
@@ -887,10 +888,10 @@
       "units": {
         "*": "uT / deg"
       },
-      "source": "RM3100 15 nT @ CC200 and 13 nT resolution: docs/hardware/FACTSHEET.md [DATASHEET PNI-UM Table 3-1]; 0.15 uT LSB = assumed generic consumer part",
+      "source": "RM3100 @ CC200: noise 15 nT, gain 75 LSB/uT -> LSB = 1/75 uT = 0.013333 uT (datasheet '13 nT' sensitivity is this rounded): docs/hardware/FACTSHEET.md [DATASHEET PNI-UM Table 3-1]; 0.15 uT LSB = assumed generic consumer part",
       "computed_by_reference_model": {
         "quant_sigma_uT": [
-          0.0037527767497325675,
+          0.0038490017945975057,
           0.04330127018922193
         ],
         "rm3100_sigma_psi_deg": 0.03437746770784939

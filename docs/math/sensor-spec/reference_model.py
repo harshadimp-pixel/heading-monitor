@@ -26,6 +26,8 @@ WGS84_F = 1.0 / 298.257223563
 WGS84_E2 = WGS84_F * (2.0 - WGS84_F)
 R_MEAN = 6371008.8          # m, IUGG mean Earth radius R1
 NM = 1852.0                 # m per international nautical mile
+RM3100_GAIN_CC200 = 75.0    # LSB/uT at cycle count 200 [DATASHEET PNI-UM Table 3-1, via docs/hardware/FACTSHEET.md]
+RM3100_LSB_CC200_UT = 1.0 / RM3100_GAIN_CC200   # uT per LSB = 0.013333... (datasheet "13 nT" is this, rounded)
 
 # --------------------------------------------------------------------------
 # 1. Angles

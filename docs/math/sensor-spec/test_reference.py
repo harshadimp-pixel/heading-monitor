@@ -341,10 +341,11 @@ def tc18(inp):
 
 
 @case("TC19", "Quantisation noise and RM3100-class noise mapped to heading (H = 25 uT)",
-      {"lsb_uT": [0.013, 0.15], "rm3100_noise_cc200_uT": 0.015, "H_uT": 25.0},
-      {"quant_sigma_uT": [0.0037528, 0.0433013], "rm3100_sigma_psi_deg": 0.0343775},
+      {"lsb_uT": [rm.RM3100_LSB_CC200_UT, 0.15], "lsb_note": "lsb_uT[0] = 1/75 uT exactly (RM3100 gain 75 LSB/uT @ CC200)",
+       "rm3100_noise_cc200_uT": 0.015, "H_uT": 25.0},
+      {"quant_sigma_uT": [(1.0 / 75.0) / math.sqrt(12.0), 0.0433013], "rm3100_sigma_psi_deg": 0.0343775},
       {"quant_sigma_uT": 1e-6, "rm3100_sigma_psi_deg": 1e-6}, {"*": "uT / deg"},
-      source="RM3100 15 nT @ CC200 and 13 nT resolution: docs/hardware/FACTSHEET.md [DATASHEET PNI-UM Table 3-1]; 0.15 uT LSB = assumed generic consumer part")
+      source="RM3100 @ CC200: noise 15 nT, gain 75 LSB/uT -> LSB = 1/75 uT = 0.013333 uT (datasheet '13 nT' sensitivity is this rounded): docs/hardware/FACTSHEET.md [DATASHEET PNI-UM Table 3-1]; 0.15 uT LSB = assumed generic consumer part")
 def tc19(inp):
     return {"quant_sigma_uT": [float(rm.quantisation_sigma(q)) for q in inp["lsb_uT"]],
             "rm3100_sigma_psi_deg": rm.heading_noise_sigma_deg(inp["rm3100_noise_cc200_uT"], inp["H_uT"])}

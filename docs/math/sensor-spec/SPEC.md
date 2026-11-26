@@ -342,7 +342,7 @@ magnetometer classes as general public datasheet classes describe them, not vend
 | Inclination | $I$ | 60° | −85…85° | site |
 | White noise (consumer MEMS) | $\sigma_m$ | 0.3 µT | 0.05–1 µT | [ASSUMED] |
 | White noise (RM3100, CC 50/100/200) | $\sigma_m$ | 0.015 µT | 0.030/0.020/0.015 µT | [DATASHEET per T1] |
-| Resolution / LSB | $q$ | 0.013 µT (RM3100 CC200) | 0.013–0.3 µT | RM3100 [DATASHEET per T1]; others [ASSUMED] |
+| Resolution / LSB | $q$ | $1/75=0.013333$ µT (RM3100 CC200; gain 75 LSB/µT; the datasheet's "13 nT" is this value rounded) | 0.013333–0.3 µT | RM3100 [DATASHEET per T1]; others [ASSUMED] |
 | Hard iron (vehicle installed) | $\lvert\mathbf h\rvert$ | 10 µT | 0–100 µT | [ASSUMED]; can exceed $H$ |
 | Soft iron / scale mismatch | $\lVert E_s\rVert$ | 3% | 0–10% | [ASSUMED] |
 | Axis non-orthogonality | — | 0.5° | 0–2° | [ASSUMED] |
@@ -418,7 +418,7 @@ The default field is $F=50$ µT, $I=60^\circ$ ($H=25$ µT) and $D=0$ unless stat
 | TC16 | Deviation curve | b = [1, 0.5] µT; E = [[.04,.02],[−.01,−.03]] | B −2.2918°, C −1.1459°; A 0.859°, D −2.005°, E −0.286° | 1e-6 / 0.01–0.03° |
 | TC17 | WGS84 radii, DR | φ = 0, 45° | M, N as in §4.3; Δφ 0.00904369°, Δλ 0.01268282° | 1e-8° |
 | TC18 | DR growth MC | 100 × 10 m, bias 1° / σ 2° | 17.4524 m (bias); 3.4907 m RMS (MC 3.476 m) | 1e-5 / 4% |
-| TC19 | Quantisation, RM3100 | q = 0.013, 0.15 µT; 15 nT | σ_q 0.003753, 0.043301 µT; σ_ψ 0.034377° | 1e-6 |
+| TC19 | Quantisation, RM3100 | q = 1/75 (0.013333), 0.15 µT; 15 nT | σ_q 0.003849, 0.043301 µT; σ_ψ 0.034377° | 1e-6 |
 | TC20 | Grid convergence | φ 19°, λ 73°, λ₀ 75°, ψ_T 10° | γ −0.6514°, ψ_G 10.6514° | 1e-5° |
 
 Extra pytest checks: wrap edge cases, accelerometer convention equivalence, and position non-observability from heading (§4.6).
