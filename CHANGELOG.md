@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-11-27
+- [math] T2 sensor-spec: docs/math/sensor-spec/ (SPEC.md/.pdf, reference_model.py, test_reference.py 23 passed, test_cases.json 20 vectors) for T3 Sim developer [SIMULATED].
 - [sim] T3 -> REVIEW: sim/ simulator (RM3100 counts/uT model, IMU, hard/soft iron, motor interference, 8 scenarios), example logs, 80 pytest passing [SIMULATED], README with LIMITATIONS.
 - [hw] T1 hardware fact sheet complete -> REVIEW: docs/hardware/FACTSHEET.md, key_numbers.json, SOURCES.md; T1 limitations added to TEAM_TRACKER.md.
 - [hub] Added T8 (group-chat hub) row to TEAM_TRACKER.md.

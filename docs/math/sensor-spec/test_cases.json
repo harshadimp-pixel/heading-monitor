@@ -1,0 +1,926 @@
+{
+  "spec": "SPEC.md",
+  "generator": "test_reference.py --dump",
+  "tolerance_semantics": "absolute, |computed - expected| <= tolerance, per key, elementwise for lists; bools must match",
+  "cases": [
+    {
+      "id": "TC01",
+      "title": "Level heading at cardinal points and 30 deg",
+      "inputs": {
+        "F_uT": 50.0,
+        "I_deg": 60.0,
+        "yaw_deg": [
+          0,
+          90,
+          180,
+          270,
+          30
+        ],
+        "roll_deg": 0,
+        "pitch_deg": 0
+      },
+      "expected": {
+        "heading_deg": [
+          0.0,
+          90.0,
+          180.0,
+          270.0,
+          30.0
+        ],
+        "m_body_at_30_uT": [
+          21.650635,
+          -12.5,
+          43.30127
+        ]
+      },
+      "tolerance": {
+        "heading_deg": 1e-09,
+        "m_body_at_30_uT": 1e-06
+      },
+      "units": {
+        "heading_deg": "deg",
+        "m_body_at_30_uT": "uT"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "heading_deg": [
+          0.0,
+          90.0,
+          180.0,
+          270.0,
+          29.999999999999996
+        ],
+        "m_body_at_30_uT": [
+          21.650635094610973,
+          -12.500000000000002,
+          43.30127018922193
+        ]
+      }
+    },
+    {
+      "id": "TC02",
+      "title": "Magnetic -> true via declination (east +), wrap-around, declination error passes through",
+      "inputs": {
+        "pairs_psi_m_D": [
+          [
+            10.0,
+            -1.5
+          ],
+          [
+            359.0,
+            2.0
+          ],
+          [
+            0.5,
+            -1.0
+          ],
+          [
+            180.0,
+            180.0
+          ]
+        ],
+        "D_error_deg": 0.5,
+        "psi_m_deg": 45.0
+      },
+      "expected": {
+        "true_deg": [
+          8.5,
+          1.0,
+          359.5,
+          0.0
+        ],
+        "true_heading_error_deg": 0.5
+      },
+      "tolerance": {
+        "true_deg": 1e-09,
+        "true_heading_error_deg": 1e-09
+      },
+      "units": {
+        "true_deg": "deg",
+        "true_heading_error_deg": "deg"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "true_deg": [
+          8.5,
+          1.0,
+          359.5,
+          0.0
+        ],
+        "true_heading_error_deg": 0.5
+      }
+    },
+    {
+      "id": "TC03",
+      "title": "Wrap conventions and circular statistics",
+      "inputs": {
+        "angles_deg": [
+          359.0,
+          1.0
+        ],
+        "diff_a_b": [
+          [
+            1.0,
+            359.0
+          ],
+          [
+            359.0,
+            1.0
+          ],
+          [
+            0.0,
+            180.0
+          ],
+          [
+            180.0,
+            0.0
+          ]
+        ],
+        "spread_deg": [
+          350.0,
+          10.0,
+          0.0
+        ]
+      },
+      "expected": {
+        "arith_mean_deg": 180.0,
+        "circ_mean_deg": 0.0,
+        "angle_diff_deg": [
+          2.0,
+          -2.0,
+          180.0,
+          180.0
+        ],
+        "circ_mean_spread_deg": 0.0,
+        "circ_std_spread_deg": 8.175368
+      },
+      "tolerance": {
+        "arith_mean_deg": 1e-09,
+        "circ_mean_deg": 1e-09,
+        "angle_diff_deg": 1e-09,
+        "circ_mean_spread_deg": 1e-09,
+        "circ_std_spread_deg": 1e-05
+      },
+      "units": {
+        "*": "deg"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "arith_mean_deg": 180.0,
+        "circ_mean_deg": 0.0,
+        "angle_diff_deg": [
+          2.0,
+          -2.0,
+          180.0,
+          180.0
+        ],
+        "circ_mean_spread_deg": 0.0,
+        "circ_std_spread_deg": 8.17536831253456
+      }
+    },
+    {
+      "id": "TC04",
+      "title": "Tilt-compensated heading from mag + accel (specific-force convention)",
+      "inputs": {
+        "F_uT": 50.0,
+        "I_deg": 60.0,
+        "cases_yaw_pitch_roll_deg": [
+          [
+            135,
+            20,
+            -30
+          ],
+          [
+            45,
+            30,
+            0
+          ],
+          [
+            300,
+            -15,
+            25
+          ]
+        ]
+      },
+      "expected": {
+        "tilt_comp_heading_deg": [
+          135.0,
+          45.0,
+          300.0
+        ],
+        "uncompensated_level_formula_deg": [
+          133.91803,
+          109.733898,
+          302.940805
+        ],
+        "recovered_roll_pitch_case1_deg": [
+          -30.0,
+          20.0
+        ],
+        "measured_dip_deg": [
+          60.0,
+          60.0,
+          60.0
+        ]
+      },
+      "tolerance": {
+        "tilt_comp_heading_deg": 1e-09,
+        "uncompensated_level_formula_deg": 1e-05,
+        "recovered_roll_pitch_case1_deg": 1e-09,
+        "measured_dip_deg": 1e-09
+      },
+      "units": {
+        "*": "deg"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "tilt_comp_heading_deg": [
+          135.0,
+          45.0,
+          300.0
+        ],
+        "uncompensated_level_formula_deg": [
+          133.91802952213888,
+          109.73389846460692,
+          302.9408054781222
+        ],
+        "recovered_roll_pitch_case1_deg": [
+          -29.999999999999996,
+          20.0
+        ],
+        "measured_dip_deg": [
+          59.99999999999999,
+          59.99999999999999,
+          59.99999999999999
+        ]
+      }
+    },
+    {
+      "id": "TC05",
+      "title": "Hard-iron one-cycle error (b_x = 5 uT, H = 25 uT, level)",
+      "inputs": {
+        "F_uT": 50.0,
+        "I_deg": 60.0,
+        "h_hard_uT": [
+          5.0,
+          0.0,
+          0.0
+        ],
+        "yaw_deg": 90.0
+      },
+      "expected": {
+        "error_exact_deg": -11.309932,
+        "error_first_order_deg": -11.459156,
+        "max_error_over_heading_deg": 11.536959,
+        "error_at_0_and_180_deg": [
+          0.0,
+          0.0
+        ]
+      },
+      "tolerance": {
+        "error_exact_deg": 1e-05,
+        "error_first_order_deg": 1e-05,
+        "max_error_over_heading_deg": 0.0001,
+        "error_at_0_and_180_deg": 1e-09
+      },
+      "units": {
+        "*": "deg"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "error_exact_deg": -11.30993247402023,
+        "error_first_order_deg": -11.459155902616466,
+        "max_error_over_heading_deg": 11.536959016342594,
+        "error_at_0_and_180_deg": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": "TC06",
+      "title": "Soft-iron two-cycle error (scale x 1.05, y 0.95, level)",
+      "inputs": {
+        "F_uT": 50.0,
+        "I_deg": 60.0,
+        "S_diag": [
+          1.05,
+          0.95,
+          1.0
+        ],
+        "yaw_deg": [
+          45.0,
+          0.0,
+          90.0,
+          135.0
+        ]
+      },
+      "expected": {
+        "error_deg": [
+          -2.862405,
+          0.0,
+          0.0,
+          2.862405
+        ],
+        "first_order_at_45_deg": -2.864789
+      },
+      "tolerance": {
+        "error_deg": 1e-05,
+        "first_order_at_45_deg": 1e-05
+      },
+      "units": {
+        "*": "deg"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "error_deg": [
+          -2.862405226111747,
+          0.0,
+          0.0,
+          2.8624052261117185
+        ],
+        "first_order_at_45_deg": -2.8647889756541187
+      }
+    },
+    {
+      "id": "TC07",
+      "title": "White-noise heading std, Monte Carlo (sigma_m = 0.1 uT/axis, H = 25 uT, N = 20000, seed 0)",
+      "inputs": {
+        "F_uT": 50.0,
+        "I_deg": 60.0,
+        "yaw_deg": 30.0,
+        "sigma_m_uT": 0.1,
+        "N": 20000,
+        "seed": 0
+      },
+      "expected": {
+        "sigma_psi_predicted_deg": 0.229183,
+        "sigma_psi_mc_deg": 0.229183,
+        "mean_error_deg": 0.0
+      },
+      "tolerance": {
+        "sigma_psi_predicted_deg": 1e-05,
+        "sigma_psi_mc_deg": 0.0069,
+        "mean_error_deg": 0.01
+      },
+      "units": {
+        "*": "deg"
+      },
+      "source": "analytic; MC tolerance = 3% (sampling std of std ~ 1/sqrt(2N) = 0.5%)",
+      "computed_by_reference_model": {
+        "sigma_psi_predicted_deg": 0.2291831180523293,
+        "sigma_psi_mc_deg": 0.2277723899797199,
+        "mean_error_deg": -0.0003037455437038261
+      }
+    },
+    {
+      "id": "TC08",
+      "title": "Interference: dipole (1 A m^2 at 0.3 m) and straight wire (10 A at 0.1 m)",
+      "inputs": {
+        "F_uT": 50.0,
+        "I_deg": 60.0,
+        "dipole_moment_Am2": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "r_axial_m": [
+          0.3,
+          0.0,
+          0.0
+        ],
+        "r_equatorial_m": [
+          0.0,
+          0.3,
+          0.0
+        ],
+        "wire_I_A": 10.0,
+        "wire_r_m": [
+          0.1,
+          1.0
+        ],
+        "disturbance_on_body_y_uT": 7.407407407,
+        "yaw_deg": 0.0
+      },
+      "expected": {
+        "B_axial_uT": 7.407407,
+        "B_equatorial_uT": -3.703704,
+        "B_wire_uT": [
+          20.0,
+          2.0
+        ],
+        "dipole_at_0.6m_axial_uT": 0.925926,
+        "heading_with_disturbance_deg": 343.495639,
+        "field_norm_uT": 50.545719,
+        "dip_deg": 58.945314,
+        "magnitude_check_5pct_pass": true,
+        "dip_check_1deg_pass": false
+      },
+      "tolerance": {
+        "B_axial_uT": 1e-05,
+        "B_equatorial_uT": 1e-05,
+        "B_wire_uT": 1e-06,
+        "dipole_at_0.6m_axial_uT": 1e-06,
+        "heading_with_disturbance_deg": 1e-05,
+        "field_norm_uT": 1e-05,
+        "dip_deg": 1e-05,
+        "magnitude_check_5pct_pass": 0,
+        "dip_check_1deg_pass": 0
+      },
+      "units": {
+        "*": "uT / deg / bool"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "B_axial_uT": 7.407407407407409,
+        "B_equatorial_uT": -3.7037037037037046,
+        "B_wire_uT": [
+          20.0,
+          2.0000000000000004
+        ],
+        "dipole_at_0.6m_axial_uT": 0.9259259259259262,
+        "heading_with_disturbance_deg": 343.4956386191033,
+        "field_norm_uT": 50.54571875533356,
+        "dip_deg": 58.94531356050464,
+        "magnitude_check_5pct_pass": true,
+        "dip_check_1deg_pass": false
+      }
+    },
+    {
+      "id": "TC09",
+      "title": "Heading vs track: crosswind crab angle",
+      "inputs": {
+        "heading_deg": 0.0,
+        "airspeed_mps": 50.0,
+        "wind_toward_deg": 90.0,
+        "wind_mps": 10.0
+      },
+      "expected": {
+        "track_deg": 11.309932,
+        "ground_speed_mps": 50.990195,
+        "crab_angle_deg": 11.309932
+      },
+      "tolerance": {
+        "track_deg": 1e-05,
+        "ground_speed_mps": 1e-05,
+        "crab_angle_deg": 1e-05
+      },
+      "units": {
+        "track_deg": "deg",
+        "ground_speed_mps": "m/s",
+        "crab_angle_deg": "deg"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "track_deg": 11.309932474020213,
+        "ground_speed_mps": 50.99019513592785,
+        "crab_angle_deg": 11.3099324740202
+      }
+    },
+    {
+      "id": "TC10",
+      "title": "Distance travelled vs displacement (U-path and semicircle)",
+      "inputs": {
+        "u_path_NE_m": [
+          [
+            0,
+            0
+          ],
+          [
+            100,
+            0
+          ],
+          [
+            100,
+            100
+          ],
+          [
+            0,
+            100
+          ]
+        ],
+        "semicircle_radius_m": 100.0,
+        "semicircle_segments": 100000
+      },
+      "expected": {
+        "u_distance_m": 300.0,
+        "u_displacement_m": 100.0,
+        "u_displacement_bearing_deg": 90.0,
+        "semi_distance_m": 314.159265,
+        "semi_displacement_m": 200.0
+      },
+      "tolerance": {
+        "u_distance_m": 1e-09,
+        "u_displacement_m": 1e-09,
+        "u_displacement_bearing_deg": 1e-09,
+        "semi_distance_m": 0.001,
+        "semi_displacement_m": 1e-09
+      },
+      "units": {
+        "*": "m / deg"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "u_distance_m": 300.0,
+        "u_displacement_m": 100.0,
+        "u_displacement_bearing_deg": 90.0,
+        "semi_distance_m": 314.15926534606,
+        "semi_displacement_m": 200.0
+      }
+    },
+    {
+      "id": "TC11",
+      "title": "Great circle LAX->JFK (haversine, initial bearing) and rhumb line, spherical Earth",
+      "inputs": {
+        "LAX_deg": [
+          33.95,
+          -118.4
+        ],
+        "JFK_deg": [
+          40.63333333333333,
+          -73.78333333333333
+        ],
+        "R_nm": "180*60/pi (1 arcmin = 1 nm)",
+        "R_mean_m": 6371008.8
+      },
+      "expected": {
+        "gc_angle_rad": 0.623585,
+        "gc_distance_nm": 2143.7,
+        "initial_course_deg": 65.892,
+        "rhumb_course_deg": 79.32,
+        "rhumb_distance_nm": 2164.6,
+        "gc_distance_km_Rmean": 3972.863
+      },
+      "tolerance": {
+        "gc_angle_rad": 1e-06,
+        "gc_distance_nm": 0.1,
+        "initial_course_deg": 0.001,
+        "rhumb_course_deg": 0.01,
+        "rhumb_distance_nm": 0.1,
+        "gc_distance_km_Rmean": 0.001
+      },
+      "units": {
+        "*": "rad / nm / deg / km"
+      },
+      "source": "Ed Williams, Aviation Formulary (LAX-JFK worked example: d=0.623585 rad=2144 nm, tc=1.150035 rad, rhumb 79.3 deg / 2164.6 nm)",
+      "computed_by_reference_model": {
+        "gc_angle_rad": 0.6235846454638788,
+        "gc_distance_nm": 2143.726101254521,
+        "initial_course_deg": 65.89216655274532,
+        "rhumb_course_deg": 79.32395900559972,
+        "rhumb_distance_nm": 2164.5756989241963,
+        "gc_distance_km_Rmean": 3972.863263795252
+      }
+    },
+    {
+      "id": "TC12",
+      "title": "Dead-reckoning cross-track error from a 2 deg heading bias over 1 km",
+      "inputs": {
+        "leg_m": 1000.0,
+        "heading_bias_deg": 2.0
+      },
+      "expected": {
+        "cross_track_m": 34.899497,
+        "along_track_m": 999.390827,
+        "total_position_error_m": 34.904813,
+        "small_angle_cross_track_m": 34.906585
+      },
+      "tolerance": {
+        "cross_track_m": 1e-05,
+        "along_track_m": 1e-05,
+        "total_position_error_m": 1e-05,
+        "small_angle_cross_track_m": 1e-05
+      },
+      "units": {
+        "*": "m"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "cross_track_m": 34.89949670250097,
+        "along_track_m": 999.3908270190958,
+        "total_position_error_m": 34.90481287456702,
+        "small_angle_cross_track_m": 34.90658503988659
+      }
+    },
+    {
+      "id": "TC13",
+      "title": "Near magnetic pole: heading noise and WMM declination uncertainty grow as 1/H",
+      "inputs": {
+        "sigma_m_uT": 0.1,
+        "H_uT": [
+          25.0,
+          2.0
+        ],
+        "H_nT_for_WMM": [
+          25000.0,
+          2000.0
+        ]
+      },
+      "expected": {
+        "sigma_psi_deg": [
+          0.229183,
+          2.864789
+        ],
+        "amplification": 12.5,
+        "wmm2025_sigma_D_deg": [
+          0.338453,
+          2.720951
+        ]
+      },
+      "tolerance": {
+        "sigma_psi_deg": 1e-05,
+        "amplification": 1e-09,
+        "wmm2025_sigma_D_deg": 1e-05
+      },
+      "units": {
+        "*": "deg"
+      },
+      "source": "sigma_D formula: NCEI WMM2025 error model",
+      "computed_by_reference_model": {
+        "sigma_psi_deg": [
+          0.2291831180523293,
+          2.8647889756541165
+        ],
+        "amplification": 12.500000000000002,
+        "wmm2025_sigma_D_deg": [
+          0.33845268856961386,
+          2.7209506151343503
+        ]
+      }
+    },
+    {
+      "id": "TC14",
+      "title": "Tilt-estimate error couples into heading via dip: 1 deg roll error, I = 60 deg, heading 0",
+      "inputs": {
+        "F_uT": 50.0,
+        "I_deg": 60.0,
+        "yaw_deg": 0.0,
+        "roll_error_deg": 1.0,
+        "pitch_error_deg": 0.0
+      },
+      "expected": {
+        "heading_error_deg": 1.731436,
+        "first_order_tanI_deg": 1.732051
+      },
+      "tolerance": {
+        "heading_error_deg": 1e-05,
+        "first_order_tanI_deg": 1e-05
+      },
+      "units": {
+        "*": "deg"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "heading_error_deg": 1.731435629974385,
+        "first_order_tanI_deg": 1.7320508075688767
+      }
+    },
+    {
+      "id": "TC15",
+      "title": "Ellipsoid fit recovers hard/soft iron (500 random attitudes, symmetric S)",
+      "inputs": {
+        "F_uT": 50.0,
+        "I_deg": 60.0,
+        "S_true": [
+          [
+            1.08,
+            0.03,
+            -0.02
+          ],
+          [
+            0.03,
+            0.95,
+            0.01
+          ],
+          [
+            -0.02,
+            0.01,
+            1.02
+          ]
+        ],
+        "h_hard_true_uT": [
+          12.0,
+          -7.0,
+          4.0
+        ],
+        "n_attitudes": 500,
+        "seed": 1,
+        "noise_sigma_uT": [
+          0.0,
+          0.1
+        ]
+      },
+      "expected": {
+        "offset_error_noisefree_uT": 0.0,
+        "W_S_offdiag_noisefree": 0.0,
+        "heading_rms_after_cal_noisefree_deg": 0.0,
+        "offset_error_noisy_uT": 0.0,
+        "heading_max_after_cal_noisy_deg": 0.0,
+        "heading_max_before_cal_deg": 34.679191
+      },
+      "tolerance": {
+        "offset_error_noisefree_uT": 1e-08,
+        "W_S_offdiag_noisefree": 1e-08,
+        "heading_rms_after_cal_noisefree_deg": 1e-08,
+        "offset_error_noisy_uT": 0.05,
+        "heading_max_after_cal_noisy_deg": 0.1,
+        "heading_max_before_cal_deg": 1e-05
+      },
+      "units": {
+        "*": "uT / deg"
+      },
+      "source": "analytic",
+      "computed_by_reference_model": {
+        "offset_error_noisefree_uT": 8.702335715267317e-15,
+        "W_S_offdiag_noisefree": 6.684004863011032e-16,
+        "heading_rms_after_cal_noisefree_deg": 4.9341666529774054e-14,
+        "heading_max_before_cal_deg": 34.67919130216035,
+        "offset_error_noisy_uT": 0.009194853143033624,
+        "heading_max_after_cal_noisy_deg": 0.019204809230643605
+      }
+    },
+    {
+      "id": "TC16",
+      "title": "Compass swing: deviation curve coefficients from hard + soft iron (36 headings, level)",
+      "inputs": {
+        "F_uT": 50.0,
+        "I_deg": 60.0,
+        "h_hard_uT": [
+          1.0,
+          0.5,
+          0.0
+        ],
+        "E_soft_2x2": [
+          [
+            0.04,
+            0.02
+          ],
+          [
+            -0.01,
+            -0.03
+          ]
+        ]
+      },
+      "expected": {
+        "hard_B_deg": -2.291831,
+        "hard_C_deg": -1.145916,
+        "soft_A_deg": 0.859437,
+        "soft_D_deg": -2.005352,
+        "soft_E_deg": -0.286479,
+        "residual_rms_after_curve_soft_deg": 0.0
+      },
+      "tolerance": {
+        "hard_B_deg": 1e-06,
+        "hard_C_deg": 1e-06,
+        "soft_A_deg": 0.01,
+        "soft_D_deg": 0.02,
+        "soft_E_deg": 0.03,
+        "residual_rms_after_curve_soft_deg": 0.05
+      },
+      "units": {
+        "*": "deg"
+      },
+      "source": "first-order theory: B=-b_x/H, C=-b_y/H, A=(e12-e21)/2, D=(e22-e11)/2, E=-(e12+e21)/2 (rad)",
+      "computed_by_reference_model": {
+        "hard_B_deg": -2.291831180523285,
+        "hard_C_deg": -1.145915590261647,
+        "soft_A_deg": 0.855097396266723,
+        "soft_D_deg": -1.9906774173810333,
+        "soft_E_deg": -0.31476523266281725,
+        "residual_rms_after_curve_soft_deg": 0.025071380985206983
+      }
+    },
+    {
+      "id": "TC17",
+      "title": "WGS84 radii and dead reckoning in lat/lon",
+      "inputs": {
+        "lat_deg": [
+          0.0,
+          45.0
+        ],
+        "dr_equator_north_m": 1000.0,
+        "dr_45N_east_m": 1000.0
+      },
+      "expected": {
+        "M_equator_m": 6335439.327,
+        "N_equator_m": 6378137.0,
+        "M_45_m": 6367381.816,
+        "N_45_m": 6388838.29,
+        "dlat_equator_1km_north_deg": 0.00904369,
+        "dlon_45N_1km_east_deg": 0.01268282
+      },
+      "tolerance": {
+        "M_equator_m": 0.001,
+        "N_equator_m": 1e-06,
+        "M_45_m": 0.001,
+        "N_45_m": 0.001,
+        "dlat_equator_1km_north_deg": 1e-08,
+        "dlon_45N_1km_east_deg": 1e-08
+      },
+      "units": {
+        "*": "m / deg"
+      },
+      "source": "WGS84 a=6378137, 1/f=298.257223563",
+      "computed_by_reference_model": {
+        "M_equator_m": 6335439.3272928195,
+        "N_equator_m": 6378137.0,
+        "M_45_m": 6367381.815619548,
+        "N_45_m": 6388838.290121148,
+        "dlat_equator_1km_north_deg": 0.009043694770503822,
+        "dlon_45N_1km_east_deg": 0.012682817246983887
+      }
+    },
+    {
+      "id": "TC18",
+      "title": "DR cross-track growth: constant bias (linear) vs white heading noise (sqrt N), Monte Carlo",
+      "inputs": {
+        "v_mps": 10.0,
+        "dt_s": 1.0,
+        "n_steps": 100,
+        "bias_deg": 1.0,
+        "sigma_psi_deg": 2.0,
+        "n_runs": 4000,
+        "seed": 2
+      },
+      "expected": {
+        "bias_crosstrack_m": 17.452406,
+        "white_rms_crosstrack_theory_m": 3.490659,
+        "white_rms_crosstrack_mc_m": 3.490659
+      },
+      "tolerance": {
+        "bias_crosstrack_m": 1e-05,
+        "white_rms_crosstrack_theory_m": 1e-05,
+        "white_rms_crosstrack_mc_m": 0.14
+      },
+      "units": {
+        "*": "m"
+      },
+      "source": "analytic; MC tolerance 4% (~3.5 sigma of sampling error for 4000 runs)",
+      "computed_by_reference_model": {
+        "bias_crosstrack_m": 17.452406437283546,
+        "white_rms_crosstrack_theory_m": 3.490658503988659,
+        "white_rms_crosstrack_mc_m": 3.4762654127345045
+      }
+    },
+    {
+      "id": "TC19",
+      "title": "Quantisation noise and RM3100-class noise mapped to heading (H = 25 uT)",
+      "inputs": {
+        "lsb_uT": [
+          0.013,
+          0.15
+        ],
+        "rm3100_noise_cc200_uT": 0.015,
+        "H_uT": 25.0
+      },
+      "expected": {
+        "quant_sigma_uT": [
+          0.0037528,
+          0.0433013
+        ],
+        "rm3100_sigma_psi_deg": 0.0343775
+      },
+      "tolerance": {
+        "quant_sigma_uT": 1e-06,
+        "rm3100_sigma_psi_deg": 1e-06
+      },
+      "units": {
+        "*": "uT / deg"
+      },
+      "source": "RM3100 15 nT @ CC200 and 13 nT resolution: docs/hardware/FACTSHEET.md [DATASHEET PNI-UM Table 3-1]; 0.15 uT LSB = assumed generic consumer part",
+      "computed_by_reference_model": {
+        "quant_sigma_uT": [
+          0.0037527767497325675,
+          0.04330127018922193
+        ],
+        "rm3100_sigma_psi_deg": 0.03437746770784939
+      }
+    },
+    {
+      "id": "TC20",
+      "title": "Grid convergence (TM first order) and true -> grid heading",
+      "inputs": {
+        "lat_deg": 19.0,
+        "lon_deg": 73.0,
+        "central_meridian_deg": 75.0,
+        "true_heading_deg": 10.0
+      },
+      "expected": {
+        "convergence_deg": -0.651373,
+        "grid_heading_deg": 10.651373
+      },
+      "tolerance": {
+        "convergence_deg": 1e-05,
+        "grid_heading_deg": 1e-05
+      },
+      "units": {
+        "*": "deg"
+      },
+      "source": "spherical TM: tan(gamma) = tan(dlon) sin(lat); ellipsoidal terms neglected (<~0.01 deg here)",
+      "computed_by_reference_model": {
+        "convergence_deg": -0.6513728374613106,
+        "grid_heading_deg": 10.651372837461311
+      }
+    }
+  ]
+}

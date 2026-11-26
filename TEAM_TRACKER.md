@@ -37,3 +37,14 @@ Status: TODO / IN-PROGRESS / BLOCKED / REVIEW / DONE
 - L13 H743-WING/SLIM V3 specs from reseller copies of Matek pages (cross-checked against ArduPilot hwdef).
 - L14 Web sources may change; PDFs not committed (sha256 in docs/hardware/SOURCES.md).
 - L15 ArduPilot COMPASS_TYPEMASK -> COMPASS_DISBLMSK rename: first release containing it not identified.
+
+## Limitations — T2 Math sensor spec (mirrors docs/math/sensor-spec/SPEC.md §10)
+- S1 No WMM/IGRF evaluation in code; D, I, F are scenario inputs (WMM2025 sigma_D formula implemented as planning aid only).
+- S2 Sensor priors in SPEC §8.2 are [ASSUMED] typical ranges except RM3100 noise/resolution ([DATASHEET] via T1). No hardware validation; all results [SIMULATED].
+- S3 Matek CAN RM3100 (AP_Periph/DroneCAN) frame/units at FC/MSP boundary must be confirmed by T4 before applying formulas to logs.
+- S4 Accel sign convention: spec + heading_core default = specific force (level z = -1 g); T3/T4 emitted convention not in contract.
+- S5 Euler heading undefined near |pitch| = 90 deg; no quaternion heading specified.
+- S6 Ellipsoid fit is algebraic (biased at low SNR / partial coverage); cannot recover misalignment rotation; output scale = geometric-mean radius, not F.
+- S7 Spherical haversine/rhumb (up to ~0.5% vs ellipsoidal geodesic); TM convergence spherical first-order only.
+- S8 Dipole/wire interference = far-field idealisations; no eddy currents, PWM spectra, hysteresis or re-magnetisation; temperature linear only.
+- S9 Error-budget formula assumes independent terms; MC tolerances in TC07/TC18 are statistical (3-4%).
