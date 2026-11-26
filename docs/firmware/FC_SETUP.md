@@ -176,6 +176,8 @@ the mapping. `MSP2_SENSOR_COMPASS` is FRD by definition and is not remapped.
 SPI driver raw24>>8 after alignment. The integers are kept in `meta.msp_raw_imu` for audit.
 
 ## 7. Hardware validation checklist (to run when the owner connects hardware; bench only, props off)
+Full runnable procedure with commands, expected values, pass/fail criteria and result fields:
+[`reports/HARDWARE_VALIDATION_CHECKLIST.md`](../../reports/HARDWARE_VALIDATION_CHECKLIST.md) (items HV1–HV8). Summary:
 1. `MSP_FC_VARIANT` = `INAV`; `MSP_RAW_IMU` replies at the poll rate (default 20 Hz); MSPv1, v2 and v2-over-v1 all answer.
 2. Level and still: `accel_g ≈ (0, 0, −1)`. Nose up 30°: `accel_g.x ≈ +0.5`. Right side down 30°: `accel_g.y ≈ −0.5`.
 3. Turn the craft clockwise (seen from above): `gyro_dps.z > 0`, and both the FC yaw and the bridge mag heading increase.
@@ -185,15 +187,17 @@ SPI driver raw24>>8 after alignment. The integers are kept in `meta.msp_raw_imu`
 
 ## LIMITATIONS
 * **L1** No hardware: framing, scaling, axis and sign conventions are verified against source and hand-built bytes
-  only. Every item in §7 is open.
+  only. Every item in §7 / [HARDWARE_VALIDATION_CHECKLIST.md](../../reports/HARDWARE_VALIDATION_CHECKLIST.md) is open.
 * **L2** Body frame (§6.3) is a source derivation. The gyro sign is the weakest link (inferred, not traced to a
   driver). Betaflight frame is assumed identical (not checked).
 * **L3** INAV mag units are physical only while `magzero=0` and `maggain=1024`. After INAV calibration, values are
   dimensionless and the bridge does not yet undo `maggain` (it would also need the alignment order, §6.1).
+  Tracked as non-blocking [BLOCKERS.md](../../BLOCKERS.md) **B3**.
 * **L4** ArduPilot paths (B, C) need MAVLink. The bridge is MSP-only, and ArduPilot answers no `MSP_RAW_IMU`. MAVLink
   (e.g. `SCALED_IMU` mG) is a follow-up. pymavlink would be a new free dependency and needs PM approval.
 * **L5** INAV 10 is a release candidate (stable planned for December 2026). The 9.x vs 10.x differences around the
   MSP compass were not diffed line by line. `master` does not contain the 10.x DroneCAN code.
+  Tracked as non-blocking [BLOCKERS.md](../../BLOCKERS.md) **B4**.
 * **L6** Node UART baud, the CLI `serial` index and field order, and VCP = port 0 on every Matek target are taken
   from docs and are **UNCERTAIN** (§2).
 * **L7** INAV MSP compass is `int16` mGauss (0.1 µT steps, ±3.27 G range). That is fine for heading. The research

@@ -26,11 +26,11 @@ Status: TODO / IN-PROGRESS / BLOCKED / REVIEW / DONE
 - 2026-11-27 HW: T1 audit follow-up: datasheet re-verified 66/66, invalid downloads renamed, SOURCES.md corrected.
 
 ## Limitations — T4 Firmware (mirrors docs/firmware/FC_SETUP.md LIMITATIONS)
-- F1 No hardware: framing/scaling/axes verified only against source and hand-built bytes; FC_SETUP.md §7 checklist open.
+- F1 No hardware: framing/scaling/axes verified only against source and hand-built bytes; checklist HV1-HV8 open in reports/HARDWARE_VALIDATION_CHECKLIST.md.
 - F2 INAV body frame (forward-left-up) and FLU->FRD mapping derived from source; gyro sign weakest (inferred); Betaflight frame assumed same.
-- F3 INAV mag is uT only with magzero_*=0 and maggain_*=1024; after INAV calibration values are dimensionless (bridge does not undo maggain).
+- F3 INAV mag is uT only with magzero_*=0 and maggain_*=1024; after INAV calibration values are dimensionless (bridge does not undo maggain). Non-blocking BLOCKERS.md B3.
 - F4 No MAVLink: ArduPilot (DroneCAN H743 / MSP-compass F405) mag not readable by bridge; ArduPilot AP_MSP has no MSP_RAW_IMU. pymavlink would need PM approval.
-- F5 INAV 10 is RC (DroneCAN code only on maintenance-10.x, no DroneCAN mag); 9.x vs 10.x MSP-compass not diffed line by line.
+- F5 INAV 10 is RC (DroneCAN code only on maintenance-10.x, no DroneCAN mag); 9.x vs 10.x MSP-compass not diffed line by line. Non-blocking BLOCKERS.md B4.
 - F6 UNCERTAIN: CAN-L4-3100 serial1 baud default, INAV `serial` CLI index/field order, USB VCP = serial port 0 on every Matek target.
 - F7 INAV native SPI RM3100 driver keeps raw24>>8 (3.41 uT/LSB, INAV #10746 closed / #10812 open); not our module but documented (profile inav-rm3100-spi).
 - F8 Betaflight: no RM3100 driver; scaling unknown (profile needs explicit factors).
@@ -72,3 +72,4 @@ Status: TODO / IN-PROGRESS / BLOCKED / REVIEW / DONE
 - 2026-11-27 Math: T2 -> REVIEW (heading_core, HEADING_MATH.md with LIMITATIONS, 59 tests, [SIMULATED] accuracy results); D1 fixed, awaiting re-test.
 - 2026-11-27 FW: T4 -> REVIEW (firmware_bridge + FC_SETUP.md; confirms S3/S4: MSP mag mG, accel converted to specific force FRD level (0,0,-1) g, pending hardware).
 - 2026-11-27 UI: T5 -> REVIEW (app/ backend+UI, 40 tests pass, LIMITATIONS U0-U10 in app/README.md; heading-only per PM).
+- 2026-11-27 FW: T4 follow-up: reports/HARDWARE_VALIDATION_CHECKLIST.md (HV1-HV8, NOT RUN), BLOCKERS B3 (maggain) + B4 (INAV 10 RC) non-blocking; MAVLink (pymavlink optional) deferred until Auditor T4 defects are closed.
