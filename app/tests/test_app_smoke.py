@@ -294,3 +294,10 @@ def test_gps_in_recordings():
     assert rows[1]["gps_status"] == "unknown" and rows[1]["gps_fix"] == ""
     assert json.loads(jsonl[0])["gps"] == {"fix": "2d", "num_sat": 6, "hdop": 1.7}
     assert "gps" not in json.loads(jsonl[1])
+
+
+def test_sim_duration_end_goes_stale():
+    """--sim-duration is passed to `python -m sim --duration`; after it ends values go STALE (never frozen)."""
+    with run_app("--source", "sim:static", "--sim-duration", "1.5", "--stale", "1",
+                 wait_for=lambda st: st["source_status"].get("state") == "ended", timeout=15) as (base, port):
+        wait_until(lambda: get_json(base + "/api/status")["sensor_status"] == "STALE", 5)

@@ -1,0 +1,13 @@
+{
+  "before_cal_mean_abs_err_deg": 21.398729607889166,
+  "before_cal_n": 161,
+  "fit_backend": "heading_core",
+  "fit_n_samples": 681,
+  "fit_residual_rms_uT": 0.01556351598333852,
+  "after_cal_mean_abs_err_deg": 0.4184864448008746,
+  "after_cal_n": 120,
+  "recording_lines": 243,
+  "motor_status": "DEGRADED",
+  "motor_reason": "FIELD_MAGNITUDE_OUT_OF_RANGE, HIGH_NOISE",
+  "frames_captured": 418
+}

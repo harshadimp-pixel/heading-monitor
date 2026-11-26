@@ -213,7 +213,7 @@ function render() {
 
   // heading
   const declTxt = st && st.core.declination_deg ? "true, declination applied" : "magnetic";
-  $("headingLabel").textContent = `Measured heading (calibrated, ${declTxt})`;
+  $("headingLabel").textContent = `Measured heading (filtered estimate, ${declTxt})`;
   const h = fresh ? r.heading_deg : null, hr = fresh ? r.heading_raw_deg : null;
   setVal("headingValue", isNum(h) ? `${fmtHeading(h)} ${cardinal(h)}` : UNKNOWN);
   const hint = $("headingHint");
@@ -221,7 +221,7 @@ function render() {
     hint.textContent = `STALE: last value ${fmtHeading(r.heading_deg)} at ${new Date(r.recv_ms).toLocaleTimeString()} (not current)`;
     hint.className = "hint stale";
   } else {
-    hint.textContent = fresh && r.calibrated === false ? "Not calibrated: calibrated heading uses the raw field" : "";
+    hint.textContent = fresh && r.calibrated === false ? "Not calibrated: heading uses the uncalibrated field (see Calibration wizard)" : "";
     hint.className = "hint";
   }
   setVal("rawHeadingValue", isNum(hr) ? `${fmtHeading(hr)} ${cardinal(hr)}` : UNKNOWN);

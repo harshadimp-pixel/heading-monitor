@@ -15,7 +15,7 @@ python -m app --source ingest                  # accept Samples POSTed to /api/s
 # open http://localhost:8080
 ```
 
-Other options: `--port 8080` (`--port 0` = OS-assigned ephemeral port, printed in the start-up log), `--host 127.0.0.1 --rate 20 --seed N --declination DEG --stale 2 --calibration file.json -v`.
+Other options: `--port 8080` (`--port 0` = OS-assigned ephemeral port, printed in the start-up log), `--host 127.0.0.1 --rate 20 --seed N --sim-duration S --declination DEG --stale 2 --calibration file.json -v`.
 With `--declination 0` (default) every heading is **magnetic**. A non-zero declination is passed to heading_core,
 and the UI then labels headings as true.
 
@@ -68,12 +68,12 @@ python -m pytest app/tests -q
 | Panel | Contents |
 |---|---|
 | Header | **DATA SOURCE badge**: SIMULATED / REPLAY / HARDWARE, mapped only from the latest sample's `source` field. It shows NO DATA when nothing current exists. The transport (CLI `--source`) is shown separately, in small text, and is never used for the badge. An evidence banner follows the source. |
-| Heading | SVG compass rose: ticks every 10°, numbers every 30°, N/E/S/W. It has three distinct indicators: measured (calibrated) needle in cyan, raw needle in grey, reference marker as an amber dashed line with a rim triangle. Below it: numeric calibrated and raw heading with a 16-point cardinal; a reference heading input with slider, "use current", clear, or click on the rose; and the signed deviation (measured − reference) wrapped to (−180, 180]. |
+| Heading | SVG compass rose: ticks every 10°, numbers every 30°, N/E/S/W. It has three distinct indicators: measured heading needle in cyan (heading_core `heading_deg`: filtered estimate, using the calibration when one is applied), unfiltered needle in grey (heading_core `heading_raw_deg`: instantaneous, before smoothing), and the reference marker as an amber dashed line with a rim triangle. Below it: the numeric measured and unfiltered heading with a 16-point cardinal; calibration state is shown in the status panel and \|B\| raw vs calibrated in the field panel; a reference heading input with slider, "use current", clear, or click on the rose; and the signed deviation (measured − reference) wrapped to (−180, 180]. |
 | Sensor status & accuracy | Status: OK / DEGRADED / FAULT / STALE / NO DATA, with the reason. Also: last-sample age, rate, accepted/invalid counts, heading_core quality (0–1) with quality bar, short-term noise 1σ, calibration state and residual, error versus sim truth (simulated data only), and warnings. |
 | Roll / pitch | Artificial-horizon canvas plus numbers, taken from the HeadingEstimate. |
 | GPS availability (status only) | A read-only indicator driven only by the optional `sample.gps` object `{fix, num_sat, hdop}`. It shows Available (2d/3d fix), Unavailable (fix `none`) or **Unknown** (gps absent, fix `unknown`, invalid gps object, or stale data), plus Fix, Satellites and HDOP, each Unknown when not reported. There are no coordinates, map, speed, course or distance anywhere in the app. |
 | Magnetic field | Bx/By/Bz (µT, body frame), raw and calibrated \|B\|, and a time plot of the 3 axes plus \|B\|. `mag_raw` (RM3100 counts) is **optional**: it is shown when a sample carries it, otherwise it reads Unknown. The CAN-L4-3100 / DroneCAN stream never carries it. |
-| Heading history | Time plot of measured, raw, reference and sim truth (30 s – 5 min), with gaps where data is missing. Below it, a table of the last 20 samples. |
+| Heading history | Time plot of measured, unfiltered, reference and sim truth (30 s – 5 min), with gaps where data is missing. Below it, a table of the last 20 samples. |
 | Calibration wizard | Start/stop collecting, live coverage (12 yaw bins, 8 axis-sign octants), **Fit** (heading_core `Calibration.fit`), review the parameters, Apply / Remove, Save JSON (`app/calibrations/`), Download, Load a saved file, Upload JSON. A bad file keeps the previous calibration. |
 | Recording & export | **Export history CSV** (in-memory ring) · Record CSV or JSONL to `app/recordings/` with download links. JSONL recordings are the original contract Samples, so they can be replayed with `--source replay:`. |
 | Test controls (app-side) | Pause intake / inject a 5 s dropout. These drop samples inside the app to exercise Unknown/stale handling, and are labelled as such. |

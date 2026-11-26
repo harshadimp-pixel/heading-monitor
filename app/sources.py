@@ -202,8 +202,8 @@ class SubprocessSource(Source):
 class RealSimSource(SubprocessSource):
     kind = "sim"
 
-    def __init__(self, emit, on_status, scenario, rate, seed, fallback_factory):
-        cmd = [sys.executable, "-m", "sim", "--rate", str(rate), "--duration", "86400", "--realtime"]
+    def __init__(self, emit, on_status, scenario, rate, seed, fallback_factory, duration=86400.0):
+        cmd = [sys.executable, "-m", "sim", "--rate", str(rate), "--duration", str(duration), "--realtime"]
         if scenario:
             cmd += ["--scenario", scenario]
         if seed is not None:
@@ -277,7 +277,7 @@ class IngestSource(Source):
 
 
 def make_source(spec: str, emit, on_status, rate=20.0, seed=None, baud=115200,
-                speed=1.0, loop=False) -> Source:
+                speed=1.0, loop=False, sim_duration=86400.0) -> Source:
     kind, _, arg = spec.partition(":")
     if kind == "sim":
         scenario = arg or None
@@ -285,7 +285,7 @@ def make_source(spec: str, emit, on_status, rate=20.0, seed=None, baud=115200,
         def stub(reason):
             return StubSimSource(emit, on_status, scenario or "slow_yaw_spin", rate, seed, reason)
         if _module_available("sim"):
-            return RealSimSource(emit, on_status, scenario, rate, seed, stub)
+            return RealSimSource(emit, on_status, scenario, rate, seed, stub, duration=sim_duration)
         return stub("T3 sim module not available yet.")
     if kind == "replay":
         if not arg:

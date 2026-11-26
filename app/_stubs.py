@@ -116,7 +116,6 @@ class StubHeadingEstimator:
         mag = sample["mag_uT"]
         acc = sample.get("accel_g")
         warnings = []
-        raw_h = stub_tilt_compensated_heading(mag, acc, self.declination_deg)
         if self.calibration is not None:
             cmag = self.calibration.apply(mag)
             calibrated = True
@@ -127,7 +126,8 @@ class StubHeadingEstimator:
         h = stub_tilt_compensated_heading(cmag, acc, self.declination_deg)
         field = math.sqrt(sum(v * v for v in cmag))
         out = {"t": sample["t"], "source": sample["source"], "heading_deg": h,
-               "heading_raw_deg": raw_h, "field_uT": field, "calibrated": calibrated}
+               "heading_raw_deg": h,  # stub has no smoothing: unfiltered == filtered
+               "field_uT": field, "calibrated": calibrated}
         quality = 1.0 if calibrated else 0.5
         if acc is not None:
             r, p = roll_pitch_from_accel(acc)

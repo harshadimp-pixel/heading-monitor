@@ -33,12 +33,12 @@
       <svg id="compass" viewBox="-160 -160 320 320" role="img" aria-label="Compass rose: measured vs reference heading"></svg>
       <div class="heading-readout">
         <div class="metric big">
-          <div class="label" id="headingLabel">Measured heading (calibrated, magnetic)</div>
+          <div class="label" id="headingLabel">Measured heading (filtered estimate, magnetic)</div>
           <div class="value" id="headingValue">Unknown</div>
           <div class="hint" id="headingHint"></div>
         </div>
         <div class="metric">
-          <div class="label">Raw heading (uncalibrated)</div>
+          <div class="label">Unfiltered heading (heading_raw_deg: instantaneous, before smoothing)</div>
           <div class="value mid" id="rawHeadingValue">Unknown</div>
         </div>
         <div class="metric">
@@ -57,8 +57,8 @@
           <div class="value mid" id="deviationValue">Unknown</div>
         </div>
         <div class="legend">
-          <span><i class="sw measured"></i>Measured (calibrated)</span>
-          <span><i class="sw raw"></i>Raw</span>
+          <span><i class="sw measured"></i>Measured (filtered)</span>
+          <span><i class="sw raw"></i>Unfiltered</span>
           <span><i class="sw reference"></i>Reference</span>
         </div>
       </div>
@@ -132,11 +132,11 @@
       </select>
     </h2>
     <canvas id="headingChart" class="chart" height="200"></canvas>
-    <div class="legend"><span><i class="sw measured"></i>Measured</span><span><i class="sw raw"></i>Raw</span><span><i class="sw reference"></i>Reference</span><span><i class="sw truth"></i>Sim truth</span><span class="muted">gaps = no data</span></div>
+    <div class="legend"><span><i class="sw measured"></i>Measured</span><span><i class="sw raw"></i>Unfiltered</span><span><i class="sw reference"></i>Reference</span><span><i class="sw truth"></i>Sim truth</span><span class="muted">gaps = no data</span></div>
     <h3>Recent samples</h3>
     <div class="table-wrap">
       <table id="samplesTable">
-        <thead><tr><th>Time (local)</th><th>Source</th><th>Heading °</th><th>Raw °</th><th>Ref °</th><th>Dev °</th>
+        <thead><tr><th>Time (local)</th><th>Source</th><th>Heading °</th><th>Unfilt. °</th><th>Ref °</th><th>Dev °</th>
           <th>Bx</th><th>By</th><th>Bz</th><th>|B|</th><th>Quality</th><th>Status</th><th>GPS fix</th></tr></thead>
         <tbody></tbody>
       </table>
