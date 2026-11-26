@@ -2,7 +2,7 @@
 
 **Status of this document:** consolidated final report for the Project Manager / CTO, written after the Auditor's official v3.0 re-test. Individual module suites being green was never treated as sufficient for completion.
 
-**Repository:** https://github.com/harshadimp-pixel/heading-monitor (private).
+**Repository:** https://github.com/harshadimp-pixel/heading-monitor (private; visibility confirmed PRIVATE via `gh repo view` by the PM).
 **Auditor-executed results** are those recorded at commits `0c25062` (suites and claims audit) and `f058c9a` (integration 30/30), as written in `reports/verification_report.md` (FINAL v3.0) and `TEST_RESULTS.md`. The Auditor's verification commit is `a88e8d1` (this draft's starting HEAD).
 **PM smoke test and PM full-suite run** were executed on 2026-11-27 at 01:29–01:31 IST (Asia/Calcutta) on the working tree based on `a88e8d1` (documentation and this report only; no product-code edits).
 
@@ -16,13 +16,13 @@
 
 The application is a **virtual magnetic-heading monitor** for a PNI RM3100 magnetometer on a Matek CAN-L4-3100 (AP_Periph) module, intended to attach later to a Matek flight controller. It runs end to end on the T3 simulator and on recorded-log replay. The live MSP serial path has been exercised against a missing port, a fake flight controller, and (as a documented limitation) a virtual pty; it has **not** been run against a real flight controller.
 
-The Testing & Technical Auditor's official final verification (v3.0, about 01:30 IST on 2026-11-27) is **PASS for the virtual scope only**, and **project completion is APPROVED for that scope** (`reports/verification_report.md`). Per-deliverable verdicts: T1–T5 **PASS**. Nothing is physically confirmed on hardware.
+The Testing & Technical Auditor's official final verification (v3.0, about 01:30 IST on 2026-11-27) is **PASS for the virtual scope only**, and **project completion is APPROVED for that scope** (`reports/verification_report.md`). Per-deliverable verdicts: T1–T5 **PASS**; PM docs **PASS**. Nothing is physically confirmed on hardware.
 
 Of the agreed requirements (`REQUIREMENTS.md` R1–R8, N1–N6), the Auditor traces **13 as delivered** in the virtual scope, **1 as partial** (R6: live MSP to a real Matek FC was never run), and **0 as not delivered** (`reports/audit/traceability.md`).
 
 The latest independent whole-repo run, at `0c25062`, is **513 passed, 44 skipped, 0 failed** (`python -m pytest -q -rs`; `TEST_RESULTS.md`). Integrated end-to-end testing at `f058c9a` is **30/30 PASS**, including tightened A8/A8b and new edge cases A10a–c (`reports/audit/integration_results.md`). Defect **D6 (CRITICAL) is CLOSED**: a replay of recorded hardware now shows **REPLAY (recorded hardware)** and a banner that the data is not live.
 
-**D7 (MINOR, documentation)** remains non-blocking and is at **REVIEW**: this report's accompanying commit updates `REQUIREMENTS.md` R8, README rule 2 and `CHANGELOG.md` to the wording suggested in the D7 tracker row. The Auditor has not re-checked that wording.
+**D7 (MINOR, documentation)** is **CLOSED**: `REQUIREMENTS.md` R8, README rule 2 and `CHANGELOG.md` were updated in 2564266 and re-checked by the Auditor (02c0ec0).
 
 A PM smoke test on ephemeral ports (8080 was not used) confirmed a live `sim:tilted_spin` session with `latest_sample_source="sim"` and a numeric heading, and a replay of a simulated example log that kept `source="sim"` (badge SIMULATED) with transport `replay` and a numeric heading. The PM re-ran `python3 -m pytest -q` and obtained **513 passed, 44 skipped** in 133.01 s, matching the Auditor's official count.
 
@@ -311,7 +311,7 @@ Status is taken from `reports/verification_report.md` §4, except D7, which this
 
 | ID | Issue | Status |
 |---|---|---|
-| B1 | No physical RM3100 + Matek FC is connected to the project environment. No result can carry a hardware-verified evidence label; the serial path was tested only against constructed MSP frames, a fake FC, or a virtual pty | **OPEN** (accepted for the virtual phase) |
+| B1 | No physical RM3100 + Matek FC is connected to the project environment. No result can carry a hardware-verified evidence label; the serial path was tested only against constructed MSP frames | **OPEN** (accepted for the virtual phase) |
 | B2 | Exact Matek FC model and firmware (INAV / ArduPilot / Betaflight) on the team’s board are unknown | **OPEN** (documented assumption, not a stop) |
 | B3 | `firmware_bridge` cannot undo INAV’s mag-calibration normalisation: after INAV mag calibration, MSP_RAW_IMU mag is dimensionless, not mGauss. `mag_uT` is only correct while `magzero=0` and `maggain=1024` | **OPEN** (non-blocking). Workaround: leave INAV mag calibration unset and let `heading_core` calibrate |
 | B4 | INAV 10 is still a release candidate (10.0.0-rc2, 2026-09-29; stable planned December 2026); setup steps are pinned to `maintenance-10.x` @ `fce6c94` | **OPEN** (non-blocking) |
@@ -330,7 +330,7 @@ There is no separate `app/LIMITATIONS` file; the list lives in `app/README.md`. 
 0. Heading only (PM decision). Position, coordinates, map, speed, course-over-ground and distance features were removed. Only a read-only GPS availability indicator remains (`sample.gps` = fix, num_sat, hdop). The contract has no coordinates and the app shows none. The current simulator does not emit `gps`, so the indicator normally reads Unknown.
 1. `mag_raw` is optional (the CAN-L4-3100 stream is a scaled field, not raw counts).
 2. Accuracy shown is quality, short-term noise and calibration residual, not absolute accuracy. Error versus truth exists only for simulated data. Nothing here is hardware-verified.
-3. The serial path has never been run against a real flight controller or the CAN-L4-3100; only a non-existent port (FAULT, no data) in owner tests, plus the Auditor’s virtual-pty observation (L-SER).
+3. The serial path has never been run against a real flight controller or the CAN-L4-3100; only a non-existent port (FAULT, no data) in owner tests. (Separately, the Auditor’s L-SER finding in `reports/verification_report.md`, not app README item 3: a virtual pty fed by the fake FC shows HARDWARE.)
 4. Replay of simulated logs keeps `source:"sim"` (badge SIMULATED; transport shown separately). Replayed hardware is relabelled `source:"replay"` with `meta.original_source="hardware"` and shown as REPLAY (recorded hardware), not live. The file’s written `original_source` is trusted only for that non-live label.
 5. Local stubs exist but are inactive in the current repo (heading_core and sim are real). firmware_bridge is never stubbed.
 6. The calibration wizard shows coverage but does not guide the user to a missing orientation.
@@ -544,7 +544,7 @@ The official written verdict is in `reports/verification_report.md` (T6 Verifica
 
 Per-deliverable verdicts from the same report (§1): T1 **PASS**, T2 **PASS**, T3 **PASS**, T4 **PASS**, T5 **PASS**, PM docs **PASS with D7 (MINOR) open**.
 
-The quoted D7 item describes the documentation gap **at the time of the audit**. This commit applies the suggested wording and sets D7 to REVIEW. It does not change the official verdict, and it is not an Auditor re-check of D7.
+The quoted D7 item describes the documentation gap **at the time of the audit**. The wording was then fixed in 2564266, and the Auditor re-checked it and closed D7 in 02c0ec0; the official verdict is unchanged.
 
 ---
 
