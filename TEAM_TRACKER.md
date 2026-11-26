@@ -11,9 +11,11 @@ Status: TODO / IN-PROGRESS / BLOCKED / REVIEW / DONE
 | T5 | Heading-monitor app `app/`: backend + local web UI (compass, numbers, field, tilt, calibration wizard, warnings, source badge), `--source sim|replay|serial` | UI & Software Developer | T2, T3 (contracts first) | IN-PROGRESS | stdlib HTTP+WebSocket backend, vanilla JS UI; local stubs behind ARCHITECTURE.md interfaces until T2/T3/T4 land |
 | T6 | Independent test plan, integration tests, accuracy runs vs sim truth, claims audit, `reports/verification_report.md` | Testing & Technical Auditor | T2-T5 | TODO | write test plan now; must not test own code |
 | T7 | Integration, review, consolidated report to owner | PM & CTO | T1-T6 | IN-PROGRESS | |
+| T8 | Group-chat hub: route questions to the right specialist, consolidate answers, record decisions for the owner | All group bot Work project | - | IN-PROGRESS | owner assigned this role 2026-11-26; no code ownership |
 
 ## Change log
 - 2026-11-26 PM: repo, contracts, tracker created.
 - 2026-11-26 HW: T1 started (IN-PROGRESS).
 - 2026-11-26 FW: T4 started (IN-PROGRESS).
 - 2026-11-26 UI: T5 started (IN-PROGRESS).
+- 2026-11-27 Hub: T8 added (IN-PROGRESS).
