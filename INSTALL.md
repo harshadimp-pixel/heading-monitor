@@ -55,8 +55,8 @@ Run from the repo root with the venv active. Every suite is independent.
 | Firmware bridge (T4) | `python -m pytest firmware_bridge/tests -q` | Firmware Specialist |
 | FW quantization research (T4) | `python -m pytest docs/firmware/research -q` | Firmware Specialist |
 
-Run the suites one by one as above, not with one bare `pytest` over the whole repo. Several suites contain
-test modules with the same file name, and a single combined run can hit pytest's module-name clashes.
+All suites can also run together. `python -m pytest -q` from the repo root (or listing all seven paths) gave the
+same totals as the per-suite runs on 2026-11-26: 499 passed, 45 skipped. There was no module-name clash.
 The app tests start their own app instances on OS-assigned ports. They never touch port 8080, so they can run
 while the dashboard is open.
 
@@ -65,4 +65,32 @@ while the dashboard is open.
 See `reports/demo/README.md`.
 
 ## Verification log
-(filled in from a real fresh-clone run, see below)
+Real run on 2026-11-26 (IST), following this file on a fresh clone in a fresh venv:
+`git clone /workspace/heading-monitor /tmp/hm-clone` (HEAD 41bb756), then `python3 -m venv /tmp/hm-venv` and
+`pip install -r requirements.txt`. Environment: Python 3.13.5, numpy 2.5.5, pytest 9.2.0, jsonschema 4.26.0,
+google-chrome present, Node v24.22.1, pyserial NOT installed.
+
+| Suite | Result |
+|---|---|
+| `app/tests` | 45 passed (20.6 s) |
+| `tests` | 105 passed (54.9 s) |
+| `heading_core/tests` | 76 passed (52.2 s) |
+| `docs/math/sensor-spec` | 23 passed |
+| `sim/tests` | 152 passed, 44 skipped. The skips are deliberate (in sim's own skip reasons: spec cases that are analysis maths or source models the sim does not implement) |
+| `firmware_bridge/tests` | 94 passed, 1 skipped (pyserial absent). With `pip install pyserial`: 95 passed |
+| `docs/firmware/research` | 4 passed |
+| all seven paths in one run, and bare `python -m pytest -q` | 499 passed, 45 skipped |
+
+Each source was started with `python -m app --source ... --port 0` and `/api/status` was read after about 5 s:
+
+| Source | Result |
+|---|---|
+| `sim:tilted_spin` | sensor OK, latest_sample_source=sim, estimator_backend=heading_core, 96/96 samples accepted |
+| `replay:reports/demo/demo_tilted_spin_recording.jsonl` | OK, source=sim (a replayed sim log keeps SIMULATED), 99/99 accepted |
+| `ingest` | NO DATA, "no valid sample received yet" (expected until something POSTs to `/api/sample`) |
+| `serial:/dev/ttyNONE` without pyserial | FAULT: "firmware_bridge exited rc=2 … pyserial …" |
+| `serial:/dev/ttyNONE` with pyserial | FAULT: "could not open port /dev/ttyNONE" |
+
+There were no failures. Fixed in the doc after this run: the old advice to avoid one combined pytest run was wrong,
+because the combined run works. Not verified: `serial:` against a real flight controller (none available; see
+app/README LIMITATIONS 3).

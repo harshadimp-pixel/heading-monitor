@@ -125,9 +125,13 @@ sensor_status, estimator_backend, truth_heading_deg_sim_only, gps_status, gps_fi
 (the `mag_raw_*` cells are empty when the sample has no raw counts).
 
 ## Tests (run 2026-11-27, real results)
-`python -m pytest app/tests -v` gives **44 passed**, about 17 s per run. Three consecutive full runs passed (44/44
-each). `app/tests/test_app_ui_headless.py` passed 10 consecutive times (3/3 each, about 4 s). The auditor's
-`tests/test_t6_app.py` and `tests/test_t6_claims.py` give 14 passed.
+`python -m pytest app/tests -v` gives **45 passed**, about 20 s per run. Three consecutive full runs passed (45/45
+each), and a fresh clone in a fresh venv also gave 45 passed (see `INSTALL.md`, Verification log).
+`app/tests/test_app_ui_headless.py` passed 10 consecutive times (3/3 each, about 4 s). The auditor's
+`tests/test_t6_app.py` and `tests/test_t6_claims.py` give 14 passed. `test_sim_duration_end_goes_stale` checks that
+when the sim ends (`--sim-duration`) the app goes stale and shows Unknown. Label semantics: "Measured heading" is the
+filtered estimate (`heading_deg`). "Unfiltered" is `heading_raw_deg`, the instantaneous value before smoothing, and
+it is calibrated whenever a calibration is applied.
 Environment: Python 3.13.5, pytest 9.2.0, Node 24 for the JS mapping tests, google-chrome headless for the 3 DOM tests.
 Every test starts its own app with `--port 0` (OS-assigned ephemeral port, read back from the start-up log line), never 8080.
 The headless smoke tests need no browser:
