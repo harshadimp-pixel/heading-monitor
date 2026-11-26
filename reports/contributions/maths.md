@@ -27,7 +27,7 @@
 | `ace283c` | 2026-11-26 23:55:46 | Untrack pycache; add `heading_core/.gitignore` |
 | `a4878c7` | 2026-11-26 23:58:55 | Implement calibration, tilt-compensated heading, estimator, synth model; 47 unit tests |
 | `912476c` | 2026-11-27 00:04:18 | Sensor spec (`SPEC.md`/`.pdf`, reference model, 23 pytest checks, 20 vectors); LIMITATIONS S1–S9 as first filed |
-| `758faeb` | 2026-11-27 00:11:54 | T2 → REVIEW; D1 frozen-data detection (`SENSOR_STALE` / `MAG_STALE` / `TIMESTAMP_STALE`); `HEADING_MATH.md` with LIMITATIONS and the dead-reckoning scope rule; MC + sim cross-check **[SIMULATED]**; 59 tests |
+| `758faeb` | 2026-11-27 00:11:54 | T2 → REVIEW; D1 frozen-data detection (`SENSOR_STALE` / `MAG_STALE` / `TIMESTAMP_STALE`); `HEADING_MATH.md` with LIMITATIONS and the heading-only scope rule (no position or navigation); MC + sim cross-check **[SIMULATED]**; 59 tests |
 | `b7e28d0` | 2026-11-27 00:20:57 | PM decisions (3) and (4): quantised-source `MAG_STALE` (`meta.mag_quant_uT` or inferred decimal grid; bit-identical ≥ 5 s, quality ≥ 0.3×) and `fc_mag_calibrated` handling; thresholds marked PROVISIONAL; 67 tests |
 | `171e1e5` | 2026-11-27 00:21:14 | `TEAM_TRACKER.md`: T2 stays REVIEW; PM decisions implemented; PROVISIONAL thresholds noted |
 | `64579d9` | 2026-11-27 00:26:22 | Sensor-spec TC19 / §8.2 fix: RM3100 CC200 LSB = exact 1/75 µT (was the rounded 0.013 µT); reference model, tests, vectors and PDF updated |
@@ -40,7 +40,7 @@ The PM recorded decision (a) in `ARCHITECTURE.md` in `1befc7b` (`[pm]`, 2026-11-
 
 **TC19 / `64579d9`.** The Simulation Developer reported that SPEC §8.2 and TC19 used a 0.013 µT step, while the 200-cycle LSB is 1/75 = 0.01333… µT (PNI User Manual Table 3-1 gain 75 LSB/µT; the datasheet “13 nT” is the rounded value). The spec, reference model, `test_cases.json` and SPEC.pdf were corrected to the exact 1/75 µT. The only expected value that moved was TC19 quantisation sigma, 0.0037528 → 0.0038490 µT; heading noise stayed 0.034377°.
 
-Dead-reckoning figures in the spec and in `HEADING_MATH.md` remain error analysis only. `heading_core` has no position or distance feature (Auditor condition; LIMITATIONS 17).
+Heading-only scope rule (no position or navigation): position-error figures in the spec and in `HEADING_MATH.md` remain error analysis only. `heading_core` has no position or distance feature (Auditor condition; LIMITATIONS 17).
 
 ## 2. Tests actually executed
 
@@ -129,7 +129,7 @@ Summary of `HEADING_MATH.md` §13:
 14a. **Residual (D3): a mag-only freeze on a stationary vehicle cannot be detected on quantised hardware.** With 0.1 µT steps and 15 nT noise, a healthy still sensor repeats bit-identical readings, so there is no evidence to separate “frozen” from “still” without motion. Detection needs rotation > 3° (beyond the 1°/s deadband) or a > 3° tilt change. Slow turns < 1°/s, or rotation about the field direction, with a frozen mag go unflagged; a gyro bias > ~1°/s (magnitude) could cause false alarms. **Default `quant_nogyro_time_rule=False`** (PM D3 decision (a), `f31784a`): without gyro, only a > 3° accel tilt change is evidence, so a frozen mag on a vehicle that only yaws (level turn) with no gyro is not detected. The opt-in 5 s rule (`True`) catches long freezes without gyro but also warns on healthy still sensors (4/20 Auditor E3b sessions in the earlier configuration; warning only, quality kept). Quantised stationary data with no accel channel still raises `SENSOR_STALE` after 0.5 s.
 15. Temperature drift, RM3100 linearity (0.5 % [DATASHEET]) and cycle-count changes are not modelled.
 16. Heading is not course over ground; no speed, distance or place estimate is provided.
-17. **Scope rule (binding):** dead-reckoning figures are error analysis only; `heading_core` does not and will not provide a position, displacement or distance feature.
+17. **Heading-only scope rule (no position or navigation), binding:** position-error figures are error analysis only; `heading_core` does not and will not provide a position, displacement or distance feature.
 
 Sensor-spec LIMITATIONS (SPEC.md §10 / tracker S1–S11, in brief): no WMM/IGRF evaluation in code (S1); §8.2 priors are [ASSUMED] except RM3100 noise/resolution [DATASHEET] (S2); Matek CAN path frame/units at the FC/MSP boundary must be confirmed before applying formulas to logs (S3); Euler heading undefined near |pitch| = 90° (S5); algebraic ellipsoid fit cannot recover misalignment rotation (S6); spherical haversine/rhumb error up to ~0.5% (S7); dipole/wire models are far-field idealisations (S8); temperature linear only (S9); error-budget terms assumed independent (S10); TC07/TC18 Monte Carlo tolerances are statistical (3–4%) (S11). S4 (accel sign) is now the agreed contract (specific force, level z = −1 g); native FC sign remains unverified on hardware.
 
