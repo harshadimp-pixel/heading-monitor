@@ -8,7 +8,7 @@ Status: TODO / IN-PROGRESS / BLOCKED / REVIEW / DONE
 | T2 | Heading math + calibration library `heading_core/` (ellipsoid hard/soft-iron fit, tilt comp, declination, smoothing w/ wrap-around, quality metric) + `docs/math/` derivation, unit tests | Mathematics & Sensor Scientist | T1 (soft) | IN-PROGRESS | interface stubs committed (importable); impl in progress. Nominal field 50 uT (CoreConfig) until T1. Proposed warning codes in heading_core/warnings_codes.py (PM to confirm) |
 | T3 | Sensor simulator `sim/`: RM3100 + FC IMU, scenarios (static, slow yaw spin, tilted spin, hard/soft iron, motor interference, noise), ground truth, seeded | Simulation Developer | T1 (soft) | TODO | emits Sample JSONL; source="sim" |
 | T4 | FC telemetry bridge `firmware_bridge/` (MSP over USB: MSP_RAW_IMU / MSP_ATTITUDE; MAVLink optional) + `docs/firmware/` FC config steps for RM3100 on Matek | Firmware Specialist | T1 | IN-PROGRESS | test against recorded/synthetic MSP frames; source="hardware" only from a live port |
-| T5 | Heading-monitor app `app/`: backend + local web UI (compass, numbers, field, tilt, calibration wizard, warnings, source badge), `--source sim|replay|serial` | UI & Software Developer | T2, T3 (contracts first) | TODO | start with contracts + stub data |
+| T5 | Heading-monitor app `app/`: backend + local web UI (compass, numbers, field, tilt, calibration wizard, warnings, source badge), `--source sim|replay|serial` | UI & Software Developer | T2, T3 (contracts first) | IN-PROGRESS | stdlib HTTP+WebSocket backend, vanilla JS UI; local stubs behind ARCHITECTURE.md interfaces until T2/T3/T4 land |
 | T6 | Independent test plan, integration tests, accuracy runs vs sim truth, claims audit, `reports/verification_report.md` | Testing & Technical Auditor | T2-T5 | TODO | write test plan now; must not test own code |
 | T7 | Integration, review, consolidated report to owner | PM & CTO | T1-T6 | IN-PROGRESS | |
 
@@ -16,3 +16,4 @@ Status: TODO / IN-PROGRESS / BLOCKED / REVIEW / DONE
 - 2026-11-26 PM: repo, contracts, tracker created.
 - 2026-11-26 HW: T1 started (IN-PROGRESS).
 - 2026-11-26 FW: T4 started (IN-PROGRESS).
+- 2026-11-26 UI: T5 started (IN-PROGRESS).
