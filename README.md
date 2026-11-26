@@ -17,6 +17,8 @@ replayed data today, and accept real FC telemetry through the same interface whe
 | `tests/` + `reports/` | Testing & Technical Auditor | independent tests, audit and verification reports |
 | `contracts/`, `TRACKER.md`, `ARCHITECTURE.md` | PM & CTO | interfaces, tracker, decisions |
 
+See also TEAM_RULES.md (owner rules, binding).
+
 ## Ground rules (non-negotiable)
 1. **Evidence labelling.** Every performance claim is tagged `[SIMULATED]`, `[REPLAYED]`, `[DATASHEET]`
    or `[HARDWARE-VERIFIED]`. `[HARDWARE-VERIFIED]` requires a raw log from the physical RM3100/Matek
