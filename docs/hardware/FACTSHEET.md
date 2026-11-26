@@ -8,8 +8,11 @@ Evidence tags: `[DATASHEET]` = PNI manufacturer document; `[OFFICIAL-DOC]` = ven
 Primary source (abbrev. **PNI-UM**): PNI Sensor, *RM3100 & RM2100 Magneto-Inductive Magnetometer User Manual*,
 Doc 1017252 V16.0 (rev. block to R16, 2026-08-28),
 https://www.pnisensor.com/wp-content/uploads/RM3100-RM2100-Sensor-Suite-User-Manual-V11.0.pdf
-(file downloaded 2026-11-26, sha256 `2a09457337a6882632681a48e6c62a6dd842287e18f8311b88d748e9b92f1cbf`; the URL
-says V11.0 but the file content is V16.0).
+(file downloaded 2026-11-26 and **re-downloaded and re-verified 2026-11-27**, sha256
+`2a09457337a6882632681a48e6c62a6dd842287e18f8311b88d748e9b92f1cbf`, 45 pages; the URL says V11.0 and the PDF metadata says
+V15.0, but the content footer is V16.0). **Audit:** all [DATASHEET] values were re-checked against this PDF and the PNI sales sheet;
+66/66 automated checks pass (`verify_datasheet.py`, `VERIFICATION.md`). A 233-byte captcha page from a failed pnicorp.com download
+was never used; it has been renamed INVALID (see SOURCES.md).
 
 ## Key numbers (for Math / Sim / Firmware)
 Machine-readable copy: `docs/hardware/key_numbers.json`. Derived values (µT/LSB, float16 steps, full scale) were computed and checked with Python on 2026-11-27.
@@ -20,7 +23,7 @@ Machine-readable copy: `docs/hardware/key_numbers.json`. Derived values (µT/LSB
 | Resolution ("sensitivity") @ CC 50/100/200 | 50 / 26 / 13 nT | [DATASHEET] PNI-UM Table 3-1 |
 | Noise @ CC 50/100/200 | 30 / 20 / 15 nT | [DATASHEET] PNI-UM Table 3-1 |
 | Max single-axis sample rate @ CC 50/100/200 | 1600 / 850 / 440 Hz ("divide by 3 for 3-axis") | [DATASHEET] PNI-UM Table 3-1 |
-| Max 3-axis rate @ CC 50/100/200 | 534 / 284 / 147 Hz | [DATASHEET] PNI sales sheet https://www.pnisensor.com/wp-content/uploads/PNI-Sensor-RM3100-Sales-Sheet.pdf |
+| Max 3-axis rate @ CC 50/100/200 | 534 / 284 / 147 Hz | [DATASHEET] PNI sales sheet https://www.pnisensor.com/wp-content/uploads/PNI-Sensor-RM3100-Sales-Sheet.pdf (PDF read 2026-11-27) |
 | Field measurement range | **±800 µT** (user manual, 121 Ω bias resistor); sales sheet/product page say ±1100 µT | [DATASHEET] PNI-UM Table 3-1; product page https://www.pnisensor.com/rm3100/ |
 | Default cycle count | 200 (0x00C8) per axis | [DATASHEET] PNI-UM Table 5-2 |
 | Raw output format | 24-bit two's complement per axis, range −8388608…8388607, big-endian MX2,MX1,MX0 | [DATASHEET] PNI-UM §5.5, Table 5-5 |
@@ -231,7 +234,7 @@ Pin/peripheral data from mateksys.com product pages [OFFICIAL-DOC] and ArduPilot
 |---|---|---|---|---|---|
 | **H743-WING V3** (V1/V2/V3 share target) | STM32H743VIT6 | I2C1 PB6/PB7, I2C2 PB10/PB11 (JST-GH, baro DPS310) | **Yes, CAN1 PD0/PD1** (JST-GH-4P) | ArduPilot `MatekH743`, INAV `MATEKH743` | [RESELLER] risingsunfpv (copy of Matek page), [SOURCE-CODE] ArduPilot hwdef MatekH743 (I2C1 PB6/PB7, I2C2 PB10/PB11, CAN1 PD0/PD1, silent pin PD3) |
 | **H743-SLIM V3** | STM32H743VIH6 | 2× I2C (same target) | **Yes, 1× CAN** on JST-GH-4P (5V/CAN-H/CAN-L/G) | `MatekH743` / `MATEKH743` | [RESELLER] lumenier, risingsunfpv; [SOURCE-CODE] |
-| **H743-WLITE** (EOL) | STM32H743VIH6 | I2C1 CL1/DA1 PB6/PB7 = compass; I2C2 PB10/PB11 on JST-GH-4P = DPS310 0x76 | **Yes, CAN1 PD0/PD1** JST-GH-4P | `MATEKH743` | [OFFICIAL-DOC] https://www.mateksys.com/?portfolio=h743-wlite |
+| **H743-WLITE** (EOL) | STM32H743VIH6 | I2C1 CL1/DA1 PB6/PB7 = compass; I2C2 PB10/PB11 on JST-GH-4P = DPS310 0x76 | **Yes, CAN1 PD0/PD1** JST-GH-4P | `MATEKH743` | [OFFICIAL-DOC] https://www.mateksys.com/?portfolio=h743-wlite (read as a search extract, see L17; pins match ArduPilot hwdef MatekH743 [SOURCE-CODE]) |
 | H743-MINI (V3) | STM32H743 (variant UNKNOWN) | **UNKNOWN** (not verified) | **UNKNOWN** | likely `MatekH743` — **unverified** | – |
 | **F405-WTE** (EOL) | STM32F405RGT6 | **1× I2C** (I2C1; ArduPilot hwdef PB8 SCL / PB7 SDA), compass + SPL06 baro share it | **No** (none listed) | ArduPilot `MatekF405-TE`, INAV `MATEKF405TE_SD` | [OFFICIAL-DOC] https://www.mateksys.com/?portfolio=f405-wte ; [SOURCE-CODE] |
 | F405-WSE / F405-WING | STM32F405 | 2× I2C (ArduPilot: I2C1 PB8/PB9, I2C2 PB10/PB11; INAV MAG_I2C_BUS = I2C2) | **No** in ArduPilot hwdef | ArduPilot `MatekF405-Wing`, INAV `MATEKF405SE` | [OFFICIAL-DOC] F405-WTE comparison table; [SOURCE-CODE] |
@@ -365,6 +368,8 @@ Source **AP-MAGINT**: https://ardupilot.org/copter/docs/common-magnetic-interfer
 - L12 H743-MINI, F405-HDTE/WMN/MINI-TE, H7A3 boards were not verified (CAN/I2C pads UNKNOWN).
 - L13 H743-WING V3 / H743-SLIM V3 specs were read from reseller copies of Matek's pages (mateksys.com URLs for those boards
   returned 404 to our fetcher); pins cross-checked against ArduPilot hwdef only.
+- L16 PNI manual naming mismatch: URL says V11.0, PDF metadata says V15.0, page footers say V16.0. Values are cited from the content (V16.0).
+- L17 Matek H743-WLITE values were read from search-engine extracts of the official page or manual, not from a full page fetch.
 - L15 `COMPASS_TYPEMASK` → `COMPASS_DISBLMSK` rename: first ArduPilot release containing it not identified.
 - L14 mateksys.com pages may change; values captured 2026-11-26. Source files are not mirrored in the repo (copyright);
   URLs, commit SHAs and file hashes are in `docs/hardware/SOURCES.md`.
