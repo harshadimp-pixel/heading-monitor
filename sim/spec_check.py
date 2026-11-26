@@ -58,9 +58,7 @@ NA = {
 
 # Understood disagreements: "case.key" -> explanation (also logged in TEAM_TRACKER.md, T3 row)
 KNOWN_MISMATCH = {
-    "TC19.quant_sigma_uT[0]": ("spec input LSB = 0.013 uT (datasheet 'sensitivity' 13 nT); the sim's LSB is "
-                               "1/gain = 1/75 = 0.013333 uT, so the sim's quantisation std is ~0.00385 uT (q/sqrt(12) = 0.003849), not 0.003753. "
-                               "Spec-side approximation, not a sim defect."),
+    # (empty) TC19 resolved by T2 in 64579d9: spec LSB now exactly 1/75 uT, matching the sim.
 }
 
 
@@ -272,11 +270,15 @@ def run_cases(rm):
         # quantisation of the sim's RM3100 path: sweep a noise-free field over many LSBs, measure error std
         mdl = RM3100Model(200, noise_scale=0.0)
         rng = np.random.default_rng(0)
-        x = np.random.default_rng(7).uniform(20.0, 40.0, 20000)   # field values spread over ~1500 LSB
-        q_err = np.array([mdl.measure([v, 0.0, 0.0], rng)[1][0] - v for v in x])
+        # noise-free fields on a low-discrepancy (golden-ratio Weyl) grid of LSB fractions, pushed through the sim's
+        # RM3100 quantiser 3 at a time; the std converges to the quantiser's true error std (deterministic)
+        lsb = 1.0 / gain_lsb_per_uT(200)
+        k = np.arange(90000)
+        x = (20.0 + k * lsb * 0.6180339887498949).reshape(-1, 3)
+        q_err = np.concatenate([np.asarray(mdl.measure(v, rng)[1]) - v for v in x])
         H = 25.0
         sim_noise = mdl.__class__(200).noise_uT
-        extras.append(("TC19", "sim RM3100 LSB (uT) = 1/gain(200)", 1.0 / gain_lsb_per_uT(200), 0.013, 0.0004))
+        extras.append(("TC19", "sim RM3100 LSB (uT) = 1/gain(200) vs spec lsb_uT[0]", lsb, i["lsb_uT"][0], 1e-12))
         return {"quant_sigma_uT": [float(np.std(q_err)), None],
                 "rm3100_sigma_psi_deg": math.degrees(sim_noise / H)}
 

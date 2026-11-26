@@ -1,8 +1,8 @@
 """Sim vs T2 heading sensor spec (docs/math/sensor-spec, read-only): all 20 reference cases.
 
-Every applicable key must PASS; the only allowed non-pass outcomes are the explicitly documented
-N/A keys (formula/navigation quantities the sim does not model) and KNOWN_MISMATCH entries, which are
-logged in TEAM_TRACKER.md (T3 row). Any new disagreement fails this test."""
+Every applicable key must PASS; the only allowed non-pass outcome is an explicitly documented N/A key
+(formula/navigation quantities the sim does not model). Any disagreement fails this test. (TC19 was a logged
+mismatch until T2 fixed the spec LSB to exactly 1/75 uT in 64579d9; it now passes.)"""
 import numpy as np
 import pytest
 
@@ -26,9 +26,6 @@ def test_spec_key(row):
     cid, key, status, val, exp, tol, note = row
     if status == "N/A":
         pytest.skip(f"{cid}.{key}: {note}")
-    if status == "MISMATCH":
-        assert f"{cid}.{key}" in spec_check.KNOWN_MISMATCH
-        pytest.xfail(f"known, logged: {note}")
     assert status == "PASS", f"{cid}.{key}: sim {val} vs expected {exp} (tol {tol})"
 
 

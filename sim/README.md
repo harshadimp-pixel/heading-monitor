@@ -166,9 +166,9 @@ Frames: NED, body x forward, y right, z down; ZYX Euler (yaw, pitch, roll), yaw 
     including their own averaging, rotation and calibration) isn't modelled. The MSP ≤ 25 Hz rate is INFERRED. The firmware on our
     unit (MatekL431-GPS vs -Periph) and its MSP availability are UNKNOWN (T1 L8). C overflow of int16 mG beyond ±3276.7 µT
     is undefined behaviour; the sim clips and flags it.
-13. **Spec check (`sim/spec_check.py`)**: 35 applicable keys PASS. 44 keys are N/A (formulas, circular statistics, dipole/wire
-    sources, WMM, navigation and geodesy, which the sim doesn't model). One MISMATCH is logged: TC19 quantisation σ, where
-    the spec's LSB of 0.013 µT differs from the sim's 1/75 µT. The spec's temperature terms (k_T, k_off) and random-walk bias
+13. **Spec check (`sim/spec_check.py`)**: all 36 applicable keys PASS, 0 FAIL, 0 MISMATCH. 44 keys are N/A (formulas,
+    circular statistics, dipole/wire sources, WMM, navigation and geodesy, which the sim doesn't model). TC19 was a logged
+    mismatch (spec LSB 0.013 µT vs the sim's 1/75 µT) until T2 fixed the spec in `64579d9`; it now passes. The spec's temperature terms (k_T, k_off) and random-walk bias
     are not modelled; misalignment and Gauss-Markov bias are, but are off by default.
 14. **The DroneCAN mode models the deprecated message `uavcan.equipment.ahrs.MagneticFieldStrength` (1001)**, because that is
     what AP_Periph sends at the pinned commit. 1002 `MagneticFieldStrength2` isn't modelled, and neither is the
@@ -177,7 +177,6 @@ Frames: NED, body x forward, y right, z down; ZYX Euler (yaw, pitch, roll), yaw 
     `can_mag_update()`, which is rate-limited. It needs a hardware log to confirm.
 16. **The firmware on our CAN-L4-3100 (MatekL431-GPS vs -Periph, version) is unknown, and only the owner can answer it.** The PM tracks it as
     blocker **B2** in `BLOCKERS.md`. It decides whether MSP output exists at all and whether the 25 Hz cap applies unchanged.
-17. **TC19 spec mismatch is pending** with the Maths Scientist (spec step 0.013 µT vs sim 1/75 µT); see LIMITATIONS 13.
 
 ## Tests
 `python -m pytest sim/tests -q` covers schema validation (every scenario, CLI output and example logs), determinism
@@ -187,5 +186,5 @@ formula (three declinations), measured heading from accel+mag, gyro/accel consis
 coverage, and hard-iron, soft-iron, motor-interference and high-noise behaviour. `test_delivery.py` covers the
 DroneCAN and MSP modes: the bit-exact float16 port, step sizes, truncation, the ≤ 25 Hz limit, sample-and-hold,
 80→25 Hz averaging, latency, schema, `mag_quant_uT`, and no false stale warnings in `heading_core`.
-`test_spec_cases.py` runs all 20 of T2's spec cases through the sim (see LIMITATIONS 13), plus misalignment and
+`test_spec_cases.py` runs all 20 of T2's spec cases through the sim (36 PASS, 44 N/A skipped; see LIMITATIONS 13), plus misalignment and
 Gauss-Markov checks.
