@@ -11,7 +11,7 @@ Non-blocking caveats: [`BLOCKERS.md`](../BLOCKERS.md) B3, B4.
 
 ## Safety and setup (applies to every item)
 * Bench only. **Remove the propellers**, disconnect the motor battery or keep the FC disarmed, and power it from USB.
-* The bridge sends only read-only MSP requests (`MSP_FC_VARIANT`, `MSP_CALIBRATION_DATA`, `MSP_ATTITUDE`, `MSP_RAW_IMU`). It never writes
+* The bridge sends only read-only MSP requests (`MSP_FC_VARIANT`, `MSP_CALIBRATION_DATA`, `MSP_RAW_GPS`, `MSP_ATTITUDE`, `MSP_RAW_IMU`). It never writes
   settings, reboots or flashes. Any FC configuration (FC_SETUP.md §2) is done by the owner in INAV Configurator.
 * Expected configuration: INAV on the Matek FC with `mag_hardware = MSP` and `align_mag = CW90`. CAN-L4-3100 TX2
   wired to a spare FC UART RX with MSP enabled. **INAV mag calibration left unset** (`magzero_x/y/z = 0`,
@@ -206,6 +206,28 @@ sources printed are `{'replay'}`.
 | Live samples | Replay samples | Identical pairs | Sources | Result (PASS/FAIL) |
 |---|---|---|---|---|
 | | | | | |
+
+---
+
+## HV9 (optional): GPS availability indicator, and no position anywhere
+Only if a GPS receiver is connected to the FC. Indoors is fine (no fix expected).
+**Steps**
+```
+python -m firmware_bridge --port PORT --baud 115200 --count 200 --out reports/hardware_logs/DATE_hv9.jsonl --capture reports/hardware_logs/DATE_hv9.capture.jsonl
+python -c "import json,collections;c=collections.Counter(json.dumps(json.loads(l).get('gps'),sort_keys=True) for l in open('reports/hardware_logs/DATE_hv9.jsonl'));print(c)"
+```
+Compare with INAV Configurator's GPS tab (fix type, satellites) just before/after.
+**Expected:** `gps` = `{"fix": ..., "num_sat": ...}` matching Configurator; only the keys `fix`/`num_sat`. With no GPS
+receiver: `{"fix":"none","num_sat":0}`. Before committing, search both files for your home latitude/longitude
+digits (e.g. first 4 digits) and confirm they are absent; in the capture, every 106 frame payload is
+`<fix><nsat>` followed by 16 zero bytes.
+
+**Pass:** fix/num_sat agree with Configurator and no position data in either file.  **Fail:** any mismatch or any
+position data found (then do not commit the logs).
+
+| Configurator fix / sats | Bridge `gps` | Position absent (Y/N) | Result |
+|---|---|---|---|
+| | | | |
 
 ---
 

@@ -26,6 +26,7 @@ MSP_FC_VARIANT = 2
 MSP_FC_VERSION = 3
 MSP_CALIBRATION_DATA = 14   # read-only 'out' message (INAV fc_msp.c mspFcProcessOutCommand); 15 = SET, never sent
 MSP_RAW_IMU = 102
+MSP_RAW_GPS = 106   # read-only; only fixType/numSat are ever decoded, coordinates are dropped
 MSP_ATTITUDE = 108
 MSP_V2_FRAME = 255
 MSP2_SENSOR_COMPASS = 0x1F04

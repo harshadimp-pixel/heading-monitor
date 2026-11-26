@@ -17,7 +17,8 @@ from . import msp
 class FakeFC:
     def __init__(self, variant: str = "INAV", yaw_rate_dps: float = 30.0, field_uT: float = 50.0,
                  inclination_deg: float = 60.0, support_raw_imu: bool = True, clock=None,
-                 mag_zero=(0, 0, 0), mag_gain=(1024, 1024, 1024), support_calibration_data: bool = True):
+                 mag_zero=(0, 0, 0), mag_gain=(1024, 1024, 1024), support_calibration_data: bool = True,
+                 gps_fix_type: int | None = 2, gps_num_sat: int = 12):
         self.variant = variant.encode()[:4].ljust(4, b" ")
         self.yaw_rate = yaw_rate_dps
         self.field = field_uT
@@ -25,6 +26,7 @@ class FakeFC:
         self.support_raw_imu = support_raw_imu
         self.mag_zero, self.mag_gain = tuple(mag_zero), tuple(mag_gain)
         self.support_calibration_data = support_calibration_data
+        self.gps_fix_type, self.gps_num_sat = gps_fix_type, gps_num_sat   # gps_fix_type None -> no GPS ('!')
         self.parser = msp.MSPParser()
         self.t = 0.0
         self._clock = clock
@@ -56,6 +58,12 @@ class FakeFC:
         if frame.cmd == msp.MSP_CALIBRATION_DATA and self.support_calibration_data:
             # INAV layout (scaling.decode_calibration_data); acc values arbitrary
             p = struct.pack("<B3h3h3hH3h", 0, 0, 0, 0, 4096, 4096, 4096, *self.mag_zero, 0, *self.mag_gain)
+            return msp.encode(frame.cmd, p, version, ">")
+        if frame.cmd == msp.MSP_RAW_GPS and self.gps_fix_type is not None:
+            # INAV layout; the position fields are deliberately non-zero SENTINELS so tests can prove the
+            # bridge drops them (they are not a real place).
+            p = struct.pack("<BBiiHHHH", self.gps_fix_type, self.gps_num_sat, 0x7A5A5A5A, 0x7B5B5B5B,
+                            0x7C7C, 0x7D7D, 0x7E7E, 0x7F7F)
             return msp.encode(frame.cmd, p, version, ">")
         if frame.cmd == msp.MSP_ATTITUDE:
             return msp.encode(frame.cmd, self.attitude_payload(), version, ">")

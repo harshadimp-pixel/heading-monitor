@@ -17,8 +17,11 @@ Useful options:
   `--accel-lsb-per-g`, `--body-frame flu|frd`.
 * `--passive`: listen without polling, e.g. on a USB-UART adapter attached to the CAN-L4-3100 TX2, which pushes
   `MSP2_SENSOR_COMPASS`.
-* `--capture FILE`: log the raw tx/rx bytes with timestamps, so you can replay them later. Use this for any
+* `--capture FILE`: log tx request bytes and every parsed rx frame (re-encoded, with `MSP_RAW_GPS` coordinates
+  zeroed) with timestamps, so you can replay them later. Frame-exact, not byte-exact: garbage and bad-checksum
+  bytes are not kept. Use this for any
   future `reports/hardware_logs/` recording.
+* `--no-gps`: do not request `MSP_RAW_GPS`; `gps` is then always absent.
 * `--count N`, `--duration S`, `--out FILE`, `--realtime` (pace replay output).
 
 **pyserial** is optional. It is only needed for `--port` (`pip install pyserial`). Without it the bridge exits
@@ -31,7 +34,7 @@ The `source` value comes from the transport **class**, never from a flag or from
 replayed Sample JSONL keeps the label it was recorded with in `meta.original_source`.
 
 ## Safety
-Live mode only sends read-only requests: `MSP_FC_VARIANT`, `MSP_CALIBRATION_DATA` (INAV only, at start and every 10 s), `MSP_ATTITUDE` and `MSP_RAW_IMU`. Any other command
+Live mode only sends read-only requests: `MSP_FC_VARIANT`, `MSP_CALIBRATION_DATA` (INAV only, at start and every 10 s), `MSP_RAW_GPS` (INAV only, once per second, off with `--no-gps`), `MSP_ATTITUDE` and `MSP_RAW_IMU`. Any other command
 raises an error before anything is written (`bridge.ALLOWED_REQUESTS`). There is no `MSP_SET_*`, no reboot and
 no flashing.
 
@@ -45,6 +48,16 @@ no flashing.
 * `meta.mag_quant_uT`: the mag step in µT (0.1 on the MSP path). `meta.fc_mag_calibrated`: `false` only when INAV's
   `magzero`=0 and `maggain`=1024 were read back via `MSP_CALIBRATION_DATA`, `true` if they differ, else `"unknown"`
   (read values in `meta.fc_mag_cal`). See FC_SETUP.md §2 step 6 and §6.4.
+* `gps` (optional contract object, GPS **availability only**): `{"fix": "none"|"2d"|"3d"|"unknown", "num_sat": int}`
+  from INAV `MSP_RAW_GPS` (106) bytes 0-1 (`fixType` 0/1/2 → none/2d/3d, other → unknown; `numSat`). `hdop` is not
+  emitted (the schema does not require it). Latitude, longitude, altitude, speed, course and hdop are **never
+  decoded**, never emitted, never put in `meta`, and are zeroed in `--capture` files. `gps` is **omitted** (= "Unknown"
+  per ARCHITECTURE.md) when: the FC is not INAV or its variant is unknown, `--no-gps`, the FC answers 106 with an
+  error frame (`!`, e.g. a build without `USE_GPS`), the payload is shorter than 18 bytes, no reply arrives (after 3
+  silent tries the bridge stops asking), or the last good reply is older than 5 s. INAV with GPS disabled or not
+  yet fixed answers `{"fix":"none","num_sat":0}` (the two cases can't be told apart from 106). Fake FC (sim) answers
+  3D/12 sats by default. Replay of captures/raw bytes uses the same rules; replay of Sample JSONL keeps a valid `gps`
+  object (only `fix`/`num_sat`/`hdop` keys) and strips any position-like keys from the sample and `meta`.
 * `mag_raw` and `rm3100_cycle_count` are never set, because MSP does not carry RM3100 counts.
 
 ## Replay input formats (auto-detected)
@@ -75,3 +88,4 @@ See [FC_SETUP.md § LIMITATIONS](../docs/firmware/FC_SETUP.md#limitations). In s
 * There is no MAVLink, so no ArduPilot mag.
 * Betaflight scaling is unknown.
 * The fake FC is a protocol loopback, not a sensor model (that's `sim/`, T3).
+* `gps` is INAV-only; "GPS disabled" and "no fix" both read as `fix: none` (FC_SETUP L10).

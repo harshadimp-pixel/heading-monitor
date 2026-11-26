@@ -41,6 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--accel-lsb-per-g", type=float, help="override accel scale (LSB per g)")
     ap.add_argument("--passive", action="store_true",
                     help="live: do not poll, only listen (e.g. AP_Periph UART pushing MSP2_SENSOR_COMPASS)")
+    ap.add_argument("--no-gps", action="store_true",
+                    help="do not request MSP_RAW_GPS (gps availability object will be absent)")
     ap.add_argument("--capture", metavar="FILE", help="live/fake: also log raw tx/rx bytes as replayable JSONL")
     ap.add_argument("--replay-rate", type=float, default=50.0, help="t step (Hz) for raw-binary replay")
     ap.add_argument("--realtime", action="store_true", help="replay: pace output by t")
@@ -77,10 +79,10 @@ def main(argv=None) -> int:
                     clock_state["t"] += s
                 tr.fc._clock = lambda: clock_state["t"]
                 poller = Poller(tr, bk, args.msp_version, args.rate, capture=capture,
-                                auto_profile=args.auto_profile, clock=clock, sleep=sleep)
+                                auto_profile=args.auto_profile, clock=clock, sleep=sleep, gps=not args.no_gps)
             else:
                 poller = Poller(tr, bk, args.msp_version, args.rate, capture=capture,
-                                passive=args.passive, auto_profile=args.auto_profile)
+                                passive=args.passive, auto_profile=args.auto_profile, gps=not args.no_gps)
             it = poller.run(max_samples=args.count, duration=args.duration)
         for s in it:
             out.write(json.dumps(s, separators=(",", ":")) + "\n")

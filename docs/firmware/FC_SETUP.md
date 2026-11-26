@@ -230,6 +230,26 @@ Full runnable procedure with commands, expected values, pass/fail criteria and r
 5. Pitch sign: nose up gives `fc_attitude_deg.pitch > 0`.
 6. Record with `--capture reports/hardware_logs/<date>_inav_msp.jsonl` and check that `--replay` reproduces the same samples.
 
+### 6.6 GPS availability (`gps`, optional)
+ARCHITECTURE.md 2026-11-27 added an optional `gps {fix, num_sat, hdop}` object for an availability indicator only.
+The bridge fills it from **`MSP_RAW_GPS` (106)**, a read-only "out" message. INAV layout
+([fc_msp.c L1044-1053 @ fce6c94](https://github.com/iNavFlight/inav/blob/fce6c94/src/main/fc/fc_msp.c#L1044-L1053),
+identical at 9.1.0 and master, inside `#ifdef USE_GPS`): `u8 fixType, u8 numSat, u32 lat, u32 lon, u16 alt(m),
+u16 groundSpeed, u16 groundCourse, u16 hdop` (18 bytes). `fixType` is `gpsFixType_e` {0 none, 1 2D, 2 3D}
+([io/gps.h L90-92](https://github.com/iNavFlight/inav/blob/maintenance-10.x/src/main/io/gps.h#L90-L92)).
+
+| Sample field | Source | Rule |
+|---|---|---|
+| `gps.fix` | byte 0 `fixType` | 0→`"none"`, 1→`"2d"`, 2→`"3d"`, anything else→`"unknown"` |
+| `gps.num_sat` | byte 1 `numSat` | integer as reported |
+| `gps.hdop` | (bytes 16-17 carry `gpsSol.hdop`) | **not emitted**: the schema does not require it, so no extra decoding |
+| lat/lon/alt/speed/course | bytes 2-15 | **never decoded or emitted**; zeroed in `--capture` logs |
+
+No other GPS request is needed (`MSP_GPSSTATISTICS` is not used). `gps` is omitted (= "Unknown") for non-INAV/unknown
+FC variants (Betaflight's byte 0 is a boolean `STATE(GPS_FIX)`, ArduPilot's layout differs), error frames, payloads
+< 18 bytes, no reply (stops asking after 3 silent tries), or a last reply older than 5 s. Nothing needs configuring
+on the FC; a GPS receiver is optional and INAV's `feature GPS` only affects whether a fix can appear.
+
 ## LIMITATIONS
 * **L1** No hardware: framing, scaling, axis and sign conventions are verified against source and hand-built bytes
   only. Every item in §7 / [HARDWARE_VALIDATION_CHECKLIST.md](../../reports/HARDWARE_VALIDATION_CHECKLIST.md) is open.
@@ -253,3 +273,9 @@ Full runnable procedure with commands, expected values, pass/fail criteria and r
   node's own `COMPASS_OFS/DIA/ODI/SCALE` are not visible over the FC's MSP, and for ArduPilot nothing is readable
   without MAVLink, so those stay `"unknown"` / unchecked. The value is refreshed every 10 s, so a change on the FC
   shows up within about 10 s. Message 14's layout is verified only for INAV (9.1.0, master, 10.x).
+* **L10** `gps` is from source only (INAV `MSP_RAW_GPS`, not checked on hardware). With GPS disabled in INAV (or no
+  receiver) 106 still answers `fixType=0, numSat=0`, so "GPS off" and "no fix yet" both read as `fix: "none"`;
+  telling them apart would need `MSP_STATUS`/`MSP_SENSOR_STATUS`, which we chose not to add. Builds without
+  `USE_GPS` answer an error frame (→ `gps` omitted), inferred from the default case of `mspFcProcessOutCommand`.
+  Betaflight/ArduPilot 106 payloads are not interpreted. `--capture` rx is re-encoded per frame (for GPS redaction)
+  and is no longer byte-exact.

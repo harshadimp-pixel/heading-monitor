@@ -67,6 +67,29 @@ def decode_calibration_data(payload: bytes) -> dict:
             "mag_zero": list(v[7:10]), "opflow_scale_x256": v[10], "mag_gain": list(v[11:14])}
 
 
+# ---- GPS availability (contract `gps` object; ARCHITECTURE.md 2026-11-27) ----------------------
+# INAV MSP_RAW_GPS (106), fc_msp.c L1044-1053 at fce6c94 (byte-identical case at 9.1.0 and master),
+# inside #ifdef USE_GPS:
+#   u8 fixType, u8 numSat, u32 lat, u32 lon, u16 alt(m), u16 groundSpeed, u16 groundCourse, u16 hdop  = 18 bytes
+# fixType = gpsFixType_e {GPS_NO_FIX=0, GPS_FIX_2D, GPS_FIX_3D} (io/gps.h L90-92).
+# PRIVACY RULE: only bytes 0-1 are ever read. lat/lon/alt/speed/course (and hdop, which the schema does not
+# require) are never unpacked, never emitted, never put in meta, and are zeroed in --capture logs.
+INAV_RAW_GPS_LEN = 18
+INAV_FIX_MAP = {0: "none", 1: "2d", 2: "3d"}
+
+
+def decode_raw_gps_availability(payload: bytes) -> dict:
+    """-> {'fix': 'none'|'2d'|'3d'|'unknown', 'num_sat': int}. Raises ValueError on a short payload."""
+    if len(payload) < INAV_RAW_GPS_LEN:
+        raise ValueError(f"MSP_RAW_GPS payload too short: {len(payload)} < {INAV_RAW_GPS_LEN}")
+    return {"fix": INAV_FIX_MAP.get(payload[0], "unknown"), "num_sat": int(payload[1])}
+
+
+def redact_raw_gps_payload(payload: bytes) -> bytes:
+    """Keep fixType/numSat, zero everything else (coordinates, alt, speed, course, hdop)."""
+    return bytes(payload[:2]) + bytes(max(0, len(payload) - 2))
+
+
 INAV_NEUTRAL_MAGZERO = (0, 0, 0)
 INAV_NEUTRAL_MAGGAIN = (1024, 1024, 1024)   # settings.yaml maggain_* default; compass.c L389-390 "not calibrated" test
 

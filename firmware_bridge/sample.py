@@ -27,12 +27,27 @@ class SampleBuilder:
         self.fc_variant: str | None = None
         self.body_frame = body_frame or self.profile.body_frame
         self.fc_cal: dict | None = None          # last decoded MSP_CALIBRATION_DATA
+        self.gps: dict | None = None             # {'fix','num_sat'} from MSP_RAW_GPS, never coordinates
+        self.gps_t: float | None = None
+        self.gps_max_age_s = 5.0
         self.fc_cal_source: str | None = None
         to_body_frd([0, 0, 0], self.body_frame)  # validate
 
     def set_fc_calibration(self, cal: dict | None, source: str = "MSP_CALIBRATION_DATA") -> None:
         self.fc_cal = cal
         self.fc_cal_source = source if cal is not None else None
+
+    def set_gps(self, gps: dict | None, t: float | None = None) -> None:
+        """gps None -> omit `gps` from samples (no GPS / no reply / error / short payload / non-INAV)."""
+        self.gps = {"fix": gps["fix"], "num_sat": int(gps["num_sat"])} if gps is not None else None
+        self.gps_t = t
+
+    def _gps_for(self, t: float) -> dict | None:
+        if self.gps is None or self.fc_variant != "INAV":
+            return None
+        if self.gps_t is not None and t - self.gps_t > self.gps_max_age_s:
+            return None   # stale -> absent ("Unknown")
+        return dict(self.gps)
 
     @property
     def fc_mag_calibrated(self):
@@ -76,6 +91,9 @@ class SampleBuilder:
             s["accel_g"] = [v / self.accel_scale + 0.0 for v in to_body_frd(raw["acc"], self.body_frame)]
         if attitude is not None:
             s["fc_attitude_deg"] = self.attitude_aero(attitude)
+        g = self._gps_for(t)
+        if g is not None:
+            s["gps"] = g
         s["meta"] = self._meta(msg="MSP_RAW_IMU", msp_raw_imu=raw, msp_attitude=attitude, **meta)
         return s
 
@@ -87,6 +105,9 @@ class SampleBuilder:
         }
         if attitude is not None:
             s["fc_attitude_deg"] = self.attitude_aero(attitude)
+        g = self._gps_for(t)
+        if g is not None:
+            s["gps"] = g
         m = self._meta(msg="MSP2_SENSOR_COMPASS", msp_sensor_compass=msg, **meta)
         m["body_frame_in"] = "frd"  # message is defined front/right/down (msp_sensors.h)
         m["mag_ut_per_lsb"] = UT_PER_MGAUSS  # message is defined in mGauss regardless of profile
@@ -128,6 +149,17 @@ def validate_sample(s: dict) -> list[str]:
         a = s["fc_attitude_deg"]
         if not isinstance(a, dict) or any(k in a and not _is_num(a[k]) for k in ("roll", "pitch", "yaw")):
             errs.append("fc_attitude_deg must be object of numbers")
+    if "gps" in s:
+        g = s["gps"]
+        if not isinstance(g, dict):
+            errs.append("gps must be an object")
+        else:
+            if "fix" in g and g["fix"] not in ("none", "2d", "3d", "unknown"):
+                errs.append("gps.fix invalid")
+            if "num_sat" in g and not (isinstance(g["num_sat"], int) and not isinstance(g["num_sat"], bool)):
+                errs.append("gps.num_sat must be integer")
+            if "hdop" in g and not _is_num(g["hdop"]):
+                errs.append("gps.hdop must be a number")
     for k in ("meta", "truth"):
         if k in s and not isinstance(s[k], dict):
             errs.append(f"{k} must be an object")

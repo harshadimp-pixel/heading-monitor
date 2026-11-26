@@ -17,7 +17,7 @@ from typing import Iterator
 from . import msp
 from .sample import SampleBuilder, validate_sample
 from .scaling import (FC_VARIANT_DEFAULT_PROFILE, decode_attitude, decode_calibration_data, decode_raw_imu,
-                      decode_sensor_compass)
+                      decode_raw_gps_availability, decode_sensor_compass, redact_raw_gps_payload)
 
 
 class BridgeError(RuntimeError):
@@ -58,7 +58,8 @@ class SerialTransport:
 
 
 class CaptureWriter:
-    """Timestamped raw-byte log (JSONL) so a hardware session can be replayed bit-exactly."""
+    """Timestamped MSP log (JSONL) for replay. tx = raw request bytes; rx = each parsed frame re-encoded
+    (MSP_RAW_GPS coordinates zeroed), so it is frame-exact, not byte-exact (garbage/bad-CRC bytes dropped)."""
 
     def __init__(self, path: str, header: dict):
         self.f = open(path, "w", encoding="utf-8")
@@ -71,22 +72,41 @@ class CaptureWriter:
             self.f.write(json.dumps({"t": round(t, 6), direction: data.hex()}) + "\n")
             self.f.flush()
 
+    def write_frame(self, t: float, frame: msp.MSPFrame) -> None:
+        """rx is logged frame by frame (re-encoded, checksum recomputed) so MSP_RAW_GPS coordinates can be
+        zeroed before anything touches disk. Garbage / bad-checksum bytes are therefore not kept."""
+        payload = frame.payload
+        if frame.cmd == msp.MSP_RAW_GPS:
+            payload = redact_raw_gps_payload(payload)
+        self.write(t, "rx", encode_frame(frame, payload))
+
+
     def close(self) -> None:
         self.f.close()
+
+
+def encode_frame(frame: msp.MSPFrame, payload: bytes) -> bytes:
+    if frame.version == 2:
+        return msp.encode_v2(frame.cmd, payload, frame.direction, frame.flag)
+    if frame.version == 21:
+        return msp.encode_v2_over_v1(frame.cmd, payload, frame.direction, frame.flag)
+    return msp.encode_v1(frame.cmd, payload, frame.direction)
 
 
 # Read-only MSP requests this bridge is allowed to send. Anything else is refused.
 # MSP_CALIBRATION_DATA (14) is an "out" (read) message in INAV mspFcProcessOutCommand; the write
 # counterpart MSP_SET_CALIBRATION_DATA (15) and MSP_MAG_CALIBRATION (206) are deliberately NOT allowed.
 ALLOWED_REQUESTS = frozenset({msp.MSP_API_VERSION, msp.MSP_FC_VARIANT, msp.MSP_FC_VERSION,
-                              msp.MSP_RAW_IMU, msp.MSP_ATTITUDE, msp.MSP_CALIBRATION_DATA})
+                              msp.MSP_RAW_IMU, msp.MSP_ATTITUDE, msp.MSP_CALIBRATION_DATA,
+                              msp.MSP_RAW_GPS})
 
 
 class Poller:
     def __init__(self, transport, builder_kwargs: dict, msp_version: int = 1, rate_hz: float = 20.0,
                  response_timeout: float = 0.25, capture: CaptureWriter | None = None,
                  passive: bool = False, auto_profile: bool = False, clock=time.monotonic,
-                 sleep=time.sleep, cal_refresh_s: float = 10.0):
+                 sleep=time.sleep, cal_refresh_s: float = 10.0, gps_period_s: float = 1.0,
+                 gps: bool = True):
         self.tr = transport
         self.version = msp_version
         self.period = 1.0 / rate_hz if rate_hz > 0 else 0.0
@@ -103,6 +123,10 @@ class Poller:
         self.raw_imu_errors = 0
         self.cal_refresh_s = cal_refresh_s
         self._last_cal_req: float | None = None
+        self.gps_enabled = gps
+        self.gps_period_s = gps_period_s
+        self._last_gps_req: float | None = None
+        self._gps_misses = 0
 
     def now(self) -> float:
         return self.clock() - self.t0
@@ -120,9 +144,9 @@ class Poller:
         while True:
             data = self.tr.read(4096, timeout=0.005)
             if data:
-                if self.capture:
-                    self.capture.write(self.now(), "rx", data)
                 for f in self.parser.feed(data):
+                    if self.capture:
+                        self.capture.write_frame(self.now(), f)
                     got.append(f)
                     want.discard(f.cmd)
             if not want or self.clock() >= deadline:
@@ -175,9 +199,26 @@ class Poller:
                         and cycle_start - self._last_cal_req >= self.cal_refresh_s):
                     self._last_cal_req = cycle_start
                     self.send(msp.MSP_CALIBRATION_DATA)   # reply handled in frames_to_samples
+                want = {msp.MSP_ATTITUDE, msp.MSP_RAW_IMU}
+                gps_asked = (self.gps_enabled and self.builder.fc_variant == "INAV"
+                             and (self._last_gps_req is None
+                                  or cycle_start - self._last_gps_req >= self.gps_period_s))
+                if gps_asked:
+                    self._last_gps_req = cycle_start
+                    self.send(msp.MSP_RAW_GPS)
+                    want.add(msp.MSP_RAW_GPS)
                 self.send(msp.MSP_ATTITUDE)
                 self.send(msp.MSP_RAW_IMU)
-                frames = self._pump({msp.MSP_ATTITUDE, msp.MSP_RAW_IMU}, cycle_start + self.timeout)
+                frames = self._pump(want, cycle_start + self.timeout)
+                if gps_asked:
+                    if any(f.cmd == msp.MSP_RAW_GPS for f in frames):
+                        self._gps_misses = 0
+                    else:   # no reply at all: gps goes absent now; stop asking after 3 silent tries
+                        self.builder.set_gps(None)
+                        self._gps_misses += 1
+                        if self._gps_misses >= 3:
+                            self.gps_enabled = False
+                            _log("no MSP_RAW_GPS reply 3x in a row; gps availability disabled (gps omitted)")
             for s in self.frames_to_samples(frames, self.now()):
                 yield s
                 n += 1
@@ -209,6 +250,10 @@ def frames_to_samples(frames, t: float, builder: SampleBuilder, state) -> list[d
                 builder.set_fc_calibration(decode_calibration_data(f.payload))
             elif f.cmd == msp.MSP_CALIBRATION_DATA and f.is_error:
                 builder.set_fc_calibration(None)
+            elif f.cmd == msp.MSP_RAW_GPS and f.direction == ">":
+                builder.set_gps(decode_raw_gps_availability(f.payload), t)
+            elif f.cmd == msp.MSP_RAW_GPS and f.is_error:
+                builder.set_gps(None)
             elif f.cmd == msp.MSP_FC_VARIANT and f.direction == ">" and len(f.payload) >= 4:
                 builder.fc_variant = f.payload[:4].decode("ascii", "replace")
             elif f.cmd == msp.MSP2_SENSOR_COMPASS and not f.is_error:
@@ -216,8 +261,34 @@ def frames_to_samples(frames, t: float, builder: SampleBuilder, state) -> list[d
         except ValueError as e:  # short payload etc. - skip frame, keep going
             if f.cmd == msp.MSP_CALIBRATION_DATA:
                 builder.set_fc_calibration(None)   # unreadable -> 'unknown'
+            elif f.cmd == msp.MSP_RAW_GPS:
+                builder.set_gps(None)              # unreadable -> gps omitted
             _log(f"skipping frame cmd={f.cmd}: {e}")
     return out
+
+
+# Position/motion keys that must never leave the bridge (ARCHITECTURE.md 2026-11-27: GPS availability only).
+POSITION_KEYS = frozenset({"lat", "lon", "lng", "latitude", "longitude", "alt", "altitude", "alt_m", "llh",
+                           "position", "pos", "coords", "coordinates", "speed", "ground_speed", "groundspeed",
+                           "course", "ground_course", "groundcourse", "heading_gps", "velocity", "vel"})
+GPS_ALLOWED_KEYS = ("fix", "num_sat", "hdop")
+
+
+def scrub_position_fields(s: dict) -> dict:
+    """In place: drop position-like keys at top level and in meta; keep only contract keys in gps."""
+    for k in list(s):
+        if k.lower() in POSITION_KEYS:
+            del s[k]
+    if isinstance(s.get("meta"), dict):
+        for k in list(s["meta"]):
+            if k.lower() in POSITION_KEYS:
+                del s["meta"][k]
+    if "gps" in s:
+        if isinstance(s["gps"], dict):
+            s["gps"] = {k: s["gps"][k] for k in GPS_ALLOWED_KEYS if k in s["gps"]}
+        else:
+            del s["gps"]
+    return s
 
 
 class _ReplayState:
@@ -283,6 +354,7 @@ def _replay_jsonl(path, builder_kwargs, realtime, sleep):
                 meta["original_source"] = s.get("source")
                 meta["replayed_from"] = path
                 s["meta"] = meta
+                scrub_position_fields(s)
                 s["source"] = "replay"
                 errs = validate_sample(s)
                 if errs:  # never forward contract-violating samples (T6 M3)
