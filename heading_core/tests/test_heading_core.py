@@ -443,7 +443,8 @@ def _quant_stream(n, rate=50.0, q=0.1, mag_noise=0.0, accel_noise=0.002, seed=0,
     return out
 
 
-def test_quantised_stationary_no_mag_stale_before_5s_then_flagged():
+def test_quantised_nogyro_fallback_5s_warning_only():
+    """D3 (c): no gyro -> MAG_STALE after 5 s bit-identical, warning only (quality not cut)."""
     from heading_core import WARN_MAG_STALE, WARN_SENSOR_STALE, ALL_WARNINGS
     e = HeadingEstimator(Calibration(field_uT=50.0))
     ref = HeadingEstimator(Calibration(field_uT=50.0), config=CoreConfig(stale_detection=False))
@@ -458,8 +459,8 @@ def test_quantised_stationary_no_mag_stale_before_5s_then_flagged():
     assert first / 50.0 == pytest.approx(5.0, abs=0.021)      # not before 5 s
     assert all(WARN_MAG_STALE not in o["warnings"] for o in outs[:first])
     assert all(o["quality"] == pytest.approx(r["quality"]) for o, r in zip(outs[:first], refs[:first]))
-    assert all(o["quality"] >= 0.3 * r["quality"] - 1e-12 for o, r in zip(outs[first:], refs[first:]))
-    assert all(o["quality"] < r["quality"] for o, r in zip(outs[first:], refs[first:]))  # but it does drop
+    assert all(o["quality"] == pytest.approx(r["quality"]) for o, r in zip(outs[first:], refs[first:]))
+    assert all(WARN_MAG_STALE in o["warnings"] for o in outs[first:])
     assert abs(angle_diff_deg(outs[-1]["heading_deg"], 45)) < 0.5
 
 
@@ -539,3 +540,100 @@ def test_quant_inferred_without_meta():
         s["mag_uT"] = (np.array(s["mag_uT"]) + rng.normal(0, 0.015, 3)).tolist()
         e2.update(s)
     assert e2.last_debug["mag_quant_inferred_uT"] is None and not e2.last_debug["quantised_mode"]
+
+
+# ------------------------------------------------ D3: quantised mode needs motion evidence
+def _session(seed, dur=60.0, rate=50.0, gyro_bias=0.2, gyro_noise=0.1, gyro_int=False, mag_noise=0.015,
+             accel_noise=0.002, q=0.1, freeze_mag_after=None, yaw_rate=0.0, pitch=3.0, roll=-2.0):
+    """Synthetic MSP-like session [SIMULATED]: mag on a q-uT grid, accel 1/512 g, gyro with per-session bias."""
+    rng = np.random.default_rng(seed)
+    yaw0 = rng.uniform(0, 360)
+    bias = rng.uniform(-gyro_bias, gyro_bias, 3)
+    frozen = None
+    for k in range(int(dur * rate)):
+        t = k / rate
+        yaw = wrap360(yaw0 + yaw_rate * t)
+        m = np.round((body_field(yaw, pitch, roll) + rng.normal(0, mag_noise, 3)) / q) * q
+        if freeze_mag_after is not None and t >= freeze_mag_after:
+            frozen = m if frozen is None else frozen
+            m = frozen
+        a = np.round((body_accel(pitch, roll) + rng.normal(0, accel_noise, 3)) * 512) / 512
+        p_, r_ = math.radians(pitch), math.radians(roll)
+        w = np.array([-math.sin(p_), math.sin(r_) * math.cos(p_), math.cos(r_) * math.cos(p_)]) * yaw_rate
+        g = w + bias + rng.normal(0, gyro_noise, 3)
+        if gyro_int:
+            g = np.round(g)  # INAV MSP_RAW_IMU gyro is integer deg/s [SOURCE-CODE]
+        yield {"t": t, "source": "replay", "mag_uT": [round(float(x), 6) for x in m], "accel_g": a.tolist(),
+               "gyro_dps": g.tolist(), "meta": {"mag_quant_uT": q}}
+
+
+@pytest.mark.parametrize("variant", [dict(), dict(gyro_bias=0.5), dict(gyro_bias=0.3, gyro_int=True),
+                                     dict(rate=20.0)])
+def test_d3_stationary_quantised_no_false_alarm_20x60s(variant):
+    """D3 (a): 20 seeded stationary 60 s sessions, RM3100 15 nT [DATASHEET], 0.1 uT grid, gyro noise+bias."""
+    from heading_core import WARN_MAG_STALE, WARN_SENSOR_STALE
+    bad, max_theta, max_att, max_frozen = [], 0.0, 0.0, 0.0
+    for seed in range(20):
+        e = HeadingEstimator(Calibration(field_uT=50.0))
+        n = 0
+        for s in _session(seed, **variant):
+            o = e.update(s)
+            n += bool({WARN_MAG_STALE, WARN_SENSOR_STALE} & set(o["warnings"]))
+            d = e.last_debug["quant_motion"]
+            max_theta, max_att = max(max_theta, d["gyro_rot_deg"]), max(max_att, d["accel_att_change_deg"])
+            max_frozen = max(max_frozen, d["frozen_s"])
+        assert e.last_debug["quantised_mode"]
+        if n:
+            bad.append((seed, n))
+    print(f"D3 {variant}: false-stale sessions {len(bad)}/20 {bad}; max gyro evidence {max_theta:.3f} deg, "
+          f"max accel evidence {max_att:.3f} deg, longest bit-identical run {max_frozen:.1f} s")
+    assert not bad
+
+
+@pytest.mark.parametrize("yaw_rate", [30.0, 5.0])
+def test_d3_rotating_with_frozen_mag_flags(yaw_rate):
+    """D3 (b): vehicle turning (gyro + level-ish accel unchanged) while mag is stuck -> MAG_STALE, quality cut."""
+    from heading_core import WARN_MAG_STALE
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    ref = HeadingEstimator(Calibration(field_uT=50.0), config=CoreConfig(stale_detection=False))
+    first = None
+    for s in _session(1, dur=10.0, yaw_rate=yaw_rate, freeze_mag_after=2.0):
+        o, r = e.update(s), ref.update(dict(s))
+        if s["t"] < 2.0:
+            assert WARN_MAG_STALE not in o["warnings"]
+        if first is None and WARN_MAG_STALE in o["warnings"]:
+            first = s["t"]
+            assert o["quality"] == pytest.approx(0.3 * r["quality"])
+    assert first is not None
+    # flags once (rate - 1 deg/s deadband) has accumulated 3 deg (+ low-pass rise)
+    assert first - 2.0 < 3.0 / (yaw_rate - 1.0) + 1.5
+
+
+def test_d3_tilting_without_gyro_flags_by_accel():
+    """No gyro, mag stuck, vehicle pitches by 10 deg: accel attitude change is motion evidence (quality cut)."""
+    from heading_core import WARN_MAG_STALE
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    rng = np.random.default_rng(4)
+    m0 = None
+    for k in range(150):
+        t = k * 0.02
+        pitch = 0.0 if t < 1.0 else min(10.0, (t - 1.0) * 10.0)
+        s = sample(t, 45, pitch, 0)
+        m0 = s["mag_uT"] if m0 is None else m0
+        s["mag_uT"] = m0
+        s["accel_g"] = (np.array(s["accel_g"]) + rng.normal(0, 0.002, 3)).tolist()  # live accel
+        s["meta"] = {"mag_quant_uT": 0.1}
+        o = e.update(s)
+    assert WARN_MAG_STALE in o["warnings"] and o["quality"] < 0.5
+    assert e.last_debug["quant_motion"]["accel_att_change_deg"] > 3.0
+
+
+def test_d3_gyro_bias_does_not_accumulate():
+    """0.2 deg/s/axis bias for 60 s would integrate to ~21 deg raw; the deadband keeps evidence at 0."""
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    s0 = next(_session(0, gyro_noise=0.0))
+    for k in range(3000):
+        o = e.update(dict(s0, t=k * 0.02, gyro_dps=[0.2, -0.2, 0.2],
+                          accel_g=(np.array(s0["accel_g"]) + 0.002 * ((-1) ** k)).tolist()))
+    assert e.last_debug["quant_motion"]["gyro_rot_deg"] == 0.0
+    assert e.last_debug["quant_motion"]["frozen_s"] > 59 and "MAG_STALE" not in o["warnings"]

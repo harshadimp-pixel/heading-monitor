@@ -48,6 +48,48 @@ class _FrozenTracker:
         return (t - self.t0) >= w and self.n >= cfg.stale_min_samples
 
 
+class _QuantMotion:
+    """Motion evidence while a quantised mag reading stays bit-identical (D3)."""
+
+    def __init__(self):
+        self.ref = None
+        self.t0 = None
+        self.w_lp = None          # low-passed gyro vector, deg/s
+        self.rp_lp = None         # low-passed accel (roll, pitch), deg
+        self.rp_ref = None
+        self.theta = 0.0
+
+    def update(self, t, dt, m, gyro, rp, cfg):
+        if dt is not None and dt > 0:
+            if gyro is not None:
+                a = dt / (cfg.quant_gyro_lp_tau_s + dt)
+                self.w_lp = gyro.copy() if self.w_lp is None else self.w_lp + a * (gyro - self.w_lp)
+            if rp is not None:
+                a = dt / (cfg.quant_accel_lp_tau_s + dt)
+                if self.rp_lp is None:
+                    self.rp_lp = np.array(rp, dtype=float)
+                else:
+                    d = np.array([angle_diff_deg(rp[0], self.rp_lp[0]), rp[1] - self.rp_lp[1]])
+                    self.rp_lp = self.rp_lp + a * d
+        else:
+            if gyro is not None and self.w_lp is None:
+                self.w_lp = gyro.copy()
+            if rp is not None and self.rp_lp is None:
+                self.rp_lp = np.array(rp, dtype=float)
+        if not np.all(np.isfinite(m)) or self.ref is None or not np.array_equal(m, self.ref):
+            self.ref, self.t0, self.theta = m.copy(), t, 0.0       # mag changed: restart evidence
+            self.rp_ref = None if self.rp_lp is None else self.rp_lp.copy()
+            return 0.0, 0.0, 0.0
+        if self.rp_ref is None and self.rp_lp is not None:
+            self.rp_ref = self.rp_lp.copy()
+        if gyro is not None and self.w_lp is not None and dt is not None and dt > 0:
+            self.theta += max(0.0, float(np.linalg.norm(self.w_lp)) - cfg.quant_gyro_deadband_dps) * dt
+        att = 0.0
+        if self.rp_lp is not None and self.rp_ref is not None:
+            att = max(abs(angle_diff_deg(self.rp_lp[0], self.rp_ref[0])), abs(self.rp_lp[1] - self.rp_ref[1]))
+        return t - self.t0, self.theta, att
+
+
 class HeadingEstimator:
     """Stateful heading estimator. One instance per data stream.
 
@@ -77,6 +119,7 @@ class HeadingEstimator:
         self._win: deque = deque(maxlen=max(1, self.config.window))
         self._innov: deque = deque(maxlen=max(2, self.config.noise_window))
         self._frozen = {"mag": _FrozenTracker(), "accel": _FrozenTracker(), "mag_exact": _FrozenTracker()}
+        self._qmotion = _QuantMotion()
         self._t_last_seen: float | None = None
 
     def set_calibration(self, calibration: Calibration | None) -> None:
@@ -127,6 +170,7 @@ class HeadingEstimator:
         if self._t_last_seen is not None and t < self._t_last_seen - cfg.max_dt_s:
             self.reset()  # large backward jump = new stream / replay restart, not staleness
         ts_stale = self._t_last_seen is not None and not (t > self._t_last_seen)
+        dt_seen = None if (self._t_last_seen is None or ts_stale) else min(t - self._t_last_seen, cfg.max_dt_s)
         if not ts_stale:
             self._t_last_seen = t
         stale_q = 1.0
@@ -142,13 +186,39 @@ class HeadingEstimator:
             else:
                 acc_frozen = True  # absent channel cannot contradict a frozen mag
             mag_exact = self._frozen["mag_exact"].update(t, m, 0.0, cfg, cfg.stale_quant_window_s)
+            g_raw = sample.get("gyro_dps")
+            gyro_v = None
+            if g_raw is not None:
+                try:
+                    gyro_v = np.asarray(g_raw, dtype=float).reshape(3)
+                    if not np.all(np.isfinite(gyro_v)):
+                        gyro_v = None
+                except (TypeError, ValueError):
+                    gyro_v = None
+            have_gyro = gyro_v is not None
+            rp_acc = None
+            if acc_raw is not None:
+                try:
+                    av = np.asarray(acc_raw, dtype=float).reshape(3)
+                    if np.all(np.isfinite(av)) and abs(np.linalg.norm(av) - 1.0) <= cfg.quant_accel_1g_tol_g:
+                        rp_acc = roll_pitch_from_accel(av, cfg.accel_convention)
+                except (TypeError, ValueError):
+                    rp_acc = None
+            q_dur, q_theta, q_att = self._qmotion.update(t, dt_seen, m, gyro_v, rp_acc, cfg)
+            quant_motion = quantised and (q_theta > cfg.quant_motion_threshold_deg
+                                          or q_att > cfg.quant_motion_threshold_deg)
+            self._qdebug = {"frozen_s": q_dur, "gyro_rot_deg": q_theta, "accel_att_change_deg": q_att,
+                            "have_gyro": have_gyro}
             if mag_frozen and acc_frozen:
                 warnings.append(WARN_SENSOR_STALE)
                 stale_q *= cfg.sensor_stale_quality_factor
             elif quantised:
-                if mag_exact:  # bit-identical for >= stale_quant_window_s
+                # D3: a still sensor on a coarse grid repeats readings legitimately -> need motion evidence
+                if quant_motion:
                     warnings.append(WARN_MAG_STALE)
                     stale_q *= max(cfg.mag_stale_quality_factor, cfg.quant_mag_stale_min_factor)
+                elif not have_gyro and cfg.quant_nogyro_time_rule and mag_exact:
+                    warnings.append(WARN_MAG_STALE)   # no-gyro fallback: warning only, quality not cut
             elif mag_frozen:
                 warnings.append(WARN_MAG_STALE)
                 stale_q *= cfg.mag_stale_quality_factor
@@ -286,7 +356,8 @@ class HeadingEstimator:
         self.last_debug = {"field_vec_uT": b.tolist(), "raw_mag_uT": m.tolist(), "dip_deg": dip,
                            "tilt_deg": tilt, "noise_deg": noise, "innovation_deg": innov,
                            "field_ref_uT": b0, "horizontal_uT": horiz,
-                           "mag_quant_uT": quant, "quantised_mode": quantised, "mag_quant_inferred_uT": inferred,
+                           "mag_quant_uT": quant, "quantised_mode": quantised,
+                           "quant_motion": dict(getattr(self, "_qdebug", {})), "mag_quant_inferred_uT": inferred,
                            "fc_mag_calibrated": self._fc_mag_calibrated}
         return {
             "t": t,

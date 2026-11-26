@@ -194,14 +194,41 @@ staleness. All thresholds are in `CoreConfig` (`stale_detection=False` disables 
 **Quantised sources (PM decision 2026-11-27; thresholds PROVISIONAL).** A source with coarse mag steps sets
 `meta.mag_quant_uT` (MSP: 0.1 µT). The value is remembered for the stream (meta may appear on the first line only);
 `CoreConfig.mag_quant_uT` overrides it. If neither is present, q is **inferred** from the data
-(`infer_mag_quant`, PROVISIONAL): the largest candidate step in {1, 0.5, 0.1, 0.05, 0.01} µT on which every mag
+(`infer_mag_quant`, on by default, **approved by the PM 2026-11-27**, PROVISIONAL): the largest candidate step in {1, 0.5, 0.1, 0.05, 0.01} µT on which every mag
 component seen so far lies (within 1e-6 µT), after ≥ 5 samples; one off-grid reading rules a step out for the
 stream. Continuous data and RM3100 counts/75 are never on such a grid. Priority: config > meta > inferred. If q ≥ `quant_noise_ratio` (3) × `expected_mag_noise_uT` (0.015 µT,
-RM3100 @ CC 200 [DATASHEET]) the estimator is in *quantised mode*: `MAG_STALE` then needs **bit-identical** mag
-(exact equality) for ≥ `stale_quant_window_s` (5 s), and its quality factor is max(0.3, `mag_stale_quality_factor`),
-never below 0.3×. Rationale: with 0.1 µT steps ≫ 15 nT noise a still vehicle legitimately repeats readings.
+RM3100 @ CC 200 [DATASHEET]) the estimator is in *quantised mode*. Rationale: with 0.1 µT steps ≫ 15 nT noise a
+still sensor legitimately repeats readings, often for many seconds (up to 23 s in our 20 Hz sessions); from
+mag data alone a still sensor and a frozen one are indistinguishable (defect D3).
+
+*Quantised-mode `MAG_STALE` rule (D3, PM decision 2026-11-27; all thresholds PROVISIONAL).* MAG_STALE needs
+**motion evidence while the mag stays bit-identical** (exact equality since the reading last changed):
+
+* **Gyro evidence** (chosen integration): ω̄ = first-order low-pass of the body-rate vector
+  (τ = `quant_gyro_lp_tau_s` = 0.5 s), θ_g = ∫ max(0, ‖ω̄‖ − ω_db) dt with deadband ω_db =
+  `quant_gyro_deadband_dps` = 1°/s, **reset to 0 whenever the mag changes**. Why: plain integration turns a
+  0.2°/s/axis residual bias into ~21° over 60 s (‖b‖ = 0.35°/s); resetting on mag change bounds the window, and the
+  deadband (above any plausible post-boot residual bias, and above INAV's 1°/s integer gyro quantisation dithered
+  by bias) makes the bias contribution exactly zero. Online bias estimation was rejected: with no trusted
+  "stationary" signal it would absorb a slow constant spin. The low-pass removes white gyro noise.
+* **Accel evidence**: change of low-passed (τ = `quant_accel_lp_tau_s` = 0.2 s) accel roll/pitch since the mag last
+  changed, max(|Δφ|, |Δθ|). Used only while | ‖a‖ − 1 g | ≤ `quant_accel_1g_tol_g` (0.05 g), so linear
+  acceleration does not fake a tilt change. Accel bias cancels (difference).
+* Flag when θ_g > `quant_motion_threshold_deg` (3°) **or** accel evidence > 3°: `MAG_STALE`, quality ×
+  max(0.3, `mag_stale_quality_factor`) = 0.3 (never below 0.3×).
+* **No gyro** in the sample: accel evidence as above (quality ×0.3), and otherwise the fallback
+  `quant_nogyro_time_rule` (default on, per PM): bit-identical for ≥ `stale_quant_window_s` (5 s) → `MAG_STALE`
+  as a **warning only, quality not cut**. With gyro present the 5 s time rule is not used.
+
 `SENSOR_STALE` (mag near-identical **and** accel frozen or absent, 0.5 s, ×0.05) and `TIMESTAMP_STALE` are
-unchanged in both modes.
+unchanged in both modes; non-quantised mode is unchanged (0.5 s near-identical rule, ×0.3).
+
+False-alarm results [SIMULATED] (`heading_core/tests/test_heading_core.py::test_d3_*`; 20 seeded 60 s stationary
+sessions each, 0.1 µT grid, RM3100 15 nT, accel 2 mg + 1/512 g steps, gyro 0.1°/s noise): 0/20 false MAG_STALE /
+SENSOR_STALE for gyro bias U(±0.2)°/s/axis @ 50 Hz, U(±0.5) @ 50 Hz, U(±0.3) with integer-°/s gyro @ 50 Hz, and
+U(±0.2) @ 20 Hz. Peak evidence: gyro 0.000°, accel 0.18–0.24° (threshold 3°). Longest legitimately bit-identical
+run: 9.3 s @ 50 Hz, 23.3 s @ 20 Hz. Detection: frozen mag during a 30°/s and a 5°/s turn is flagged; a 10° pitch
+change without gyro is flagged by accel.
 
 **Single-calibration rule (ARCHITECTURE.md 2026-11-27).** The ellipsoid fit in heading_core is the only intended
 magnetometer calibration; the FC's own mag calibration is kept neutral (INAV magzero = 0, maggain = 1024). The
@@ -213,7 +240,8 @@ within the frozen codes:
   `fc_mag_calibrated_quality_factor` (0.7, PROVISIONAL). Reason: a *fixed* FC affine correction composed with our
   fit is still an affine map and is absorbed by the fit, but it may change after our fit (FC re-calibration),
   which silently invalidates it. The app shows the user-facing warning (ARCHITECTURE.md: "the app warns if not
-  false"). `last_debug["fc_mag_calibrated"]` exposes the flag.
+  false"). `last_debug["fc_mag_calibrated"]` exposes the flag. This quality-only handling was **approved by the
+  PM 2026-11-27**.
 
 Warning codes (frozen as contract in ARCHITECTURE.md 2026-11-27; `heading_core/warnings_codes.py`; the schema only says "array of strings"):
 
@@ -227,7 +255,7 @@ Warning codes (frozen as contract in ARCHITECTURE.md 2026-11-27; `heading_core/w
 | `HIGH_NOISE` | innovation RMS > 3° (also fires during fast turns without gyro — it measures lag too) |
 | `INVALID_MAG` | non-finite mag, zero field or zero horizontal field; sample ignored |
 | `SENSOR_STALE` | mag **and** accel (if present) frozen for ≥ `stale_window_s` (0.5 s) and ≥ 10 samples (D1); quality × 0.05 |
-| `MAG_STALE` | mag frozen as above while accel still changes; quality × 0.3. Quantised mode: bit-identical for ≥ 5 s, factor ≥ 0.3 (PROVISIONAL) |
+| `MAG_STALE` | mag frozen as above while accel still changes; quality × 0.3. Quantised mode: bit-identical mag **plus** gyro/accel motion evidence > 3° (×0.3); no gyro: also bit-identical ≥ 5 s, warning only (PROVISIONAL) |
 | `TIMESTAMP_STALE` | `t` ≤ previous `t` (repeated or out-of-order); sample not fed to the filter, held heading output; quality × 0.05 |
 
 ## 9. API summary
@@ -282,7 +310,7 @@ heading RMS vs `truth.heading_deg` is 0.71–0.83° on static / yaw_spin / tilte
 against 34–42° RMS uncalibrated on the spin scenarios. This uses the simulator's own noise/bias models, so it checks that the interfaces and
 conventions agree, not real-world accuracy.
 
-## 11. Reference test cases (all in `heading_core/tests/test_heading_core.py`, 67 tests)
+## 11. Reference test cases (all in `heading_core/tests/test_heading_core.py`, 75 tests)
 
 | Case | Input | Expected |
 |---|---|---|
@@ -299,10 +327,14 @@ conventions agree, not real-world accuracy.
 | Warnings | no cal; \|B\| = 70 µT; pitch 50°; dip 55° vs 40°; no accel; σ = 8 µT noise; NaN/inf/zero mag | each code fires; invalid sample leaves filter at 45° |
 | D1 frozen sensor | 150 identical samples (3 s @ 50 Hz), then live noisy data | `SENSOR_STALE` from 0.5 s, quality ≤ 0.05; clears on first live sample, quality > 0.9 |
 | Frozen variants | mag frozen + live accel; no accel; 1e-9 µT jitter; repeated/backward `t`; >1 s backwards jump | `MAG_STALE`; `SENSOR_STALE`; still frozen; `TIMESTAMP_STALE` + held heading; reset, no warning |
-| Quantised stationary | 0.1 µT steps, bit-identical mag, live accel (2 mg), meta on first line | no MAG_STALE before 5 s (quality = unflagged); MAG_STALE from 5.0 s with quality ≥ 0.3× and < 1× unflagged; never SENSOR_STALE |
 | Quantised varying | 0.1 µT steps with 0.06 µT noise (12 s); slow 2°/s turn | never MAG_STALE / SENSOR_STALE |
 | Quantised edge cases | q = 0.02 µT (< 3×noise); CoreConfig override; mag+accel frozen | normal 0.5 s rule; quantised mode; SENSOR_STALE ×0.05 unchanged |
 | Quantised, no meta | 0.1 µT grid, 4 s bit-identical; continuous noisy data | grid 0.1 inferred, no MAG_STALE; nothing inferred |
+| D3 stationary quantised | 4 × 20 seeded 60 s sessions (bias 0.2 / 0.5 / 0.3 + integer gyro / 20 Hz) | 0 false MAG_STALE or SENSOR_STALE |
+| D3 frozen mag while turning | 30°/s and 5°/s yaw, mag stuck from 2 s | MAG_STALE, quality = 0.3 × unflagged |
+| D3 tilt, no gyro | pitch 0→10°, mag stuck, live accel | MAG_STALE by accel evidence, quality cut |
+| D3 bias | 0.2°/s/axis constant for 60 s, mag bit-identical | gyro evidence stays 0, no MAG_STALE |
+| D3 no-gyro fallback | 0.1 µT stationary, no gyro | MAG_STALE from 5.0 s, quality equal to unflagged |
 | fc_mag_calibrated | true / false / "unknown" / absent | same heading and warnings; quality ×0.7 only for true |
 | Accel convention | (0,0,−1) level; nose-up 10° → x = +sin 10°; (0,0,+1) fed in | 0/0; pitch 10°; `TILT_TOO_LARGE` |
 | Schema | every estimator output (incl. 300 random-garbage samples) | validates against contracts/heading_estimate.schema.json |
@@ -355,13 +387,19 @@ Unresolved at REVIEW (mirrored in TEAM_TRACKER.md, T2 row):
 13. Warning codes and the `config` / `accel_convention` keywords were approved by the PM (ARCHITECTURE.md
     2026-11-27); new codes need PM sign-off, so some conditions (e.g. FC calibration active) have no own code.
 14. **Frozen-data and quantised-mode thresholds are PROVISIONAL** until a hardware replay log exists (0.5 s /
-    10 samples / 1e-6 µT / 1e-7 g; quantised mode: ratio 3, 5 s, ≥ 0.3×; `expected_mag_noise_uT` 0.015 µT;
-    `fc_mag_calibrated_quality_factor` 0.7). Quantised stationary data with **no** accel channel (or a coarsely
-    quantised accel) still raises `SENSOR_STALE` after 0.5 s, by design of the unchanged rule. A sensor stuck at a
-    noisy value or slowly drifting is not detected. If `meta.mag_quant_uT` is missing on an MSP stream, the
-    estimator infers the grid from the data; a source quantised on a non-decimal step would not be inferred and
-    falls back to the 0.5 s near-identical rule (MAG_STALE ×0.3), so false alarms remain possible there.
+    10 samples / 1e-6 µT / 1e-7 g; quantised mode: ratio 3, motion threshold 3°, gyro deadband 1°/s, LP 0.5 s /
+    0.2 s, 1 g tolerance 0.05 g, no-gyro window 5 s, factor ≥ 0.3×; `expected_mag_noise_uT` 0.015 µT;
+    grid inference; `fc_mag_calibrated_quality_factor` 0.7). A sensor stuck at a *noisy* value or slowly drifting
+    is not detected. A source quantised on a non-decimal step without meta is not inferred and uses the 0.5 s rule.
     `fc_mag_calibrated = true` cannot be expressed by a frozen warning code; only quality reflects it in the core.
+14a. **Residual (D3): a mag-only freeze on a stationary vehicle cannot be detected on quantised hardware.** With
+    0.1 µT steps and 15 nT noise a healthy still sensor repeats bit-identical readings, so without motion there is
+    no evidence to separate "frozen" from "still". Detection needs rotation > 3° (beyond the 1°/s deadband) or a
+    > 3° tilt change. Consequences: slow turns < 1°/s, or rotation about the field direction, with a frozen mag go
+    unflagged; a gyro bias > ~1°/s (magnitude) could cause false alarms; without gyro the PM's 5 s fallback still
+    warns on healthy still sensors (warning only, quality kept) — it fails the Auditor's no-gyro stress test E3b
+    unless `quant_nogyro_time_rule=False`. Quantised stationary data with **no** accel channel still raises
+    `SENSOR_STALE` after 0.5 s (unchanged rule).
 15. Temperature drift, RM3100 linearity (0.5 % [DATASHEET]) and cycle-count changes are not modelled.
 16. Heading is not course over ground; no speed, distance or place estimate is provided or implied (section 1).
 17. **Scope rule (Auditor condition, binding):** heading_core does not and will not provide a position,

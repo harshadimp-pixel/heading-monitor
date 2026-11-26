@@ -50,13 +50,23 @@ class CoreConfig:
     timestamp_stale_quality_factor: float = 0.05
     # Quantised sources (PM decision 2026-11-27). PROVISIONAL. Sample meta.mag_quant_uT (MSP: 0.1 uT) is
     # remembered per stream; mag_quant_uT here overrides it. If quant >= quant_noise_ratio * expected noise,
-    # MAG_STALE requires bit-identical mag (exact equality) for >= stale_quant_window_s and its quality factor
-    # is never below quant_mag_stale_min_factor. SENSOR_STALE / TIMESTAMP_STALE are unchanged.
+    # MAG_STALE requires bit-identical mag plus motion evidence (D3, see quant_motion_* below); its quality
+    # factor is never below quant_mag_stale_min_factor. SENSOR_STALE / TIMESTAMP_STALE are unchanged.
     expected_mag_noise_uT: float = 0.015         # [DATASHEET] RM3100 noise @ CC=200 (15 nT); PROVISIONAL use
     mag_quant_uT: Optional[float] = None
     quant_noise_ratio: float = 3.0
-    stale_quant_window_s: float = 5.0            # PROVISIONAL
-    infer_mag_quant: bool = True                 # fallback when meta.mag_quant_uT is absent: detect a decimal
+    stale_quant_window_s: float = 5.0            # PROVISIONAL; used only by the no-gyro fallback (D3)
+    # D3 (PM decision 2026-11-27), all PROVISIONAL: in quantised mode MAG_STALE needs *motion evidence* while the
+    # mag stays bit-identical. Gyro evidence: theta = integral of max(0, |LP(omega)| - quant_gyro_deadband_dps) dt
+    # since the mag last changed (LP = first-order low-pass, time constant quant_gyro_lp_tau_s). Accel evidence:
+    # change of low-passed accel roll/pitch since the mag last changed, only while | |a| - 1 g | <= quant_accel_1g_tol_g.
+    quant_motion_threshold_deg: float = 3.0
+    quant_gyro_deadband_dps: float = 1.0         # > plausible residual gyro bias magnitude (e.g. 0.2 deg/s/axis)
+    quant_gyro_lp_tau_s: float = 0.5
+    quant_accel_lp_tau_s: float = 0.2
+    quant_accel_1g_tol_g: float = 0.05
+    quant_nogyro_time_rule: bool = True          # no gyro: MAG_STALE (warning only, quality not cut) after 5 s
+    infer_mag_quant: bool = True                 # PM-approved 2026-11-27. fallback when meta.mag_quant_uT is absent: detect a decimal
     infer_quant_candidates_uT: tuple = (1.0, 0.5, 0.1, 0.05, 0.01)  # grid (e.g. MSP mG) from the data. PROVISIONAL
     infer_quant_min_samples: int = 5
     quant_mag_stale_min_factor: float = 0.3      # PROVISIONAL
