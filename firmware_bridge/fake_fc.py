@@ -36,10 +36,11 @@ class FakeFC:
         yaw = math.radians(self.yaw_deg())
         h = self.field * math.cos(self.incl)
         z = self.field * math.sin(self.incl)
-        # level vehicle, body x forward/y right/z down; heading psi -> body field (h cos psi, -h sin psi, z)
-        mag_mg = [round(h * math.cos(yaw) * 10), round(-h * math.sin(yaw) * 10), round(z * 10)]
-        acc = [0, 0, 512]
-        gyro = [0, 0, round(self.yaw_rate)]
+        # level vehicle. In FRD the body field is (h cos psi, -h sin psi, +z) and specific force (0,0,-1 g).
+        # INAV reports forward-LEFT-UP (see scaling.py), so emit (x, -y, -z) of the FRD values:
+        mag_mg = [round(h * math.cos(yaw) * 10), round(h * math.sin(yaw) * 10), round(-z * 10)]
+        acc = [0, 0, 512]                      # INAV: level -> +512 on z (imu.c L367)
+        gyro = [0, 0, -round(self.yaw_rate)]   # clockwise yaw (FRD +z) is -z in FLU
         return struct.pack("<9h", *acc, *gyro, *mag_mg)
 
     def attitude_payload(self) -> bytes:

@@ -60,6 +60,40 @@ class MagProfile:
     accel_lsb_per_g: float | None     # None -> unknown, accel_g omitted
     description: str
     uncertain: tuple[str, ...] = field(default_factory=tuple)
+    body_frame: str = "flu"           # frame of MSP_RAW_IMU vectors: 'flu' (INAV) or 'frd' (no change)
+
+
+# ---- body frame -------------------------------------------------------------------------------
+# ARCHITECTURE.md: body frame x forward, y right, z down (FRD/"NED-style"); accel is specific force,
+# level & at rest = (0, 0, -1) g.
+# INAV MSP_RAW_IMU vectors are, by source derivation, in a forward-LEFT-UP body frame:
+#   * imu.c L367: wCoGAcc = (accBFNorm.z - 1) ... "z direction is verified via SITL"  -> level acc z = +1 g
+#   * imu.c L287-293 imuResetOrientationQuaternion(): q = (az+|a|, ay, -ax, 0) and
+#     imu.c L626-627 roll = atan2(rMat[2][1], rMat[2][2]), pitch = 90deg - acos(-rMat[2][0]):
+#     +roll (right side down, see mavlink_streams.c L724) <=> +ay  -> y points LEFT
+#     nose-up (negative INAV pitch, see osd.c L3085 SYM_PITCH_DOWN for pitch>0) <=> +ax -> x FORWARD
+#   * Matek CAN-L4-3100 page: INAV `align_mag = CW90` for an arrow-forward module; INAV compass_msp.c
+#     applies CW90_DEG_FLIP to the FRD MSP2_SENSOR_COMPASS vector, boardalignment.c L126-150:
+#     FRD (f,r,d) -CW90_DEG_FLIP-> (r,f,-d) -CW90_DEG-> (f,-r,-d) = FLU.  Consistent with the above.
+# FLU -> FRD is (x, -y, -z). Applied to acc, gyro and mag.  NEEDS HARDWARE VALIDATION (tilt/rotate test
+# in docs/firmware/FC_SETUP.md §7); the gyro sign in particular is only inferred.
+def flu_to_frd(v):
+    return [v[0], -v[1], -v[2]]
+
+
+def to_body_frd(v, body_frame: str):
+    if body_frame == "flu":
+        return flu_to_frd(v)
+    if body_frame == "frd":
+        return list(v)
+    raise ValueError(f"unknown body frame {body_frame!r}")
+
+
+# MSP_ATTITUDE pitch sign by firmware: INAV/Betaflight report +pitch = nose DOWN (INAV osd.c L3085,
+# INAV MAVLink sends -pitch, mavlink_streams.c L725); ArduPilot AP_MSP sends degrees(pitch_rad)*10,
+# i.e. aerospace +pitch = nose UP. The bridge outputs aerospace convention (roll + right side down,
+# pitch + nose up, yaw clockwise from north, 0..360).
+PITCH_SIGN_BY_VARIANT = {"INAV": -1.0, "BTFL": -1.0, "ARDU": 1.0}
 
 
 MAG_PROFILES: dict[str, MagProfile] = {
@@ -72,7 +106,8 @@ MAG_PROFILES: dict[str, MagProfile] = {
         "(magzero_*=0, maggain_*=1024).",
         ("Valid only with INAV magzero_x/y/z=0 and maggain_x/y/z=1024; after INAV mag calibration the "
          "values are offset-removed and normalised to ~1024 per axis peak (dimensionless).",
-         "Axis order/sign after INAV CW90_DEG_FLIP + align_mag not yet checked on hardware.",
+         "Axis order/sign: INAV body frame derived as forward-left-up from source and converted to FRD; "
+         "assumes align_mag=CW90 per Matek for an arrow-forward module. Not yet checked on hardware.",
          "AP_Periph field already includes the node's own COMPASS_OFS/orientation (ROTATION_PITCH_180 in hwdef)."),
     ),
     # Bare RM3100 breakout on SPI (INAV registers RM3100 on SPI only, e.g. MATEKH743 SPI3 / MATEKF405CAN SPI2).
@@ -88,9 +123,11 @@ MAG_PROFILES: dict[str, MagProfile] = {
         "betaflight", None, None,
         "Betaflight has no RM3100 driver (src/main/drivers/compass/ at master). magADC units are "
         "driver-specific and accel is raw counts (acc_1G sensor-specific).",
-        ("No RM3100 support; mag/accel scaling unknown - supply --mag-ut-per-lsb / --accel-lsb-per-g.",),
+        ("No RM3100 support; mag/accel scaling unknown - supply --mag-ut-per-lsb / --accel-lsb-per-g.",
+         "Body frame assumed forward-left-up like INAV (shared Cleanflight heritage); not verified for Betaflight."),
     ),
-    "custom": MagProfile("custom", None, None, "User-supplied scale factors.", ("User-supplied scaling.",)),
+    "custom": MagProfile("custom", None, None, "User-supplied scale factors; vectors passed through as FRD.",
+                         ("User-supplied scaling; no axis conversion.",), body_frame="frd"),
 }
 
 FC_VARIANT_DEFAULT_PROFILE = {"INAV": "inav-msp-mag", "BTFL": "betaflight"}

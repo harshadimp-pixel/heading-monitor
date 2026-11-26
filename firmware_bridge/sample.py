@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from numbers import Real
 
-from .scaling import MAG_PROFILES, UT_PER_MGAUSS, MagProfile
+from .scaling import MAG_PROFILES, PITCH_SIGN_BY_VARIANT, UT_PER_MGAUSS, MagProfile, to_body_frd
 
 SOURCES = ("sim", "replay", "hardware")
 
@@ -12,7 +12,7 @@ SOURCES = ("sim", "replay", "hardware")
 class SampleBuilder:
     def __init__(self, source: str, profile: str = "inav-msp-mag",
                  mag_ut_per_lsb: float | None = None, accel_lsb_per_g: float | None = None,
-                 msp_version: int | None = None):
+                 msp_version: int | None = None, body_frame: str | None = None):
         if source not in SOURCES:
             raise ValueError(f"invalid source {source!r}")
         if profile not in MAG_PROFILES:
@@ -25,11 +25,19 @@ class SampleBuilder:
             raise ValueError(f"profile {profile!r} has no known mag scale; pass --mag-ut-per-lsb")
         self.msp_version = msp_version
         self.fc_variant: str | None = None
+        self.body_frame = body_frame or self.profile.body_frame
+        to_body_frd([0, 0, 0], self.body_frame)  # validate
+
+    def attitude_aero(self, att: dict) -> dict:
+        """MSP_ATTITUDE (as decoded) -> aerospace convention (pitch + nose up)."""
+        sign = PITCH_SIGN_BY_VARIANT.get(self.fc_variant or "INAV", -1.0)
+        return {"roll": att["roll"], "pitch": att["pitch"] * sign if att["pitch"] else 0.0, "yaw": att["yaw"]}
 
     def _meta(self, **extra) -> dict:
         m = {
             "bridge": "firmware_bridge",
             "mag_profile": self.profile.name,
+            "body_frame_in": self.body_frame,
             "mag_ut_per_lsb": self.mag_scale,
             "scaling_uncertain": list(self.profile.uncertain),
         }
@@ -44,25 +52,26 @@ class SampleBuilder:
         s = {
             "t": float(t),
             "source": self.source,
-            "mag_uT": [v * self.mag_scale for v in raw["mag"]],
-            "gyro_dps": [float(v) for v in raw["gyro"]],
+            "mag_uT": [round(v * self.mag_scale, 6) + 0.0 for v in to_body_frd(raw["mag"], self.body_frame)],
+            "gyro_dps": [float(v) + 0.0 for v in to_body_frd(raw["gyro"], self.body_frame)],
         }
         if self.accel_scale:
-            s["accel_g"] = [v / self.accel_scale for v in raw["acc"]]
+            s["accel_g"] = [v / self.accel_scale + 0.0 for v in to_body_frd(raw["acc"], self.body_frame)]
         if attitude is not None:
-            s["fc_attitude_deg"] = dict(attitude)
-        s["meta"] = self._meta(msg="MSP_RAW_IMU", msp_raw_imu=raw, **meta)
+            s["fc_attitude_deg"] = self.attitude_aero(attitude)
+        s["meta"] = self._meta(msg="MSP_RAW_IMU", msp_raw_imu=raw, msp_attitude=attitude, **meta)
         return s
 
     def from_sensor_compass(self, t: float, msg: dict, attitude: dict | None = None, **meta) -> dict:
         s = {
             "t": float(t),
             "source": self.source,
-            "mag_uT": [v * UT_PER_MGAUSS for v in msg["mag_mgauss"]],
+            "mag_uT": [round(v * UT_PER_MGAUSS, 6) for v in msg["mag_mgauss"]],
         }
         if attitude is not None:
-            s["fc_attitude_deg"] = dict(attitude)
+            s["fc_attitude_deg"] = self.attitude_aero(attitude)
         m = self._meta(msg="MSP2_SENSOR_COMPASS", msp_sensor_compass=msg, **meta)
+        m["body_frame_in"] = "frd"  # message is defined front/right/down (msp_sensors.h)
         m["mag_ut_per_lsb"] = UT_PER_MGAUSS  # message is defined in mGauss regardless of profile
         m["scaling_uncertain"] = ["AP_Periph field includes node-side orientation/offsets; not hardware-checked."]
         s["meta"] = m
