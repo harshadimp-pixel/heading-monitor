@@ -1,6 +1,6 @@
 # Contribution report — UI & Software Developer (T5, `app/`)
 
-**Status:** T5 at REVIEW (PM accepted pending the Auditor's sign-off).
+**Status:** T5 at REVIEW (PM accepted pending the Auditor's sign-off). D6 (CRITICAL, replayed hardware shown as live) fixed in `0ca6b0f` and set to REVIEW; the Auditor re-runs A8/A8b and closes it.
 **Evidence level:** every heading, field and accuracy number shown in the app, the screenshots and the demo video is `[SIMULATED]` (T3 sim) or a replay of a simulated log. Nothing here is hardware-verified: no RM3100, Matek CAN-L4-3100 or flight controller was ever connected to the app.
 **Scope:** compass heading only. The app has no position, coordinate, map, speed, course or distance features and makes no navigation claims; GPS appears only as a read-only availability indicator.
 
@@ -14,7 +14,7 @@ Filename: `ui.md`, following the area-named siblings (`maths.md`, `sim.md`, `fir
 | `app/core_adapter.py`, `app/_stubs.py` | heading_core `Calibration`/`HeadingEstimator` through the ARCHITECTURE.md interface; labelled local stubs used only on `NotImplementedError` (currently inactive) |
 | `app/hub.py`, `app/server.py` | State, history (6000 samples), sensor status OK/DEGRADED/FAULT/STALE/NO DATA, calibration wizard, CSV/JSONL recorder; stdlib HTTP + RFC 6455 WebSocket push (10 Hz) and the REST API listed in `app/README.md` |
 | `app/static/` | Vanilla JS/SVG/canvas UI, no CDN or build step: DATA SOURCE badge taken only from `sample.source`, compass with separate measured/reference indicators, filtered and unfiltered heading, roll/pitch, field plot, quality bar and warnings, GPS availability indicator, history chart/table, CSV export, calibration wizard; unavailable values shown as Unknown |
-| `app/tests/` | 45 tests: core adapter, heading maths (Python + Node), HTTP/WebSocket smoke tests, 3 headless-Chrome DOM tests driven over the DevTools protocol; all on ephemeral ports |
+| `app/tests/` | 52 tests: core adapter, heading maths (Python + Node), HTTP/WebSocket smoke tests, D6 replay-labelling tests (`test_app_d6_replay.py`), 5 headless-Chrome DOM tests driven over the DevTools protocol; all on ephemeral ports |
 | `app/README.md` | Run, architecture, UI table, heading-only section, Unknown/stale rules, data interfaces, tests, LIMITATIONS 0–10 |
 | `INSTALL.md` | Clean install, running each source, running every test suite, real verification log from a fresh clone + fresh venv |
 | `reports/demo/demo.mp4` | 71.48 s, 1440×900, H.264 25 fps, 2,463,884 bytes; real app on ephemeral ports; SIMULATED badge and the caption "Simulated data — not hardware-verified. Compass heading only; no position or navigation." on every frame |
@@ -22,14 +22,34 @@ Filename: `ui.md`, following the area-named siblings (`maths.md`, `sim.md`, `fir
 | `reports/screenshots/t5_*.png` | 4 screenshots of the real running app: dashboard (`sim:tilted_spin`), calibration applied (`sim:calibration_dance`), GPS indicator (ingest), no current data → Unknown. Refreshed in this commit to the current labels |
 | `TEAM_TRACKER.md` (T5 row + UI changelog lines) | Status, test counts, limitations mirror |
 
-Commits: `84fc231` (T5 → REVIEW: app, 40 tests, LIMITATIONS, screenshots), `516f80c` (GPS indicator wired to `sample.gps`, all tests on `--port 0`, deterministic headless UI tests), `41bb756` (demo video, INSTALL.md, `--sim-duration`, filtered/unfiltered labels, 45 tests), `8687ab8` (INSTALL.md fresh-venv verification log, README tests section, tracker row), plus the commit adding this file and the refreshed screenshots (message starting `[ui] contribution report`; see `git log -- reports/contributions/ui.md`).
+Commits: `84fc231` (T5 → REVIEW: app, 40 tests, LIMITATIONS, screenshots), `516f80c` (GPS indicator wired to `sample.gps`, all tests on `--port 0`, deterministic headless UI tests), `41bb756` (demo video, INSTALL.md, `--sim-duration`, filtered/unfiltered labels, 45 tests), `8687ab8` (INSTALL.md fresh-venv verification log, README tests section, tracker row), `0ca6b0f` (D6 fix: replay relabelling, REPLAY (recorded hardware) badge, not-live banner, ingest UNVERIFIED SOURCE, provenance in CSV/JSONL, 52 tests), `ed3961c` (this file + refreshed screenshots), plus the commit updating this file and the refreshed screenshots (message starting `[ui] contribution report`; see `git log -- reports/contributions/ui.md`).
+
+### D6 fix (`0ca6b0f`, per the PM decision in ARCHITECTURE.md)
+- `--source replay:<file>`: every sample with `source:"hardware"` is relabelled to `source:"replay"` with `meta.original_source:"hardware"` and `meta.replayed_from:<file>` (the same fields `firmware_bridge --replay` sets; a test compares the two). Other meta keys are kept. `sim` and `replay` samples are unchanged, so a replayed sim log still shows SIMULATED with the transport shown as replay.
+- Badge: **REPLAY (recorded hardware)**. Banner: "[REPLAYED] Recorded hardware log played back from a file. This is recorded data, not a live sensor stream. Nothing here is hardware-verified."
+- HARDWARE (and a live banner) appears only for `source:"hardware"` arriving over the serial transport. A `hardware`-labelled sample posted via `ingest` keeps its label (contract; the Auditor's U2 test relies on it) but shows **UNVERIFIED SOURCE** with a banner saying it is not a live serial source.
+- Records carry `original_source` (copied from meta, never inferred), `transport` and `live_hardware`; CSV gains `original_source`, `transport` columns; JSONL recordings store the relabelled Sample including `meta.original_source`.
+- The relabel mirrors the bridge's fields instead of importing its helper: the bridge's Python function is not an ARCHITECTURE interface (CLI only), and it relabels sim samples too.
 
 Demo metrics `[SIMULATED]` (from `reports/demo/demo_metrics.json`): mean |heading error vs sim truth| 21.40° before calibration (n = 161) and 0.418° after (n = 120); fit by `heading_core.Calibration.fit` on 681 samples, residual 0.0156 µT; `motor_interference` shows DEGRADED with FIELD_MAGNITUDE_OUT_OF_RANGE, HIGH_NOISE.
 
 ## 2. Tests actually executed
 All from the repo root. Environment: Python 3.13.5, pytest 9.2.0, numpy 2.5.5, jsonschema 4.26.0, google-chrome (headless), Node v24.22.1. Results copied from the console output.
 
-Re-run now, 2026-11-27 00:49–00:51 IST, HEAD `8687ab8`, system Python:
+After the D6 fix, 2026-11-27 about 01:01–01:11 IST, working tree that became `0ca6b0f`, system Python:
+
+| Command | Result |
+|---|---|
+| `python3 -m pytest app/tests -q`, 3 consecutive runs | **52 passed** ×3 (24.09 s, 23.91 s, 24.01 s) |
+| `python3 -m pytest app/tests/test_app_ui_headless.py -q`, 5 consecutive runs | **5 passed** ×5 (5.0–5.7 s each) |
+| `python3 -m pytest tests/ -q` (all Auditor `test_t6_*`) | **111 passed** in 45.49 s |
+| `python3 -m pytest -q` (whole repo) | **512 passed, 45 skipped** in 133.23 s (finished 01:09:34 IST) |
+| `python3 reports/audit/integration_run.py /workspace/heading-monitor /tmp/d6_integ` (Auditor's script; output to /tmp, no repo files written) | **27/27 passed**, incl. A8 (file `source=hardware` → app records `source=['replay']`) and A8b (headless Chrome: badge 'REPLAY (recorded hardware)', banner "...recorded data, not a live sensor stream...") |
+| `python3 -m pytest tests/test_t6_claims.py -q` | **4 passed** (the earlier `maths.md:30` failure was fixed by its owner in `dc3123a`); re-run against this updated file at 01:14 IST: 4 passed |
+
+The Auditor's own A8/A8b sign-off is still pending; the 27/27 above is my run of their script, not their verdict.
+
+Earlier run, 2026-11-27 00:49–00:51 IST, HEAD `8687ab8`, system Python (pre-D6):
 
 | Command | Result |
 |---|---|
@@ -63,7 +83,7 @@ Fresh-clone verification of `INSTALL.md` (2026-11-26/27 night IST): `git clone /
 | `python -m app --source ingest --port 0` | NO DATA, "no valid sample received yet" (expected) |
 | `python -m app --source serial:/dev/ttyNONE --port 0` | FAULT, pyserial missing; with pyserial: FAULT, "could not open port /dev/ttyNONE" |
 
-Claims test: `python3 -m pytest tests/test_t6_claims.py -q` gave **1 failed, 3 passed** on `8687ab8`, both before and after this file was added (ui.md adds no failure). The single failure is `test_Q1b_navigation_claims`, flagging `reports/contributions/maths.md:30` (the Mathematics & Sensor Scientist's file, not mine). No app/ or ui.md line is flagged; app/ and reports/demo lines appear only in the informational inventory because they negate position features.
+Claims test history: `python3 -m pytest tests/test_t6_claims.py -q` gave **1 failed, 3 passed** on `8687ab8`, both before and after this file was added (ui.md adds no failure). The single failure is `test_Q1b_navigation_claims`, flagging `reports/contributions/maths.md:30` (the Mathematics & Sensor Scientist's file, not mine). No app/ or ui.md line is flagged; app/ and reports/demo lines appear only in the informational inventory because they negate position features.
 
 Screenshots in this commit were produced by `/workspace/heading-monitor-runlogs/make_t5_screenshots.py` (real app via `run_app --port 0`, headless Chrome over CDP) and checked by eye: badge SIMULATED or NO DATA as expected, GPS Available/3D/9/0.9 for the ingest sample with `gps`, all values Unknown after the sample went stale.
 
@@ -73,7 +93,7 @@ Full text in `app/README.md` → LIMITATIONS (mirrored in the T5 row):
 - U1. `mag_raw` is optional (CAN-L4-3100 sends scaled field, no raw counts).
 - U2. Accuracy shown is precision (noise 1σ), quality and calibration residual, not absolute accuracy; error vs truth exists only for simulated data. Nothing here is hardware-verified.
 - U3. The serial path was never run against a real flight controller, a live firmware_bridge session or the CAN-L4-3100; only a non-existent port (FAULT) was exercised.
-- U4. Replay keeps the original `source` (a replayed sim log shows SIMULATED; transport shown separately).
+- U4. Replay labels (D6 fixed in `0ca6b0f`, pending the Auditor's re-run): replayed `hardware` samples become `source:"replay"` + `meta.original_source:"hardware"` and show REPLAY (recorded hardware), never live; a replayed sim log keeps `source:"sim"` and shows SIMULATED. The app trusts `meta.original_source` as written in a file. HARDWARE is shown only for the serial transport, which has never run against a real FC (U3); a `hardware` label via ingest shows UNVERIFIED SOURCE.
 - U5. Stubs exist but are inactive (heading_core and sim are real); firmware_bridge is never stubbed.
 - U6. The calibration wizard shows coverage but does not guide the user per orientation.
 - U7. One source per process; switching needs a restart; only one process can hold port 8080.
