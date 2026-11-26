@@ -1,0 +1,124 @@
+{
+  "tag": "[SIMULATED]",
+  "params": {
+    "field_uT": 50.0,
+    "dip_deg": 40.0,
+    "mag_noise_sensor_uT": 0.015,
+    "mag_lsb_uT": 0.013333333333333334,
+    "mag_noise_platform_uT": 0.3,
+    "accel_noise_g": 0.003,
+    "accel_bias_g": 0.005,
+    "hard_iron_uT": 30.0,
+    "soft_iron_sym": 0.1,
+    "soft_iron_skew": 0.02,
+    "n_cal": 300,
+    "n_test": 500,
+    "tilt_max_deg": 30.0,
+    "rate_hz": 50.0,
+    "gyro_noise_dps": 0.05,
+    "gyro_bias_dps": 0.2,
+    "yaw_rate_dps": 30.0,
+    "filter_alpha": 0.05,
+    "circ_window": 25
+  },
+  "trials": 200,
+  "seed": 2026,
+  "static_per_sample": {
+    "no_tilt_comp_cal": {
+      "rms_deg": 16.128583619493742,
+      "p95_deg": 30.407271526681775,
+      "max_deg": 57.072984193105924,
+      "n": 100000
+    },
+    "uncalibrated": {
+      "rms_deg": 29.505271540173045,
+      "p95_deg": 55.36117854006564,
+      "max_deg": 179.7598626185768,
+      "n": 100000
+    },
+    "hard_iron_only": {
+      "rms_deg": 2.99362644832664,
+      "p95_deg": 5.828734037886912,
+      "max_deg": 11.120510364061886,
+      "n": 100000
+    },
+    "ellipsoid": {
+      "rms_deg": 0.30086043935006535,
+      "p95_deg": 0.6052397339332826,
+      "max_deg": 1.7505950739901692,
+      "n": 100000
+    },
+    "ellipsoid_true_accel": {
+      "rms_deg": 0.023577822851475437,
+      "p95_deg": 0.046190449787493905,
+      "max_deg": 0.10362560159791201,
+      "n": 100000
+    },
+    "ellipsoid_platform_noise": {
+      "rms_deg": 0.5635220603588752,
+      "p95_deg": 1.110782987571207,
+      "max_deg": 2.762589653882287,
+      "n": 100000
+    },
+    "ellipsoid_skew_soft_iron": {
+      "rms_deg": 0.6906721255037634,
+      "p95_deg": 1.3297919615319749,
+      "max_deg": 2.961599132102549,
+      "n": 100000
+    }
+  },
+  "smoothing": {
+    "static_raw": {
+      "rms_deg": 0.5559333617547698,
+      "p95_deg": 1.093982719482081,
+      "max_deg": 2.4659138201203383,
+      "n": 80000
+    },
+    "static_complementary": {
+      "rms_deg": 0.2732437935995956,
+      "p95_deg": 0.5286978070823071,
+      "max_deg": 1.0545951367696489,
+      "n": 80000
+    },
+    "static_circular_mean": {
+      "rms_deg": 0.271327485595546,
+      "p95_deg": 0.5314672475051655,
+      "max_deg": 1.1546837289131986,
+      "n": 80000
+    },
+    "rot_raw": {
+      "rms_deg": 0.5565638591503879,
+      "p95_deg": 1.0934057654688054,
+      "max_deg": 2.964451189014028,
+      "n": 80000
+    },
+    "rot_complementary_gyro": {
+      "rms_deg": 0.26801028422636797,
+      "p95_deg": 0.5268028018898662,
+      "max_deg": 1.0240499213334147,
+      "n": 80000
+    },
+    "rot_complementary_nogyro": {
+      "rms_deg": 11.424687585669485,
+      "p95_deg": 11.829937078881589,
+      "max_deg": 12.385340584788139,
+      "n": 80000
+    },
+    "rot_circular_mean": {
+      "rms_deg": 7.207546975445624,
+      "p95_deg": 7.62998195542396,
+      "max_deg": 8.198094379974123,
+      "n": 80000
+    }
+  },
+  "fit": {
+    "offset_err_uT_mean": 0.0026044241822042497,
+    "offset_err_uT_max": 0.005796996945773118,
+    "residual_rms_uT_mean": 0.015309708062354668
+  },
+  "env": {
+    "python": "3.13.5",
+    "numpy": "2.5.5"
+  },
+  "runtime_s": 40.5
+}

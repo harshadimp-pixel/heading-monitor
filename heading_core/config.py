@@ -32,5 +32,15 @@ class CoreConfig:
     max_dt_s: float = 1.0                        # gaps longer than this reset the filter
     noise_window: int = 20                       # samples used for innovation RMS (noise) estimate
     noise_warn_deg: float = 3.0                  # innovation RMS above which HIGH_NOISE is raised
+    # Frozen / stale data detection (D1). A channel is "frozen" while every axis of each new reading stays
+    # within tol of the reading that started the frozen run. Flag after stale_window_s AND stale_min_samples.
+    stale_detection: bool = True
+    stale_window_s: float = 0.5
+    stale_min_samples: int = 10
+    stale_mag_tol_uT: float = 1e-6               # "near-identical": far below RM3100 noise (15 nT)
+    stale_accel_tol_g: float = 1e-7
+    sensor_stale_quality_factor: float = 0.05    # all present channels frozen (sharp drop)
+    mag_stale_quality_factor: float = 0.3        # mag frozen, accel live (could be coarse mG quantisation)
+    timestamp_stale_quality_factor: float = 0.05
     uncalibrated_quality_factor: float = 0.5     # quality multiplier when NOT_CALIBRATED
     no_accel_quality_factor: float = 0.7         # quality multiplier when no tilt source

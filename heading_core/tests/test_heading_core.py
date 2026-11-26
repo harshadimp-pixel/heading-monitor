@@ -341,3 +341,87 @@ def test_filter_is_wrap_invariant():
         return [angle_diff_deg(e.update(sample(k * 0.02, wrap360(start + 0.5 * k)))["heading_deg"],
                                wrap360(start + 0.5 * k)) for k in range(80)]
     assert np.allclose(run(350), run(170), atol=1e-6)
+
+
+def test_d1_frozen_sensor_3s_flagged_and_recovers():
+    """D1: 3 s of bit-identical samples (mag + accel) at 50 Hz must warn and drop quality; then recover."""
+    from heading_core import WARN_SENSOR_STALE
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    s0 = sample(0.0, 45)
+    outs = [e.update(dict(s0, t=k * 0.02)) for k in range(150)]   # 3 s frozen
+    for o in outs:
+        validate(o)
+    assert WARN_SENSOR_STALE not in outs[10]["warnings"] and outs[10]["quality"] > 0.9  # < 0.5 s: not yet
+    first = next(k for k, o in enumerate(outs) if WARN_SENSOR_STALE in o["warnings"])
+    assert first * 0.02 == pytest.approx(0.5, abs=0.021)          # flagged at stale_window_s
+    assert all(WARN_SENSOR_STALE in o["warnings"] and o["quality"] <= 0.05 for o in outs[first:])
+    # live data again (tiny noise, like a real RM3100) -> warning clears and quality recovers at once
+    rng = np.random.default_rng(0)
+    rec = []
+    for k in range(150, 200):
+        s = sample(k * 0.02, 45)
+        s["mag_uT"] = (np.array(s["mag_uT"]) + rng.normal(0, 0.015, 3)).tolist()
+        s["accel_g"] = (np.array(s["accel_g"]) + rng.normal(0, 0.003, 3)).tolist()
+        rec.append(e.update(s))
+    assert WARN_SENSOR_STALE not in rec[0]["warnings"] and rec[0]["quality"] > 0.9
+    assert all(WARN_SENSOR_STALE not in o["warnings"] for o in rec)
+    assert abs(angle_diff_deg(rec[-1]["heading_deg"], 45)) < 0.5
+
+
+def test_frozen_mag_only_and_mag_without_accel():
+    from heading_core import WARN_MAG_STALE, WARN_SENSOR_STALE
+    rng = np.random.default_rng(1)
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    s0 = sample(0.0, 45)
+    for k in range(60):  # mag frozen, accel live -> MAG_STALE (milder drop)
+        s = dict(s0, t=k * 0.02, accel_g=(np.array(s0["accel_g"]) + rng.normal(0, 0.003, 3)).tolist())
+        o = e.update(s)
+    assert WARN_MAG_STALE in o["warnings"] and WARN_SENSOR_STALE not in o["warnings"] and o["quality"] <= 0.3
+    e2 = HeadingEstimator(Calibration(field_uT=50.0))
+    s1 = {k: v for k, v in s0.items() if k != "accel_g"}
+    for k in range(60):  # no accel channel: frozen mag alone is a frozen sensor
+        o = e2.update(dict(s1, t=k * 0.02))
+    assert WARN_SENSOR_STALE in o["warnings"]
+
+
+def test_near_identical_tolerance_and_disable():
+    from heading_core import WARN_SENSOR_STALE
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    s0 = sample(0.0, 45)
+    for k in range(60):  # 1e-9 uT jitter is "near-identical" -> still frozen
+        o = e.update(dict(s0, t=k * 0.02, mag_uT=(np.array(s0["mag_uT"]) + 1e-9 * (k % 2)).tolist()))
+    assert WARN_SENSOR_STALE in o["warnings"]
+    off = HeadingEstimator(Calibration(field_uT=50.0), config=CoreConfig(stale_detection=False))
+    assert all(WARN_SENSOR_STALE not in off.update(dict(s0, t=k * 0.02))["warnings"] for k in range(60))
+
+
+def test_timestamp_stale_and_restart():
+    from heading_core import WARN_TIMESTAMP_STALE
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    for k in range(20):
+        e.update(sample(k * 0.02, 120))
+    o = e.update(sample(0.38, 300))      # repeated timestamp: not used, held heading, low quality
+    validate(o)
+    assert WARN_TIMESTAMP_STALE in o["warnings"] and o["quality"] <= 0.05
+    assert o["heading_deg"] == pytest.approx(120)
+    o = e.update(sample(0.30, 300))      # small backwards step: stale too
+    assert WARN_TIMESTAMP_STALE in o["warnings"]
+    o = e.update(sample(0.40, 120))      # advances again -> recovers
+    assert WARN_TIMESTAMP_STALE not in o["warnings"] and o["quality"] > 0.9
+    for k in range(21, 100):
+        e.update(sample(k * 0.02, 120))
+    o = e.update(sample(0.0, 200))       # backwards jump > max_dt_s (1 s) = new stream: reset, not stale
+    assert WARN_TIMESTAMP_STALE not in o["warnings"] and o["heading_deg"] == pytest.approx(200)
+
+
+def test_accel_convention_matches_architecture():
+    """ARCHITECTURE.md: specific force, level & at rest reads (0, 0, -1) g in NED body frame."""
+    from heading_core.config import ACCEL_SPECIFIC_FORCE
+    assert CoreConfig().accel_convention == ACCEL_SPECIFIC_FORCE
+    assert np.allclose(body_accel(0, 0), [0, 0, -1])
+    assert roll_pitch_from_accel([0, 0, -1]) == pytest.approx((0, 0))
+    r, p = roll_pitch_from_accel(body_accel(10, 0))   # nose up 10 deg: x reads +sin(10) g
+    assert p == pytest.approx(10) and body_accel(10, 0)[0] == pytest.approx(math.sin(math.radians(10)))
+    # wrong sign (gravity convention fed as specific force) is made visible
+    o = HeadingEstimator(Calibration(field_uT=50.0)).update(sample(0, 30, accel_g=[0, 0, 1]))
+    assert WARN_TILT_TOO_LARGE in o["warnings"]

@@ -17,7 +17,8 @@ from .heading import (angle_diff_deg, heading_from_level, level_frame_field,
                       roll_pitch_from_accel, tilt_deg, wrap360)
 from .warnings_codes import (WARN_DIP_ANOMALY, WARN_FIELD_MAGNITUDE, WARN_HIGH_NOISE,
                              WARN_NO_ACCEL, WARN_NOT_CALIBRATED, WARN_TILT_TOO_LARGE,
-                             WARN_INVALID_MAG)
+                             WARN_INVALID_MAG, WARN_MAG_STALE, WARN_SENSOR_STALE,
+                             WARN_TIMESTAMP_STALE)
 
 
 def _lin_quality(dev: float, tol: float) -> float:
@@ -25,6 +26,25 @@ def _lin_quality(dev: float, tol: float) -> float:
     if tol <= 0:
         return 1.0
     return float(1.0 / (1.0 + (dev / tol) ** 2))
+
+
+class _FrozenTracker:
+    """Tracks how long a vector channel has stayed within tol (per axis) of the run's first value."""
+
+    def __init__(self):
+        self.ref = None
+        self.t0 = None
+        self.n = 0
+
+    def update(self, t: float, v: np.ndarray, tol: float, cfg) -> bool:
+        if not np.all(np.isfinite(v)):
+            self.ref, self.t0, self.n = None, None, 0
+            return False
+        if self.ref is None or np.max(np.abs(v - self.ref)) > tol:
+            self.ref, self.t0, self.n = v.copy(), t, 1  # data changed -> recover immediately
+            return False
+        self.n += 1
+        return (t - self.t0) >= cfg.stale_window_s and self.n >= cfg.stale_min_samples
 
 
 class HeadingEstimator:
@@ -51,6 +71,8 @@ class HeadingEstimator:
         self._t: float | None = None
         self._win: deque = deque(maxlen=max(1, self.config.window))
         self._innov: deque = deque(maxlen=max(2, self.config.noise_window))
+        self._frozen = {"mag": _FrozenTracker(), "accel": _FrozenTracker()}
+        self._t_last_seen: float | None = None
 
     def set_calibration(self, calibration: Calibration | None) -> None:
         self.calibration = calibration
@@ -68,6 +90,30 @@ class HeadingEstimator:
         t = float(sample["t"])
         m = np.asarray(sample["mag_uT"], dtype=float).reshape(3)
 
+        # 0. stale / frozen data (D1)
+        if self._t_last_seen is not None and t < self._t_last_seen - cfg.max_dt_s:
+            self.reset()  # large backward jump = new stream / replay restart, not staleness
+        ts_stale = self._t_last_seen is not None and not (t > self._t_last_seen)
+        if not ts_stale:
+            self._t_last_seen = t
+        stale_q = 1.0
+        if ts_stale:
+            warnings.append(WARN_TIMESTAMP_STALE)
+            stale_q *= cfg.timestamp_stale_quality_factor
+        if cfg.stale_detection and not ts_stale:
+            mag_frozen = self._frozen["mag"].update(t, m, cfg.stale_mag_tol_uT, cfg)
+            acc_raw = sample.get("accel_g")
+            if acc_raw is not None:
+                acc_frozen = self._frozen["accel"].update(t, np.asarray(acc_raw, dtype=float).reshape(3),
+                                                          cfg.stale_accel_tol_g, cfg)
+            else:
+                acc_frozen = True  # absent channel cannot contradict a frozen mag
+            if mag_frozen and acc_frozen:
+                warnings.append(WARN_SENSOR_STALE)
+                stale_q *= cfg.sensor_stale_quality_factor
+            elif mag_frozen:
+                warnings.append(WARN_MAG_STALE)
+                stale_q *= cfg.mag_stale_quality_factor
         mag_finite = bool(np.all(np.isfinite(m)))
         if not mag_finite:
             m = np.zeros(3)
@@ -141,6 +187,13 @@ class HeadingEstimator:
                     "pitch_deg": float(pitch), "field_uT": field if math.isfinite(field) else 0.0,
                     "calibrated": calibrated, "quality": q_out, "warnings": warnings}
         q_field = _lin_quality(field_dev, cfg.field_tolerance_frac)
+        if ts_stale and self._psi is not None:
+            # repeated / out-of-order timestamp: report held heading, leave filter state untouched
+            self.last_debug = {"timestamp_stale": True}
+            return {"t": t, "source": sample["source"], "heading_deg": wrap360(self._psi),
+                    "heading_raw_deg": wrap360(psi_raw), "roll_deg": float(roll), "pitch_deg": float(pitch),
+                    "field_uT": field, "calibrated": calibrated,
+                    "quality": float(min(1.0, max(0.0, q_field * stale_q))), "warnings": warnings}
         dt = None if self._t is None else t - self._t
         if dt is not None and (dt <= 0 or dt > cfg.max_dt_s):
             self.reset()
@@ -187,6 +240,7 @@ class HeadingEstimator:
             q *= cfg.uncalibrated_quality_factor
         if not have_tilt:
             q *= cfg.no_accel_quality_factor
+        q *= stale_q
         q = float(min(1.0, max(0.0, q)))
 
         self.last_debug = {"field_vec_uT": b.tolist(), "raw_mag_uT": m.tolist(), "dip_deg": dip,
