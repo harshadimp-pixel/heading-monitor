@@ -16,7 +16,7 @@ def main(argv=None):
     ap.add_argument("--source", default="sim",
                     help="sim[:scenario] | replay:<file.jsonl> | serial:<port> | ingest (default: sim)")
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--port", type=int, default=8080, help="TCP port (default 8080; 0 = OS-assigned ephemeral port)")
     ap.add_argument("--rate", type=float, default=20.0, help="sim sample rate in Hz (default 20)")
     ap.add_argument("--seed", type=int, default=None, help="sim seed")
     ap.add_argument("--baud", type=int, default=115200, help="serial baud for firmware_bridge")
@@ -44,7 +44,8 @@ def main(argv=None):
         ap.error(str(e))
     httpd = serve(hub, a.host, a.port)
     src.start()
-    logging.info("Heading monitor UI on http://%s:%d  (source %s)", a.host, a.port, a.source)
+    port = httpd.server_address[1]  # actual port (OS-assigned when --port 0)
+    logging.info("Heading monitor UI on http://%s:%d  (source %s)", a.host, port, a.source)
     signal.signal(signal.SIGTERM, lambda *_: (src.stop(), sys.exit(0)))
     try:
         httpd.serve_forever()

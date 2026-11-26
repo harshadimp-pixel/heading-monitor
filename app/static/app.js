@@ -6,7 +6,11 @@ const $ = (id) => document.getElementById(id);
 const MAX_RECORDS = 6000;
 const UNKNOWN = "Unknown";
 
-const S = { records: [], status: null, statusAt: 0, connected: false, lastMsgAt: 0, dirty: true, lastTable: 0 };
+const S = { records: [], status: null, statusAt: 0, connected: false, lastMsgAt: 0, dirty: true, lastTable: 0,
+            messages: 0, renders: 0, renderedSeq: 0 };
+// Read-only readiness probe for automated UI tests: how many WS messages arrived and which sample seq was last rendered.
+window.__hmProbe = () => ({ connected: S.connected, messages: S.messages, records: S.records.length,
+  latestSeq: S.records.length ? S.records[S.records.length - 1].seq : 0, renderedSeq: S.renderedSeq, renders: S.renders });
 
 // ---------------------------------------------------------------- math helpers (mirrored in tests)
 const { wrap360, angleDiff, roundHeading, cardinal, isNum, badgeLabel } = window.HeadingMath;
@@ -30,7 +34,7 @@ function sampleAge() {
 function staleAfter() { return (S.status && S.status.stale_after_s) || 2; }
 function isFresh() {
   const age = sampleAge();
-  return S.connected && (Date.now() - S.lastMsgAt) < 3000 && age !== null && age <= staleAfter();
+  return S.connected && (Date.now() - S.lastMsgAt) < Math.max(3000, staleAfter() * 1000 + 1000) && age !== null && age <= staleAfter();
 }
 function latest() { return S.records.length ? S.records[S.records.length - 1] : null; }
 
@@ -42,7 +46,7 @@ function connect() {
   ws.onerror = () => ws.close();
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
-    S.lastMsgAt = Date.now();
+    S.lastMsgAt = Date.now(); S.messages++;
     if (m.status) { S.status = m.status; S.statusAt = Date.now(); }
     if (m.type === "hello") S.records = m.records || [];
     else if (m.records && m.records.length) {
@@ -229,7 +233,8 @@ function render() {
   C.center.textContent = isNum(h) ? "" : "heading unknown";
 
   // status
-  const sensor = !S.connected ? "UNKNOWN" : (st ? st.sensor_status : "UNKNOWN");
+  let sensor = !S.connected ? "UNKNOWN" : (st ? st.sensor_status : "UNKNOWN");
+  if (S.connected && st && r && !isFresh() && (sensor === "OK" || sensor === "DEGRADED")) sensor = "STALE";  // never show a stale OK
   const pill = $("sensorStatus");
   pill.textContent = sensor === "UNKNOWN" ? UNKNOWN : sensor;
   pill.className = "pill " + sensor.toLowerCase().replace(/\s/g, "");
@@ -260,11 +265,16 @@ function render() {
   drawHorizon(roll, pitch);
   setVal("rollValue", fmtNum(roll, 1, "°")); setVal("pitchValue", fmtNum(pitch, 1, "°"));
 
-  // GPS availability: status only (Sample contract has no GPS fields -> Unknown)
-  const gps = st && S.connected ? st.gps.status : "unknown";
+  // GPS availability: status only, from the optional sample.gps object {fix, num_sat, hdop}; never coordinates
+  const g = st && S.connected && fresh ? st.gps : null;
+  const gps = g ? g.status : "unknown";
   const gp = $("gpsStatus"); gp.textContent = gps === "available" ? "Available" : gps === "unavailable" ? "Unavailable" : UNKNOWN;
   gp.className = "pill " + (gps === "available" ? "ok" : gps === "unavailable" ? "fault" : "unknown");
-  if (st) $("gpsNote").textContent = "This app shows heading only. Heading is orientation, not movement or position. " + st.gps.note;
+  setVal("gpsFix", g && g.fix && g.fix !== "unknown" ? (g.fix === "none" ? "No fix" : g.fix.toUpperCase()) : UNKNOWN);
+  setVal("gpsSats", g && isNum(g.num_sat) ? String(g.num_sat) : UNKNOWN);
+  setVal("gpsHdop", g && isNum(g.hdop) ? g.hdop.toFixed(1) : UNKNOWN);
+  if (st) $("gpsNote").textContent = "This app shows heading only. Heading is orientation, not movement or position. " +
+    st.gps.note + (g && g.error ? " Last gps object was invalid: " + g.error : "");
 
   // field
   const mag = fresh ? r.mag_uT : null;
@@ -291,6 +301,7 @@ function render() {
 
   renderTable();
   renderPanels();
+  S.renders++; S.renderedSeq = r ? r.seq : 0;
   requestAnimationFrame(render);
 }
 
@@ -303,9 +314,9 @@ function renderTable() {
       cell(x.heading_raw_deg, (v) => roundHeading(v).toFixed(1)) + cell(x.reference_deg, (v) => v.toFixed(1)) +
       cell(x.deviation_deg, (v) => v.toFixed(1)) + cell(m[0], (v) => v.toFixed(2)) + cell(m[1], (v) => v.toFixed(2)) +
       cell(m[2], (v) => v.toFixed(2)) + cell(x.field_raw_uT, (v) => v.toFixed(2)) + cell(x.quality, (v) => v.toFixed(2)) +
-      `<td>${x.sensor_status}</td></tr>`;
+      `<td>${x.sensor_status}</td>` + (x.gps_fix && x.gps_fix !== "unknown" ? `<td>${x.gps_fix}</td>` : `<td class="unk">${UNKNOWN}</td>`) + `</tr>`;
   });
-  $("samplesTable").tBodies[0].innerHTML = rows.join("") || `<tr><td colspan="12" class="unk">No samples received</td></tr>`;
+  $("samplesTable").tBodies[0].innerHTML = rows.join("") || `<tr><td colspan="13" class="unk">No samples received</td></tr>`;
 }
 
 function fmtCal(c) {

@@ -15,7 +15,7 @@ python -m app --source ingest                  # accept Samples POSTed to /api/s
 # open http://localhost:8080
 ```
 
-Other options: `--port 8080 --host 127.0.0.1 --rate 20 --seed N --declination DEG --stale 2 --calibration file.json -v`.
+Other options: `--port 8080` (`--port 0` = OS-assigned ephemeral port, printed in the start-up log), `--host 127.0.0.1 --rate 20 --seed N --declination DEG --stale 2 --calibration file.json -v`.
 With `--declination 0` (default) every heading is **magnetic**. A non-zero declination is passed to heading_core,
 and the UI then labels headings as true.
 
@@ -71,7 +71,7 @@ python -m pytest app/tests -q
 | Heading | SVG compass rose: ticks every 10°, numbers every 30°, N/E/S/W. It has three distinct indicators: measured (calibrated) needle in cyan, raw needle in grey, reference marker as an amber dashed line with a rim triangle. Below it: numeric calibrated and raw heading with a 16-point cardinal; a reference heading input with slider, "use current", clear, or click on the rose; and the signed deviation (measured − reference) wrapped to (−180, 180]. |
 | Sensor status & accuracy | Status: OK / DEGRADED / FAULT / STALE / NO DATA, with the reason. Also: last-sample age, rate, accepted/invalid counts, heading_core quality (0–1) with quality bar, short-term noise 1σ, calibration state and residual, error versus sim truth (simulated data only), and warnings. |
 | Roll / pitch | Artificial-horizon canvas plus numbers, taken from the HeadingEstimate. |
-| GPS availability (status only) | A single read-only indicator: Available / Unavailable / **Unknown**. It is always Unknown today because the Sample contract has no GPS field. There are no coordinates, map, speed, course or distance anywhere in the app. |
+| GPS availability (status only) | A read-only indicator driven only by the optional `sample.gps` object `{fix, num_sat, hdop}`. It shows Available (2d/3d fix), Unavailable (fix `none`) or **Unknown** (gps absent, fix `unknown`, invalid gps object, or stale data), plus Fix, Satellites and HDOP, each Unknown when not reported. There are no coordinates, map, speed, course or distance anywhere in the app. |
 | Magnetic field | Bx/By/Bz (µT, body frame), raw and calibrated \|B\|, and a time plot of the 3 axes plus \|B\|. `mag_raw` (RM3100 counts) is **optional**: it is shown when a sample carries it, otherwise it reads Unknown. The CAN-L4-3100 / DroneCAN stream never carries it. |
 | Heading history | Time plot of measured, raw, reference and sim truth (30 s – 5 min), with gaps where data is missing. Below it, a table of the last 20 samples. |
 | Calibration wizard | Start/stop collecting, live coverage (12 yaw bins, 8 axis-sign octants), **Fit** (heading_core `Calibration.fit`), review the parameters, Apply / Remove, Save JSON (`app/calibrations/`), Download, Load a saved file, Upload JSON. A bad file keeps the previous calibration. |
@@ -84,21 +84,22 @@ magnetic north (true north only if a declination is configured). It comes from t
 tilt-compensated with the accelerometer. Heading is orientation, not movement or position. A vehicle can point one
 way and travel another (wind, drift, reversing). The app has no position, coordinate, map, speed, course or
 distance features (PM decision, 2026-11-27). It keeps only one GPS availability status indicator, because the
-owner asked for GPS availability, and that indicator shows Unknown when not reported.
+owner asked for GPS availability. It is fed only by `sample.gps` {fix, num_sat, hdop} and shows Unknown when not reported.
 
 ### Unknown / stale rules
 * A value that was not measured, not reported, or is older than **2 s** (default; `--stale S`) is shown as **Unknown**,
   never as 0. When a stale value exists, the last value is shown in a separate "STALE: last value … at hh:mm:ss
   (not current)" line, and the badge switches to NO DATA.
 * A lost WebSocket connection also makes everything Unknown.
-* CSV: an empty cell means unknown or not reported. `gps_status` is the literal `unknown`.
+* CSV: an empty cell means unknown or not reported. `gps_status` is `available` / `unavailable` / `unknown`.
 
 ## Data interfaces
 
 ### Sample in (contracts/sample.schema.json, unchanged)
 Required: `t` (s, monotonic), `source` (`sim|replay|hardware`), `mag_uT` [3]. Optional: `accel_g`, `gyro_dps`,
-`mag_raw` (3 ints, **absent on the CAN-L4-3100 hardware stream**; validated only if present), `rm3100_cycle_count`, `fc_attitude_deg`, `truth` (sim only), `meta`. Invalid samples are counted and
-rejected (missing fields, wrong source enum, non-finite vectors).
+`mag_raw` (3 ints, **absent on the CAN-L4-3100 hardware stream**; validated only if present), `rm3100_cycle_count`, `fc_attitude_deg`, `truth` (sim only), `meta`, `gps` {fix: none|2d|3d|unknown, num_sat ≥ 0 int, hdop ≥ 0}. Invalid samples are counted and
+rejected (missing fields, wrong source enum, non-finite vectors). An invalid `gps` object does **not** reject the heading
+sample: GPS is shown as Unknown, `counts.gps_invalid` is incremented and the error is shown in the UI.
 
 `POST /api/sample` (only with `--source ingest`) takes one Sample or a JSON array of Samples.
 It returns 200 `{"ok":true,"accepted":n}`, 422 with per-sample errors, or 409 if the app is not in ingest mode.
@@ -112,7 +113,7 @@ curl -X POST localhost:8080/api/sample -H 'Content-Type: application/json' \
   (status plus new records). Record fields: `seq, recv_ms, recv_time_iso, t, source, mag_uT, accel_g,
   field_raw_uT, heading_deg, heading_raw_deg, roll_deg, pitch_deg, field_uT, calibrated, quality, warnings,
   noise_1sigma_deg, reference_deg, deviation_deg, truth_heading_deg, sim_error_deg, sensor_status,
-  estimator_backend, error, gps_status, mag_raw, rm3100_cycle_count`. `null` means unknown.
+  estimator_backend, error, gps_status, gps_fix, gps_num_sat, gps_hdop, gps_error, mag_raw, rm3100_cycle_count`. `null` means unknown.
 * `GET /api/health` (liveness), `GET /api/status`, `GET /api/history?since=<seq>`, `GET /api/export.csv`.
 * `POST /api/reference {"deg": number|null}`, `POST /api/control {"paused": bool} | {"dropout_s": n}`.
 * `POST /api/calib/{start,stop,fit,apply,clear,save,load}`, `GET /api/calib/{list,current}`.
@@ -120,28 +121,44 @@ curl -X POST localhost:8080/api/sample -H 'Content-Type: application/json' \
 
 CSV columns: `recv_time_iso, t, source, heading_deg, heading_raw_deg, reference_deg, deviation_deg, roll_deg,
 pitch_deg, bx_uT, by_uT, bz_uT, field_raw_uT, field_cal_uT, calibrated, quality, noise_1sigma_deg, warnings,
-sensor_status, estimator_backend, truth_heading_deg_sim_only, gps_status, mag_raw_x, mag_raw_y, mag_raw_z`
+sensor_status, estimator_backend, truth_heading_deg_sim_only, gps_status, gps_fix, gps_num_sat, gps_hdop, mag_raw_x, mag_raw_y, mag_raw_z`
 (the `mag_raw_*` cells are empty when the sample has no raw counts).
 
 ## Tests (run 2026-11-27, real results)
-`python -m pytest app/tests -v` gives **40 passed** in about 10 s (Python 3.13.5, pytest 9.2.0, Node 24 for the JS
-mapping tests, google-chrome headless for the DOM test). The headless smoke tests need no browser:
-* start-up on a free port, `GET /` and `GET /api/health` (`test_sim_source_serves_ui_and_streams`)
+`python -m pytest app/tests -v` gives **44 passed**, about 17 s per run. Three consecutive full runs passed (44/44
+each). `app/tests/test_app_ui_headless.py` passed 10 consecutive times (3/3 each, about 4 s). The auditor's
+`tests/test_t6_app.py` and `tests/test_t6_claims.py` give 14 passed.
+Environment: Python 3.13.5, pytest 9.2.0, Node 24 for the JS mapping tests, google-chrome headless for the 3 DOM tests.
+Every test starts its own app with `--port 0` (OS-assigned ephemeral port, read back from the start-up log line), never 8080.
+The headless smoke tests need no browser:
+* start-up, `GET /` and `GET /api/health` (`test_sim_source_serves_ui_and_streams`)
 * samples from the real sim over WebSocket (`test_sim_source_serves_ui_and_streams`, `test_badge_matches_sim_source_over_websocket`)
 * the badge equals `sample.source` for every pushed record in a mixed sim/replay/hardware sequence, checked on the
   server payload and through the frontend `badgeLabel` mapping run in Node
   (`test_badge_always_equals_sample_source_for_every_pushed_record`)
 * calibration fit → apply → save → clear → load (by name and by uploaded JSON), with an exact JSON round-trip
   (`test_calibration_wizard_fit_apply_save_load`)
+* GPS availability: absent → Unknown, present → fix/satellites/HDOP passed through, invalid → heading kept and GPS
+  Unknown, stale → Unknown, plus CSV columns and CSV/JSONL recordings (`test_gps_availability_absent_present_invalid`,
+  `test_gps_in_recordings`); rendered values in headless Chrome (`test_gps_indicator_renders_fix_sats_hdop`)
 * `mag_raw` optional (`test_mag_raw_is_optional`), Unknown/stale (`test_ingest_unknown_until_data_then_stale_...`),
   replay + CSV export, JSONL recording, serial without hardware gives FAULT with no fabricated data, heading maths and
   wrap/deviation, stub fallback versus real-module errors.
 
+The headless-Chrome DOM tests are deterministic:
+* Chrome is driven over the DevTools protocol (stdlib only, `app/tests/_cdp.py`) on the **real clock**. There is no
+  `--virtual-time-budget` fast-forward. That fast-forward had made data look stale and caused an occasional
+  NO DATA failure.
+* Each test waits, with a bounded timeout of 15 s, until `window.__hmProbe().renderedSeq` reaches the seq of a specific
+  sample. It then reads the DOM once and asserts. The retry/wait covers readiness only, never the assertions.
+* A third DOM test checks that stale data renders Unknown and NO DATA (`--stale 1`).
+
 ## LIMITATIONS
 0. **Heading only (PM decision 2026-11-27).** Position, coordinates, map, speed, course-over-ground and distance
-   features were removed. Only a read-only GPS availability indicator remains, and it is always Unknown because the
-   Sample contract has no GPS field. Wiring it needs a PM-approved optional field (e.g. `gps_fix`). No fields were
-   invented.
+   features were removed. Only a read-only GPS availability indicator remains. It is wired to the optional
+   `sample.gps` object {fix, num_sat, hdop} (PM decision, commit 9d0552f). The contract has no coordinates and the app
+   shows none. Neither the T3 sim nor any other current source emits `gps`, so in normal runs the indicator reads
+   Unknown. The app does not fake GPS data. MSP_RAW_GPS wiring in firmware_bridge is T4 scope and untested here.
 1. **`mag_raw` is optional.** The real hardware is a Matek CAN-L4-3100 (RM3100 behind AP_Periph, DroneCAN), whose
    stream carries scaled field, not raw counts. The app works without `mag_raw`, shows it only when present, and rejects
    malformed values (422) rather than crashing.
@@ -149,9 +166,10 @@ mapping tests, google-chrome headless for the DOM test). The headless smoke test
    remove a constant turn rate; precision only), and calibration residual. Error versus truth exists only for
    simulated data. Real absolute accuracy needs an independent reference and is Unknown.
    Nothing here is hardware-verified.
-3. **Serial path untested against hardware.** `serial:` runs `python -m firmware_bridge --port P --baud B` (T4,
+3. **Serial path never run against a real FC.** `serial:` runs `python -m firmware_bridge --port P --baud B` (T4,
    CLI verified compatible via `--help`). It has only been exercised with a non-existent port, where it reports FAULT and no data. It
-   has not been run against a real bridge, FC or CAN-L4-3100. Everything here is virtual.
+   has never been run against a real flight controller, a live firmware_bridge session or the CAN-L4-3100.
+   Everything here is virtual.
 4. **Replay keeps the original `source`.** A JSONL file recorded from the simulator still says `source:"sim"`, so the
    badge shows SIMULATED while the transport line shows `replay`. This follows the "badge from sample.source only"
    rule. A replayer that rewrites `source` to `replay` belongs in T3/T4/PM scope.

@@ -53,6 +53,42 @@ def validate_sample(s) -> str | None:
     return None
 
 
+GPS_FIX_VALUES = ("none", "2d", "3d", "unknown")
+
+
+def parse_gps(g):
+    """Optional `gps` object {fix, num_sat, hdop} (availability only, no coordinates).
+    Returns (gps_dict_or_None, error_or_None). An invalid gps object never invalidates the
+    heading sample: the caller treats GPS as Unknown and reports the error."""
+    if g is None:
+        return None, None
+    if not isinstance(g, dict):
+        return None, "gps must be an object"
+    out = {}
+    fix = g.get("fix")
+    if fix is not None:
+        if fix not in GPS_FIX_VALUES:
+            return None, f"gps.fix must be one of {GPS_FIX_VALUES}"
+        out["fix"] = fix
+    ns = g.get("num_sat")
+    if ns is not None:
+        if not isinstance(ns, int) or isinstance(ns, bool) or ns < 0:
+            return None, "gps.num_sat must be a non-negative integer"
+        out["num_sat"] = ns
+    hd = g.get("hdop")
+    if hd is not None:
+        if not isinstance(hd, (int, float)) or isinstance(hd, bool) or not math.isfinite(hd) or hd < 0:
+            return None, "gps.hdop must be a finite non-negative number"
+        out["hdop"] = float(hd)
+    return out, None
+
+
+def gps_status(gps):
+    """available (2d/3d fix) / unavailable (fix none) / unknown (absent, invalid or fix unknown)."""
+    fix = (gps or {}).get("fix")
+    return "available" if fix in ("2d", "3d") else "unavailable" if fix == "none" else "unknown"
+
+
 def _module_available(name: str) -> bool:
     try:
         return importlib.util.find_spec(name + ".__main__") is not None

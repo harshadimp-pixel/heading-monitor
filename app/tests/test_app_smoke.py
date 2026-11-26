@@ -235,3 +235,62 @@ def test_mag_raw_is_optional():
         assert post_json(base + "/api/sample", dict(sample(0.2, 0), mag_raw=[1.5, 2, 3]))[0] == 422
         rows = list(csv.DictReader(io.StringIO(urllib.request.urlopen(base + "/api/export.csv").read().decode())))
         assert rows[0]["mag_raw_x"] == "" and rows[1]["mag_raw_x"] == "1950"
+
+
+def test_gps_availability_absent_present_invalid():
+    """Optional sample.gps {fix, num_sat, hdop}: absent -> unknown; present -> passed through;
+    invalid -> heading sample still accepted, GPS shown as unknown, error reported. No coordinates ever."""
+    with run_app("--source", "ingest") as (base, port):
+        assert get_json(base + "/api/status")["gps"]["status"] == "unknown"          # no data at all
+        assert post_json(base + "/api/sample", sample(0.0, 10.0))[0] == 200            # gps absent
+        g = get_json(base + "/api/status")["gps"]
+        assert g["status"] == "unknown" and g["fix"] is None and g["num_sat"] is None and g["hdop"] is None
+        s = dict(sample(0.1, 10.0), gps={"fix": "3d", "num_sat": 11, "hdop": 0.8})
+        assert post_json(base + "/api/sample", s)[0] == 200
+        g = get_json(base + "/api/status")["gps"]
+        assert (g["status"], g["fix"], g["num_sat"], g["hdop"]) == ("available", "3d", 11, 0.8)
+        s = dict(sample(0.2, 10.0), gps={"fix": "none", "num_sat": 0})
+        post_json(base + "/api/sample", s)
+        g = get_json(base + "/api/status")["gps"]
+        assert (g["status"], g["fix"], g["num_sat"], g["hdop"]) == ("unavailable", "none", 0, None)
+        post_json(base + "/api/sample", dict(sample(0.3, 10.0), gps={"fix": "unknown", "num_sat": 4}))
+        assert get_json(base + "/api/status")["gps"]["status"] == "unknown"
+        for bad in ({"fix": "rtk"}, {"num_sat": -1}, {"num_sat": 3.5}, {"hdop": "x"}, "3d", [1]):
+            code, j = post_json(base + "/api/sample", dict(sample(0.4, 20.0), gps=bad))
+            assert code == 200, (bad, j)                       # heading sample still accepted
+            st = get_json(base + "/api/status")
+            assert st["gps"]["status"] == "unknown" and st["gps"]["error"], bad
+            assert "gps" in st["last_error"]
+            rec = get_json(base + "/api/history")["records"][-1]
+            assert rec["heading_deg"] is not None and rec["gps_status"] == "unknown"
+        assert get_json(base + "/api/status")["counts"]["gps_invalid"] == 6
+        rows = list(csv.DictReader(io.StringIO(urllib.request.urlopen(base + "/api/export.csv").read().decode())))
+        assert [r["gps_status"] for r in rows[:4]] == ["unknown", "available", "unavailable", "unknown"]
+        assert (rows[1]["gps_fix"], rows[1]["gps_num_sat"], rows[1]["gps_hdop"]) == ("3d", "11", "0.8")
+        assert rows[0]["gps_fix"] == "" and rows[0]["gps_num_sat"] == "" and rows[0]["gps_hdop"] == ""
+        for banned in ("lat", "lon", "speed", "course", "distance", "position"):
+            assert not any(banned in c for c in rows[0])
+        time.sleep(2.4)                                        # stale -> GPS also Unknown
+        assert get_json(base + "/api/status")["gps"]["status"] == "unknown"
+
+
+def test_gps_in_recordings():
+    from app.hub import RECORDINGS_DIR
+    with run_app("--source", "ingest") as (base, port):
+        names = []
+        for fmt in ("csv", "jsonl"):
+            names.append(post_json(base + "/api/record/start", {"format": fmt})[1]["file"])
+            post_json(base + "/api/sample", [dict(sample(0.1, 5), gps={"fix": "2d", "num_sat": 6, "hdop": 1.7}),
+                                             sample(0.2, 6)])
+            post_json(base + "/api/record/stop", {})
+            time.sleep(1.1)                                    # recording names are per-second
+        csv_txt = urllib.request.urlopen(f"{base}/recordings/{names[0]}").read().decode()
+        jsonl = urllib.request.urlopen(f"{base}/recordings/{names[1]}").read().decode().splitlines()
+        for n in names:
+            os.unlink(os.path.join(RECORDINGS_DIR, n))
+    rows = list(csv.DictReader(io.StringIO(csv_txt)))
+    assert (rows[0]["gps_status"], rows[0]["gps_fix"], rows[0]["gps_num_sat"], rows[0]["gps_hdop"]) == \
+        ("available", "2d", "6", "1.7")
+    assert rows[1]["gps_status"] == "unknown" and rows[1]["gps_fix"] == ""
+    assert json.loads(jsonl[0])["gps"] == {"fix": "2d", "num_sat": 6, "hdop": 1.7}
+    assert "gps" not in json.loads(jsonl[1])

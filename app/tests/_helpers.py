@@ -1,5 +1,7 @@
 """Shared helpers for app tests: start the app on a free port, talk WebSocket with raw sockets."""
 import base64
+import re
+import threading
 import contextlib
 import json
 import os
@@ -13,28 +15,33 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def free_port():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 @contextlib.contextmanager
 def run_app(*args, wait_for=None, timeout=10.0):
-    port = free_port()
-    p = subprocess.Popen([sys.executable, "-m", "app", "--port", str(port), *args], cwd=ROOT,
+    """Start `python -m app --port 0` (OS-assigned ephemeral port, never 8080) and yield (base_url, port).
+    The real port is read from the app's start-up log line."""
+    p = subprocess.Popen([sys.executable, "-m", "app", "--port", "0", *args], cwd=ROOT,
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    base = f"http://127.0.0.1:{port}"
+    log = []
+    port_box = []
+    got_port = threading.Event()
+
+    def reader():
+        for line in p.stdout:
+            log.append(line)
+            m = re.search(r"Heading monitor UI on http://[^:]+:(\d+)", line)
+            if m and not port_box:
+                port_box.append(int(m.group(1)))
+                got_port.set()
+        got_port.set()
+
+    threading.Thread(target=reader, daemon=True).start()
     try:
-        t0 = time.time()
-        while True:
-            try:
-                urllib.request.urlopen(base + "/api/status", timeout=1).read()
-                break
-            except Exception:
-                if p.poll() is not None or time.time() - t0 > timeout:
-                    raise RuntimeError("app did not start:\n" + (p.stdout.read() if p.poll() is not None else ""))
-                time.sleep(0.2)
+        if not got_port.wait(timeout) or not port_box:
+            raise RuntimeError("app did not report its port:\n" + "".join(log))
+        port = port_box[0]
+        assert port != 8080
+        base = f"http://127.0.0.1:{port}"
+        wait_until(lambda: _alive(base), timeout)
         if wait_for:
             wait_until(lambda: wait_for(get_json(base + "/api/status")), timeout)
         yield base, port
@@ -44,6 +51,14 @@ def run_app(*args, wait_for=None, timeout=10.0):
             p.wait(5)
         except subprocess.TimeoutExpired:
             p.kill()
+
+
+def _alive(base):
+    try:
+        urllib.request.urlopen(base + "/api/health", timeout=1).read()
+        return True
+    except Exception:
+        return False
 
 
 def wait_until(pred, timeout=10.0, step=0.2):

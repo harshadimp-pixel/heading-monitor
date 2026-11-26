@@ -15,7 +15,7 @@ import threading
 import time
 
 from .core_adapter import CoreAdapter
-from .sources import validate_sample
+from .sources import gps_status, parse_gps, validate_sample
 from ._stubs import angle_diff_deg, wrap360
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,14 +25,14 @@ STALE_AFTER_S = 2.0
 HISTORY_LEN = 6000
 DEGRADING_WARNINGS = {"FIELD_MAGNITUDE_OUT_OF_RANGE", "TILT_TOO_LARGE", "DIP_ANGLE_ANOMALY",
                       "HIGH_NOISE"}
-GPS_NOTE = ("The Sample contract has no GPS fields, so GPS availability is Unknown. "
-            "Nothing is inferred from heading.")
+GPS_NOTE = ("GPS availability comes only from the optional sample.gps object (fix, satellites, HDOP). "
+            "Absent or unknown fix is shown as Unknown. No coordinates are used, and nothing is inferred from heading.")
 
 CSV_COLUMNS = ["recv_time_iso", "t", "source", "heading_deg", "heading_raw_deg", "reference_deg",
                "deviation_deg", "roll_deg", "pitch_deg", "bx_uT", "by_uT", "bz_uT",
                "field_raw_uT", "field_cal_uT", "calibrated", "quality", "noise_1sigma_deg",
                "warnings", "sensor_status", "estimator_backend", "truth_heading_deg_sim_only",
-               "gps_status", "mag_raw_x", "mag_raw_y", "mag_raw_z"]
+               "gps_status", "gps_fix", "gps_num_sat", "gps_hdop", "mag_raw_x", "mag_raw_y", "mag_raw_z"]
 
 
 def _iso(ms: float) -> str:
@@ -44,7 +44,7 @@ def _num(v, nd=3):
 
 
 def record_to_row(r: dict) -> list:
-    """CSV row. Empty cell = unknown / not reported. gps_status is the literal 'unknown'."""
+    """CSV row. Empty cell = unknown / not reported. gps_status is available|unavailable|unknown."""
     mag = r.get("mag_uT") or [None] * 3
     raw = r.get("mag_raw") if isinstance(r.get("mag_raw"), list) else ["", "", ""]   # optional
     return [r["recv_time_iso"], r.get("t"), r.get("source"), _num(r.get("heading_deg")),
@@ -54,7 +54,8 @@ def record_to_row(r: dict) -> list:
             _num(r.get("field_uT")), "" if r.get("calibrated") is None else str(r["calibrated"]).lower(),
             _num(r.get("quality")), _num(r.get("noise_1sigma_deg")),
             ";".join(r.get("warnings") or []), r.get("sensor_status", ""), r.get("estimator_backend", ""),
-            _num(r.get("truth_heading_deg")), r.get("gps_status", "unknown"), *raw]
+            _num(r.get("truth_heading_deg")), r.get("gps_status", "unknown"),
+            r.get("gps_fix") or "", _num(r.get("gps_num_sat")), _num(r.get("gps_hdop")), *raw]
 
 
 def safe_name(name: str, ext: str) -> str:
@@ -74,7 +75,8 @@ class Hub:
         self.last_recv_mono = None
         self.recv_times = collections.deque(maxlen=400)
         self.headings = collections.deque(maxlen=40)
-        self.counts = {"received": 0, "accepted": 0, "invalid": 0, "dropped_by_test_control": 0}
+        self.counts = {"received": 0, "accepted": 0, "invalid": 0, "dropped_by_test_control": 0,
+                       "gps_invalid": 0}
         self.last_error = None
         self.source_status = {"transport": source_spec.split(":")[0], "state": "starting"}
         self.reference_deg = None
@@ -144,7 +146,15 @@ class Hub:
              "field_raw_uT": math.sqrt(sum(v * v for v in mag)),
              "estimator_backend": backend, "error": est_err,
              "truth_heading_deg": (s.get("truth") or {}).get("heading_deg") if s["source"] == "sim" else None,
-             "gps_status": "unknown"}
+             "gps_status": "unknown", "gps_fix": None, "gps_num_sat": None, "gps_hdop": None}
+        gps, gps_err = parse_gps(s.get("gps"))
+        if gps_err:
+            r["gps_error"] = gps_err
+            self.counts["gps_invalid"] = self.counts.get("gps_invalid", 0) + 1
+            self.last_error = f"invalid gps object ignored (GPS shown as Unknown): {gps_err}"
+        elif gps:
+            r.update(gps_status=gps_status(gps), gps_fix=gps.get("fix"), gps_num_sat=gps.get("num_sat"),
+                     gps_hdop=gps.get("hdop"))
         if est:
             for k in ("heading_deg", "heading_raw_deg", "roll_deg", "pitch_deg", "field_uT",
                       "calibrated", "quality", "warnings"):
@@ -301,6 +311,13 @@ class Hub:
         with self.lock:
             return [r for r in self.history if r["seq"] > seq][-limit:]
 
+    def _gps_status(self, age):
+        r = self.latest
+        if r is None or age is None or age > self.stale_after_s:
+            return {"status": "unknown", "fix": None, "num_sat": None, "hdop": None, "note": GPS_NOTE}
+        return {"status": r["gps_status"], "fix": r.get("gps_fix"), "num_sat": r.get("gps_num_sat"),
+                "hdop": r.get("gps_hdop"), "error": r.get("gps_error"), "note": GPS_NOTE}
+
     def status(self):
         with self.lock:
             now = time.monotonic()
@@ -339,7 +356,7 @@ class Hub:
                 "dropout_remaining_s": max(0.0, self.dropout_until - now),
                 "counts": dict(self.counts),
                 "last_error": self.last_error,
-                "gps": {"status": "unknown", "note": GPS_NOTE},
+                "gps": self._gps_status(age),
             }
 
 

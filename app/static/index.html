@@ -102,6 +102,9 @@
   <section class="panel unknown-panel" id="panelGps">
     <h2>GPS availability <span class="tag gps">status only</span></h2>
     <div class="kv"><span>GPS</span><b id="gpsStatus" class="pill unknown">Unknown</b></div>
+    <div class="kv"><span>Fix</span><b id="gpsFix" class="unk">Unknown</b></div>
+    <div class="kv"><span>Satellites</span><b id="gpsSats" class="unk">Unknown</b></div>
+    <div class="kv"><span>HDOP</span><b id="gpsHdop" class="unk">Unknown</b></div>
     <p class="note" id="gpsNote">This app shows heading only. Heading is orientation, not movement or position.</p>
   </section>
 
@@ -134,7 +137,7 @@
     <div class="table-wrap">
       <table id="samplesTable">
         <thead><tr><th>Time (local)</th><th>Source</th><th>Heading °</th><th>Raw °</th><th>Ref °</th><th>Dev °</th>
-          <th>Bx</th><th>By</th><th>Bz</th><th>|B|</th><th>Quality</th><th>Status</th></tr></thead>
+          <th>Bx</th><th>By</th><th>Bz</th><th>|B|</th><th>Quality</th><th>Status</th><th>GPS fix</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
