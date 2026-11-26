@@ -3,6 +3,8 @@
 Scope: every tracked text file at HEAD **`dc3123a`** (clean `git archive` export), including the contribution reports, `reports/demo/` and INSTALL.md added in the last hour.
 Tool: `tests/test_t6_claims.py` (T6), run as `python -m pytest tests/test_t6_claims.py -s` → **4 passed** (Q1a, Q1a rule self-check, Q1b, Q3). Raw: `/workspace/audit/claims_dc3123a.log` (box). T6 also read the new documents by hand.
 
+**Re-run after the D6 fix (2026-11-27 ~01:25 IST, HEAD `0c25062`):** `tests/test_t6_claims.py` → 4 passed (Q1a, Q1a self-check, Q1b, Q3). There are 0 applied hardware tags and now **44 mentions** (30 at dc3123a). Lines that are new or moved: app.js:215/217 (the new banners; app.js:211 is gone), app/README.md:193, ui.md:4/20/29/94, PROJECT_STATUS.md:4/44, and T6's own audit documents and raw DOM dumps. T6 read each of these by hand: each says the data is not hardware-verified, or describes the not-live/recorded banner. Q1b: 0 navigation claims. The list below is the 30 confirmed at `dc3123a`.
+
 ## 1. Evidence labels / hardware tag (Q1a)
 Rule (unchanged, PM-requested refinement): a line containing "[HARDWARE-VERIFIED]", "hardware-verified" or "hardware verified" is a **mention** only if the same line has a rule/negation cue (no, not, nothing, none, never, cannot, requires, until, before any, must not, may not, only if/when/after, without a, is/are not, carries). Any other occurrence is **applied** and fails while `reports/hardware_logs/` is missing. The self-test proves that "Heading RMSE 0.4 deg [HARDWARE-VERIFIED]" and a table cell "HARDWARE-VERIFIED" are still caught.
 
@@ -39,7 +41,7 @@ Result: **0 applied tags. 30 mentions, each read and confirmed by T6** to state 
 - `firmware_bridge/scaling.py:5`
 - `sim/README.md:8`
 
-Special case: `app/static/app.js:211` is the banner text for `source:"hardware"`: "Live hardware samples. Accuracy is not hardware-verified…". As text it is a correct mention. At runtime, though, it is shown for a **replayed** hardware-labelled file (integration A8b), where "Live" is false → **D6 (CRITICAL)**.
+Special case: `app/static/app.js:211` is the banner text for `source:"hardware"`: "Live hardware samples. Accuracy is not hardware-verified…". As text it is a correct mention. At 471724e it was shown for a **replayed** hardware-labelled file (A8b), where "Live" is false. That was D6 (CRITICAL), now CLOSED: at 0ca6b0f the banner reads "Live hardware samples (serial)" and is used only for the serial transport.
 
 ## 2. Hardware-performance claims without a hardware log
 **None found.** `reports/hardware_logs/` does not exist, so no result may be [HARDWARE-VERIFIED], and none is.
@@ -60,7 +62,8 @@ Special case: `app/static/app.js:211` is the banner text for `source:"hardware"`
 
 ## 4. Runtime claims (what the running app tells the user)
 - Badge/banner for sim and replay data: correct (A1, A2, A3b, A4, A9a, A9b).
-- **D6 (CRITICAL)**: a replayed hardware-labelled file shows HARDWARE + "Live hardware samples." (A8, A8b).
+- D6 (CRITICAL, found at 471724e) is **CLOSED** after 0ca6b0f. A replayed hardware-labelled file now shows "REPLAY (recorded hardware)" with a not-live banner (A8, A8b at f058c9a), and the relabel could not be defeated (A10a). An ingest `hardware` sample shows UNVERIFIED SOURCE (A10b).
+- Limitation L-SER: a *virtual* serial port fed by a simulator is shown as live HARDWARE (A10c). The serial transport cannot tell it from a real FC.
 - Ingest (`POST /api/sample`) trusts the client-declared `source` (documented limitation, app/README). A local client could post `source:"hardware"`. Only the bridge should feed it.
 
 ## LIMITATIONS of this audit

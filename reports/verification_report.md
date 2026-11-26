@@ -1,35 +1,74 @@
-# T6 Verification Report — FINAL (v2.0)
+# T6 Verification Report — FINAL (v3.0, after the D6 re-test)
 
-Auditor: Testing & Technical Auditor (T6). Updated 2026-11-27 at about 01:15 IST.
-**Code under test:** clean `git archive` exports (never the shared working tree) of **`c942d6f`** (D3 fix f31784a; full suites + D3 re-test), **`471724e`** (integration harness, all owner suites) and **HEAD `dc3123a`** (repo-root suite, claims audit; it differs from 471724e only in docs and screenshots).
-Clean venv: `pip install -r requirements.txt` (numpy 2.5.5, pytest 9.2.0, jsonschema 4.26.0) + pyserial; Python 3.13.5; Google Chrome 156 headless; Node.
+Auditor: Testing & Technical Auditor (T6). Updated 2026-11-27 at about 01:30 IST.
+**Code under test:** clean `git archive` exports (never the shared working tree).
+- **HEAD `0c25062`:** all suites and the claims audit. It contains the D6 fix 0ca6b0f, the PM decisions eacf8a2 (D6) and c831574 (ingest labelling), and 1e37a34.
+- **`f058c9a`:** full integration harness, 30 steps. It differs from HEAD only in PROJECT_STATUS.md.
+- **Earlier:** `c942d6f` (D3 re-test) and `471724e` (the D6 finding).
+
+Clean venv: `pip install -r requirements.txt` (numpy 2.5.5, pytest 9.2.0, jsonschema 4.26.0, pyserial, which is now listed as optional in requirements.txt per eacf8a2, verified); Python 3.13.5; Google Chrome 156 headless; Node.
 Companion documents (all in `reports/audit/`): `integration_results.md` (A), `traceability.md` (B), `claims_audit.md` (C), `team_rules_compliance.md` (D). Executed counts: `TEST_RESULTS.md`.
 
-Evidence labels: every accuracy and robustness result is **[SIMULATED]** or **[REPLAYED]**; RM3100 constants **[DATASHEET]**; MSP scaling **[SOURCE-CODE]**.
+Evidence labels: every accuracy and robustness result is **[SIMULATED]** or **[REPLAYED]**; RM3100 constants are **[DATASHEET]**; MSP scaling is **[SOURCE-CODE]**.
 **Nothing is [HARDWARE-VERIFIED]:** `reports/hardware_logs/` does not exist.
 
-## 0. OVERALL VERDICT: **CONDITIONAL PASS** (virtual scope only). Completion NOT yet approved.
+## 0. OVERALL VERDICT: **PASS (virtual scope only)**. Project completion **APPROVED for the virtual (simulated/replayed) scope**; hardware performance is NOT verified.
 Reasons:
-1. The software runs end to end on simulated and replayed data. T6 started every instance itself on PID-verified ephemeral ports, and 25/27 integration steps pass.
-2. All suites are green: repo root at dc3123a gives **506 passed, 44 skipped, 0 failed** (44 skips are sim spec-check cases outside the simulator's scope; none hides a required check, see §3a). Every owner count was reproduced.
-3. D3 is fixed and re-tested (E3b stress 0/20), and frozen-sensor detection did not regress (D1 stays closed).
-4. All required reports exist (FACTSHEET, HEADING_MATH, FC_SETUP, sim/firmware_bridge/app READMEs, INSTALL, TEST_PLAN, this report, TEST_RESULTS, six contribution reports, audit A–D).
-5. Claims audit: 0 applied hardware tags, 0 hardware-performance claims, 0 positioning/navigation claims. TEAM_RULES: PASS (disclosed incidents).
+1. **The software runs.** T6 started a fresh app on a PID-verified ephemeral port for every step: **30/30 integration steps pass**.
+   - All 8 sim scenarios ran through heading_core and the app, plus motor interference with a short sim duration.
+   - 7 example-log replays; fake-FC `--capture` → `--replay` → app; fake-FC → bridge → app (SIMULATED).
+   - Calibration wizard; frozen and stale data; missing serial port.
+   - Headless Chrome checked the badge, heading, warnings, GPS "Unknown", and the replay and ingest badges and banners.
+   - D6 edge cases A10a–c.
+2. **All suites green at HEAD 0c25062:** repo root **513 passed, 44 skipped, 0 failed**.
+   - Per suite: heading_core 76, sensor-spec 23, sim 152 (+44 out-of-scope N/A skips, §3a), firmware_bridge 95, app 52, T6 111.
+3. **D6 (CRITICAL) is CLOSED** after T6's independent re-test, and so are D3 (MAJOR) and D1 (MAJOR).
+4. **All required reports exist:**
+   - FACTSHEET, HEADING_MATH, FC_SETUP;
+   - the sim, firmware_bridge and app READMEs, and INSTALL;
+   - TEST_PLAN, this report, TEST_RESULTS;
+   - seven contribution reports;
+   - audit A–D.
+5. **Claims audit:** 0 applied hardware tags, 0 hardware-performance claims, 0 positioning or navigation claims. TEAM_RULES: 13/13 (with disclosed, repaired incidents).
 
-**Condition (blocks approval):** **D6 (CRITICAL, open)**. The app's own replay of a JSONL file whose samples carry `source:"hardware"` shows the **HARDWARE** badge and the banner "**Live hardware samples.**" This is per TEST_PLAN §4 ("wrong source badge" = CRITICAL), and conflicts with README "UI must show the active data source" and with N4. Approval follows once D6 is fixed (or the PM records an explicit, reasoned waiver in TEAM_TRACKER) **and** T6 re-runs A8/A8b green.
-It is latent today, because no hardware log exists yet. It will trigger the first time an app recording of a live FC session (R7) is replayed.
-Hardware performance remains entirely unverified (BLOCKERS B1; HARDWARE_VALIDATION_CHECKLIST not run).
+Open, non-blocking:
+- **D7 (MINOR, PM docs):** the R8 wording in REQUIREMENTS.md and the README rule 2 badge list don't reflect the accepted D6 and ingest badge rules, and there is no CHANGELOG entry (§2b).
+- **Limitations:** L-D3 (frozen-mag blind spots in quantised mode) and L-SER (a virtual serial port shows HARDWARE). See LIMITATIONS.
+
+The approval covers the virtual scope only. Every number is [SIMULATED]/[REPLAYED]. Hardware validation (HARDWARE_VALIDATION_CHECKLIST, BLOCKERS B1) has not been run.
 
 ## 1. Verdict per deliverable
 | Deliverable | Owner | Verdict | Evidence (one line) |
 |---|---|---|---|
-| T1 hardware fact sheet (`docs/hardware/`) | HW Research | **PASS** | PNI UM Table 3-1 re-read by T6 matches key_numbers.json [DATASHEET]; check_key_numbers.py present; L1–L17; ±800/±1100 µT conflict disclosed. |
-| T2 heading_core + `docs/math/` | Math | **PASS** | 76/76 owner + 23/23 sensor-spec; all T6 H/C/E/F/R criteria pass; **D3 CLOSED at f31784a** (E3b 0/20, E3c–E3g pass); residual 14a documented. |
-| T3 simulator (`sim/`) | Sim | **PASS** | 152 passed + 44 documented N/A skips; S1–S4; all 8 scenarios run through the app (A1). |
-| T4 firmware_bridge + FC_SETUP.md | FW | **PASS** | 95/95 (with pyserial); M1–M4; A3a capture→replay bit-identical mag; A4 fake-FC labelled sim; A7b missing port rc=2, no output; GPS coordinates stripped. |
-| T5 app (`app/`) | UI | **FAIL (D6 open)** | 45/45 owner tests; U1–U5, A1–A7, A9a/b pass; A8/A8b fail (replayed hardware-labelled log → HARDWARE badge + "Live" banner). |
-| PM docs (README, ARCHITECTURE, contracts, REQUIREMENTS, BLOCKERS, TRACKER, INSTALL) | PM | **PASS with note** | Contracts are consistent with all producers. The ARCHITECTURE decision "replayed file keeps its original source" is the design root of D6 (shared ownership). |
-| T6 (TEST_PLAN, tests, reports, audit A–D) | QA | complete | 111 T6 tests; self-reported D5 and the 9b808b5 tracker revert, both repaired. |
+| T1 hardware fact sheet (`docs/hardware/`) | HW Research | **PASS** | PNI UM Table 3-1 re-read by T6 matches key_numbers.json [DATASHEET]; L1–L17; ±800/±1100 µT conflict disclosed. |
+| T2 heading_core + `docs/math/` | Math | **PASS** | 76/76 owner + 23/23 sensor-spec; all T6 H/C/E/F/R criteria pass; D1 and D3 closed; residual 14a documented. |
+| T3 simulator (`sim/`) | Sim | **PASS** | 152 passed + 44 documented N/A skips; S1–S4; all 8 scenarios run through the app (A1, A1b). |
+| T4 firmware_bridge + FC_SETUP.md | FW | **PASS** | 95/95 (with pyserial); M1–M4; A3a bit-identical capture → replay; A4 fake-FC labelled sim; A7b missing port rc=2; GPS coordinates stripped. |
+| T5 app (`app/`) | UI | **PASS** | 52/52 owner tests. **D6 CLOSED**: A8/A8b pass at f058c9a and the relabel cannot be bypassed (A10a). Ingest hardware → UNVERIFIED SOURCE (A10b). U1–U5, A1–A9 pass. |
+| PM docs (README, ARCHITECTURE, contracts, REQUIREMENTS, BLOCKERS, TRACKER, INSTALL) | PM | **PASS with D7 (MINOR) open** | Contracts consistent with all producers; D6/ingest decisions recorded in ARCHITECTURE (eacf8a2, c831574), but R8/README/CHANGELOG not updated → D7. pyserial added to requirements (verified). |
+| T6 (TEST_PLAN, tests, reports, audit A–D) | QA | complete | 111 T6 tests; self-reported D5 and 9b808b5, both repaired. |
+
+## 2a. D6 re-test (fix 0ca6b0f, decisions eacf8a2 and c831574)
+- **A8:** 20 replayed `hardware` lines → 20 records with source=replay, meta.original_source=hardware and transport=replay, none live. The app's own `badgeInfo` (run in Node) gives "REPLAY (recorded hardware)".
+- **A8b (headless Chrome):** the badge reads `REPLAY (recorded hardware)`. The banner reads "[REPLAYED] Recorded hardware log played back from a file. This is recorded data, not a live sensor stream. Nothing here is hardware-verified."
+- **A10a, can a replayed file defeat the relabel? No.**
+  - `HARDWARE` and `Hardware` are rejected by the schema enum.
+  - `hardware` + `meta.original_source: sim/replay` → relabelled, with original_source forced to `hardware`.
+  - Top-level `transport: "serial"` and `live_hardware: true` in a file are ignored (transport comes from the app's own `--source`).
+  - `replay` + `original_source: "HARDWARE"` or an object → plain REPLAY.
+  - No record became hardware, live, HARDWARE or UNVERIFIED.
+  - Accepted residual (PM c831574, app LIMITATIONS 4): a file can *claim* `original_source: "hardware"`. It is still labelled non-live.
+- **A10b, ingest:** `hardware` POSTs, including injected `transport: "serial"` and `live_hardware: true`, keep source=hardware. Transport is ingest, the live flag is 0, the badge reads **UNVERIFIED SOURCE**, and the banner reads "[UNVERIFIED] … not a live serial source".
+- **A10c, can a live/serial path show HARDWARE when the data is not real hardware? Yes, by design.** A virtual pty driven by the fake FC, with no device at all, is shown as HARDWARE with the banner "Live hardware samples (serial)". The serial transport cannot tell a pty from a flight controller. This is contract-conformant ("hardware only from a live port"), needs a deliberate set-up, and is already noted for the bridge test in firmware_bridge/README:81. It is recorded as **limitation L-SER**; T6 recommends a line in the app/README LIMITATIONS. Conversely, no non-serial path reaches HARDWARE (A2, A3b, A4, A8, A10a, A10b).
+- **UI's claims checked:** "integration 27/27" → T6 got 30/30 (27 + 3 new A10 steps). "tests/ 111 passed" → confirmed. "repo 512/45 skipped" → T6 got 513/44: the bridge pty test runs with pyserial installed, and one more test than at their count. "52 app tests" → confirmed.
+- **Pushed?** `git ls-remote origin main` = `0c25062` = local HEAD, so T6's commits bf7b406 and 3c99f1a are on the remote. Verified with a read-only query; T6 did not push.
+- **D6 → CLOSED.**
+
+## 2b. Is the UNVERIFIED SOURCE ingest badge consistent with R8 and the contracts?
+- **Contracts: consistent.** `contracts/sample.schema.json` is unchanged. `source` keeps the enum sim/replay/hardware, and ingest keeps `sample.source="hardware"`, so the recorded data and the JSONL/CSV exports are unchanged. `meta` is a free object, so `original_source`/`replayed_from` are allowed; the bridge already used them. `transport`/`original_source`/`live_hardware` are app-internal record fields, not Sample fields.
+- **R8: deviates from the literal wording, consistent with its intent.** R8 says the badge is "(SIMULATED / REPLAY / HARDWARE) driven only by the sample's `source` field". The app now shows five labels, keyed on `sample.source` and refined by `meta.original_source` and the transport. For ingest `hardware` the badge (UNVERIFIED SOURCE) does not equal the plain mapping of `sample.source` (HARDWARE). Every deviation is in the conservative direction: it never upgrades data to live or hardware. It is required by N4 and the README "show the active data source" rule, and the PM decided it explicitly (ARCHITECTURE eacf8a2, c831574).
+- **Gap:** REQUIREMENTS.md R8 ("Changes require a CHANGELOG entry"), README rule 2 and CHANGELOG were not updated → **D7 (MINOR, PM)**. Suggested R8 wording: "badge derived from sample.source; HARDWARE only for a live serial transport; replayed hardware → 'REPLAY (recorded hardware)'; hardware via ingest → 'UNVERIFIED SOURCE'". Not blocking: this is a documentation consistency fix, and the behaviour is verified.
+- T6 test U2/U3 (pure `badgeLabel` mapping) is unchanged and passes. The displayed badge is covered by A8b, A9a/b and A10b.
 
 ## 2. D3 re-test and regression check (PM request, f31784a / c942d6f)
 - PM claim "499 passed, 45 skipped, 0 failed at c942d6f": **reproduced**. T6 got 501 passed / 44 skipped at c942d6f, which includes 2 extra T6 tests written during this re-test: 499 + 2. The 45th skip is `firmware_bridge/tests/test_bridge_modes.py` (pty serial), which skips when pyserial is absent (INSTALL.md:80). T6 has pyserial, and that test passes.
@@ -115,8 +154,8 @@ None maps to R1–R8. The navigation ones are out of scope by the heading-only r
 - T6 tests: 0.15 µT / 0.005 g noise in H5 and C1-C3, 0.002 g accel and 0.05 µT environment noise in E3b
 
 The accel bias (0.01 g, about 0.57° of tilt) is the main contributor to the A1 RMSE figures.
-| INT integrated end-to-end (audit/integration_results.md) | **25/27 PASS** | A1 8/8 scenarios sim→heading_core→app; A1b motor interference warned (76/76 bad samples flagged); A2 7/7 example logs; A3a/b fake-FC `--capture` → `--replay` → app (REPLAY badge); A4 fake-FC → bridge → app: SIMULATED, never HARDWARE; A5 wizard 0.72°; A6 frozen/stale; A7/A7b missing port → FAULT, no data; A9a/b headless Chrome: badge, heading, warnings, GPS 'Unknown'. **FAIL A8/A8b → D6** |
-| A8 badge for replayed hardware-labelled log | **FAIL → D6 (CRITICAL)** | app shows HARDWARE + "Live hardware samples." for `--source replay:<file>` |
+| INT integrated end-to-end (audit/integration_results.md) | **30/30 PASS at f058c9a** (25/27 at 471724e) | A1 8/8 scenarios sim→heading_core→app; A1b motor interference warned (76/76 bad samples flagged); A2 7/7 example logs; A3a/b fake-FC `--capture` → `--replay` → app (REPLAY badge); A4 fake-FC → bridge → app: SIMULATED, never HARDWARE; A5 wizard 0.72°; A6 frozen/stale; A7/A7b missing port → FAULT, no data; A9a/b headless Chrome: badge, heading, warnings, GPS 'Unknown'. A8/A8b now pass (D6 closed); A10a–c D6 edge cases |
+| A8/A8b badge for replayed hardware-labelled log | 471724e: FAIL → D6; **f058c9a: PASS** | 'REPLAY (recorded hardware)', banner says not live |
 
 
 ## 4. Defects
@@ -127,16 +166,17 @@ The accel bias (0.01 g, about 0.57° of tilt) is the main contributor to the A1 
 | D3 | MAJOR | T2 + PM rule | **CLOSED** (f31784a, re-tested at c942d6f) | False MAG_STALE on a stationary quantised sensor; E3b stress 0/20. Residual stationary/no-gyro blind spot → limitation L-D3 (HEADING_MATH 14a). |
 | D4 | MAJOR | T4 | **CLOSED** | Bridge replay forwarded schema-invalid lines; fixed 403976b. |
 | D5 | MINOR | T6 | **CLOSED** (self-reported) | Accidental HEAD detach; repaired (84fc231). |
-| **D6** | **CRITICAL** | T5 (app replay/badge) + PM (ARCHITECTURE decision "replay keeps original source") | **OPEN, blocks approval** | `python -m app --source replay:<file>` with samples `source:"hardware"` → badge **HARDWARE**, banner "**Live hardware samples.**" (integration A8, A8b; DOM `audit/raw/ui_dom_hw_replay.html`). Suggested fix (owner's choice): in the app's replay source, relabel `hardware` → `replay` and keep `original_source` (as `firmware_bridge --replay` already does), or show "REPLAY (recorded hardware)" with a non-live banner. |
+| D6 | CRITICAL | T5 + PM | **CLOSED** (fix 0ca6b0f; decisions eacf8a2, c831574; T6 re-test at f058c9a/0c25062) | A replayed hardware-labelled log was shown as HARDWARE + "Live hardware samples." (found at 471724e). Now 'REPLAY (recorded hardware)' with a not-live banner; the relabel cannot be bypassed (A10a). |
+| D7 | MINOR | PM | **OPEN (non-blocking)** | REQUIREMENTS R8 / README rule 2 / CHANGELOG not updated for the accepted badge rules (5 labels; ingest hardware → UNVERIFIED SOURCE; replayed hardware → REPLAY (recorded hardware)). See §2b. |
 
 ## 5. Claims audit → `reports/audit/claims_audit.md`
-0 applied hardware tags (30 mentions confirmed by hand); 0 hardware-performance claims; 0 positioning, distance or GPS-independent navigation claims (89 inventory lines adjudicated). The GPS indicator is availability-only, with coordinates stripped. Runtime claim issue: D6.
+At 0c25062: 0 applied hardware tags (44 mentions, new ones confirmed by hand; 30 at dc3123a); 0 hardware-performance claims; 0 positioning, distance or GPS-independent navigation claims (89 inventory lines adjudicated). The GPS indicator is availability-only, with coordinates stripped. Runtime claim issue: D6.
 
 ## 6. TEAM_RULES compliance → `reports/audit/team_rules_compliance.md`
 13/13 PASS as far as verifiable. Spend: none found (requirements are OSS; no keys, purchases or paid APIs; all contribution reports state none). Disclosed rule-1 incidents: D5 and 9b808b5 (T6), d211e80 (sim); all repaired.
 
 ## 7. Traceability → `reports/audit/traceability.md`
-Delivered 11 (R1–R5, R7, N1–N3, N5, N6); Partial 3 (R6 live MSP not runnable without hardware; R8 and N4 because of D6); Not delivered 0.
+Delivered 13 (R1–R5, R7, R8, N1–N6; R8 text pending D7); Partial 1 (R6: live MSP to a real FC not runnable without hardware); Not delivered 0.
 
 ## LIMITATIONS (T6, unresolved)
 1. All results are [SIMULATED] or [REPLAYED] against an idealised uniform-field model. **None transfer to the physical RM3100 or Matek FC.** No hardware log exists, so [HARDWARE-VERIFIED] sign-off is impossible (HARDWARE_VALIDATION_CHECKLIST not run).
@@ -144,7 +184,7 @@ Delivered 11 (R1–R5, R7, N1–N3, N5, N6); Partial 3 (R6 live MSP not runnable
 3. MSP tests use hand-built frames and the fake FC; real USB timing, rate limits and partial reads are untested. Live `serial:` was only tested against a missing port.
 4. **L-D3:** in quantised mode a frozen mag is undetectable on a stationary vehicle, below 1°/s, or during a level yaw turn when no gyro is supplied (PM decision (a)). The opt-in `quant_nogyro_time_rule=True` catches long freezes but brings back about 4/20 false alarms in T6's stress test.
 5. App ingest trusts the client-declared `source` (documented).
-6. pyserial is not in requirements.txt; a fresh install cannot use `serial:` until it is added (documented in INSTALL.md).
+6. **L-SER:** the serial transport cannot tell a virtual pty (e.g. one fed by the fake FC) from a real FC; such data is shown as live HARDWARE (A10c). The app also trusts `meta.original_source` written in a replay file (accepted, c831574), but only ever as a non-live label. (pyserial is now an optional entry in requirements.txt.)
 7. UI checks use DOM text from headless Chrome (badge, heading, warnings, GPS, banner); pixels and human readability were not assessed. Demo video and screenshots were not inspected frame by frame.
 8. The default `--sim-duration 86400` stretches the motor_interference profile over 24 h, so in a short live demo interference does not appear unless `--sim-duration` is set (A1 vs A1b).
 9. F1 lag (4.5° on a 25°/s ramp) and E5 interference error (13°) are reported, not gated. T6 numeric targets have not been reviewed by the owner. Python 3.10 was not tested (3.13.5 only).

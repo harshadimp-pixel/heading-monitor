@@ -6,7 +6,17 @@ Every result carries an evidence label. Maintained by the Testing & Technical Au
 Environment: Linux box, Python 3.13.5. Clean venv built from `requirements.txt` (numpy 2.5.5, pytest 9.2.0, jsonschema 4.26.0), plus pyserial; Google Chrome 156 headless; Node.
 Code: clean `git archive <sha>` exports (never the shared working tree), plus T6 `tests/` as committed with this file. Latest run by T6 on 2026-11-27, 00:40–01:10 IST.
 
-## Latest run (final verification v2.0)
+## Latest run (final verification v3.0, D6 re-test) — 2026-11-27 ~01:15–01:30 IST
+| Date (IST) | Test / suite | Command | Commit | Result | Evidence |
+|---|---|---|---|---|---|
+| 2026-11-27 01:25 | **Whole repo** (all owner suites + T6) | `python -m pytest -q -rs` (repo root) | 0c25062 (HEAD) | **513 passed, 44 skipped, 0 failed** | [SIMULATED] |
+| 2026-11-27 01:22 | heading_core / sensor-spec / sim / firmware_bridge / app | `python -m pytest <dir> -q` | 0c25062 | 76 / 23 / 152 (+44 N/A) / 95 / 52 passed | [SIMULATED] |
+| 2026-11-27 01:22 | T6 independent suite (incl. claims) | `python -m pytest tests -q` | 0c25062 | 111 passed | [SIMULATED] |
+| 2026-11-27 01:17 | **Integrated end-to-end A1–A10** (incl. D6 A8/A8b, edge cases A10a–c, headless Chrome) | `python reports/audit/integration_run.py <export> <out>` | f058c9a (= HEAD minus PROJECT_STATUS.md) | **30/30 PASS** → D6 CLOSED | [SIMULATED]/[REPLAYED] |
+| 2026-11-27 01:25 | Claims audit | `pytest tests/test_t6_claims.py -s` | 0c25062 | 4 passed; 0 applied hardware tags (44 mentions), 0 nav claims | n/a |
+| 2026-11-27 01:20 | Remote check (read-only) | `git ls-remote origin main` | - | remote main = 0c25062 = local HEAD (T6 commits bf7b406, 3c99f1a are on the remote) | n/a |
+
+## Previous run (final verification v2.0)
 | Date (IST) | Test / suite | Command | Commit | Result | Evidence |
 |---|---|---|---|---|---|
 | 2026-11-27 01:05 | **Whole repo** (all owner suites + T6) | `python -m pytest -q -rs` (repo root) | dc3123a | **506 passed, 44 skipped, 0 failed** | [SIMULATED] |

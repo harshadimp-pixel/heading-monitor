@@ -225,6 +225,17 @@ rec("A7 serial to missing port (app)", a.cmdline(), ok, summ, out)
 rec("A7b firmware_bridge --port missing", "python -m firmware_bridge --port /dev/ttyT6_DOES_NOT_EXIST", ok2,
     f"rc={pb.returncode} stdout_lines={len(pb.stdout.splitlines())} stderr={pb.stderr.strip()[:300]!r}", pb.stderr)
 
+
+def node_badges(records):
+    """Evaluate the app's own headingmath.js badgeInfo(source, original_source, transport) in Node for each record."""
+    node = shutil.which("node")
+    if not node: return [None] * len(records)
+    js = ("const H=require(process.argv[1]);let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{"
+          "const rs=JSON.parse(d);console.log(JSON.stringify(rs.map(r=>H.badgeInfo?H.badgeInfo(r.source,r.original_source,r.transport):{text:H.badgeLabel(r.source)})));});")
+    inp = json.dumps([{k: x.get(k) for k in ("source", "original_source", "transport")} for x in records])
+    o = subprocess.run([node, "-e", js, os.path.join(ROOT, "app/static/headingmath.js")], input=inp, capture_output=True, text=True, timeout=30)
+    return json.loads(o.stdout)
+
 # ---------- A8: hardware-labelled log replayed through the app (badge semantics)
 hw = os.path.join(OUT, "hw_labelled.jsonl")
 with open(hw, "w") as f:
@@ -233,8 +244,11 @@ a = App("--source", f"replay:{hw}", "--speed", "20")
 try:
     wait(lambda: a.status()["source_status"]["state"] == "ended", 15)
     r = a.hist(); srcs = sorted({x["source"] for x in r})
-    ok = srcs == ["replay"]
-    summ = f"pid_ok={a.pid_ok} file sample.source=hardware -> app records source={srcs} -> badge={[MAP.get(s) for s in srcs]} (active data source is a REPLAY of a file)"
+    origs = sorted({str(x.get("original_source")) for x in r}); lives = [x for x in r if x.get("live_hardware")]
+    badges = sorted({b["text"] for b in node_badges(r) if b})
+    ok = a.pid_ok and len(r) == 20 and srcs == ["replay"] and origs == ["hardware"] and not lives and badges == ["REPLAY (recorded hardware)"]
+    summ = (f"pid_ok={a.pid_ok} file sample.source=hardware -> app records={len(r)} source={srcs} original_source={origs} "
+            f"transport={sorted({str(x.get('transport')) for x in r})} live_hardware_true={len(lives)} -> badgeInfo (app's headingmath.js in Node)={badges}")
 finally:
     out = a.close()
 rec("A8 app replay of a hardware-labelled log: badge must not read HARDWARE", a.cmdline().replace(OUT + "/", "<out>/"), ok, summ, out)
@@ -297,9 +311,10 @@ if chrome:
     a = App("--source", f"replay:{hw}", "--speed", "1", "--loop", "--stale", "60")
     try:
         wait(lambda: len(a.hist()) > 5, 10)
-        d = dom(f"http://127.0.0.1:{a.port}/", lambda d: "source-badge none" not in d)
+        d = dom(f"http://127.0.0.1:{a.port}/", lambda d: "source-badge replay" in d)
         badge, banner, transport = text(d, "sourceBadge"), text(d, "evidenceBanner"), text(d, "transportText")
-        ok = a.pid_ok and badge != "HARDWARE"
+        ok = (a.pid_ok and badge == "REPLAY (recorded hardware)" and banner is not None and "not a live" in banner
+              and not banner.lower().startswith("live"))
         summ = f"pid_ok={a.pid_ok} sourceBadge={badge!r} evidenceBanner={banner!r} transportText={transport!r}"
         open(os.path.join(OUT, "ui_dom_hw_replay.html"), "w").write(d)
     finally:
@@ -307,6 +322,104 @@ if chrome:
     rec("A8b UI render of a replayed hardware-labelled log (headless Chrome)", a.cmdline().replace(OUT + "/", "<out>/") + " ; dump-dom", ok, summ, out)
 else:
     rec("A9 UI render", "-", False, "NOT RUN: no headless Chrome available", "")
+
+
+# ---------- A10: D6 edge cases (re-test of 0ca6b0f)
+# A10a: can a replayed file defeat the relabel? case variants, original_source tricks, injected transport/live fields
+trick = os.path.join(OUT, "replay_tricks.jsonl")
+variants = [
+    ("upper-case HARDWARE", {"source": "HARDWARE"}),
+    ("title-case Hardware", {"source": "Hardware"}),
+    ("hardware + meta.original_source=sim", {"source": "hardware", "meta": {"original_source": "sim"}}),
+    ("replay + original_source=hardware + top-level transport=serial, live_hardware=true", {"source": "replay", "meta": {"original_source": "hardware"}, "transport": "serial", "live_hardware": True}),
+    ("hardware + top-level transport=serial, live_hardware=true", {"source": "hardware", "transport": "serial", "live_hardware": True}),
+    ("replay + meta.original_source=HARDWARE", {"source": "replay", "meta": {"original_source": "HARDWARE"}}),
+    ("replay + meta.original_source=object", {"source": "replay", "meta": {"original_source": {"x": "hardware"}}}),
+    ("sim + meta.original_source=hardware", {"source": "sim", "meta": {"original_source": "hardware"}}),
+    ("hardware + meta.replayed_from spoof", {"source": "hardware", "meta": {"replayed_from": "", "original_source": "replay"}}),
+]
+with open(trick, "w") as f:
+    for i, (_, extra) in enumerate(variants):
+        f.write(json.dumps(dict({"t": i * 0.05, "mag_uT": [25.0, -3.0, 43.0], "accel_g": [0, 0, -1]}, **extra)) + "\n")
+a = App("--source", f"replay:{trick}", "--speed", "20")
+try:
+    wait(lambda: a.status()["source_status"]["state"] == "ended", 15)
+    r = a.hist(); st = a.status(); nb = node_badges(r)
+    rows = [(x.get("t"), x.get("source"), x.get("original_source"), x.get("transport"), x.get("live_hardware"), (b or {}).get("text")) for x, b in zip(r, nb)]
+    bad = [row for row in rows if row[1] == "hardware" or row[4] or row[5] in ("HARDWARE", "UNVERIFIED SOURCE")]
+    ok = a.pid_ok and not bad and len(r) + st["counts"]["invalid"] == len(variants)
+    summ = (f"pid_ok={a.pid_ok} lines={len(variants)} accepted={len(r)} invalid={st['counts']['invalid']} last_error={st.get('last_error')!r}; "
+            f"records (t, source, original_source, transport, live_hardware, badge)={rows}; violations={bad}")
+finally:
+    out = a.close()
+rec("A10a replayed file cannot defeat the D6 relabel (case variants, original_source/transport/live tricks)", a.cmdline().replace(OUT + "/", "<out>/"), ok, summ,
+    "variants: " + json.dumps([v[0] for v in variants]) + "\n" + out)
+
+# A10b: ingest of a 'hardware' sample (with injected transport/live fields) -> UNVERIFIED SOURCE, never live
+a = App("--source", "ingest", "--stale", "600")
+try:
+    import threading
+    stop = threading.Event()
+    def feed2():
+        i = 0
+        while not stop.is_set():
+            try: http(a.port, "/api/sample", {"t": i * 0.05, "source": "hardware", "mag_uT": [25.0, -3.0 + 0.01 * (i % 5), 43.0], "accel_g": [0, 0, -1], "transport": "serial", "live_hardware": True})
+            except Exception: pass
+            i += 1; time.sleep(0.05)
+    th = threading.Thread(target=feed2, daemon=True); th.start()
+    wait(lambda: len(a.hist()) > 10, 10)
+    d = dom(f"http://127.0.0.1:{a.port}/", lambda d: "source-badge unverified" in d) if chrome else ""
+    stop.set(); th.join(2)
+    r = a.hist(); nb = node_badges(r[-5:])
+    badge, banner = (text(d, "sourceBadge"), text(d, "evidenceBanner")) if chrome else (None, None)
+    srcs = sorted({x["source"] for x in r}); tr = sorted({str(x.get("transport")) for x in r}); lives = sum(bool(x.get("live_hardware")) for x in r)
+    ok = (a.pid_ok and srcs == ["hardware"] and tr == ["ingest"] and lives == 0 and all((b or {}).get("text") == "UNVERIFIED SOURCE" for b in nb)
+          and badge == "UNVERIFIED SOURCE" and banner is not None and banner.startswith("[UNVERIFIED]"))
+    summ = (f"pid_ok={a.pid_ok} records={len(r)} sample.source={srcs} transport={tr} live_hardware_true={lives} "
+            f"badgeInfo(Node)={sorted({(b or {}).get('text') for b in nb})} DOM sourceBadge={badge!r} evidenceBanner={banner!r}")
+    if chrome: open(os.path.join(OUT, "ui_dom_ingest_hardware.html"), "w").write(d)
+finally:
+    out = a.close()
+rec("A10b ingest of source=hardware (+ injected transport=serial) -> UNVERIFIED SOURCE, never live", a.cmdline() + " ; POST hardware samples ; dump-dom", ok, summ, out)
+
+# A10c: serial transport over a VIRTUAL pty driven by the fake FC (no device): what does the app show?
+# Expected per design: HARDWARE (live) -- the serial path cannot tell a virtual pty from a real FC. Recorded as a limitation.
+try:
+    import serial  # noqa: F401
+    have_serial = True
+except Exception:
+    have_serial = False
+if have_serial and hasattr(os, "openpty"):
+    sys.path.insert(0, ROOT)
+    from firmware_bridge.fake_fc import FakeFC
+    import tty, threading
+    master, slave = os.openpty(); tty.setraw(slave); fc = FakeFC(); stop = threading.Event()
+    def serve():
+        while not stop.is_set():
+            try: data = os.read(master, 1024)
+            except OSError: return
+            for fr in fc.parser.feed(data): os.write(master, fc.handle(fr))
+    th = threading.Thread(target=serve, daemon=True); th.start()
+    ptyname = os.ttyname(slave)
+    a = App("--source", f"serial:{ptyname}", "--stale", "60")
+    try:
+        wait(lambda: len(a.hist()) > 10, 20)
+        d = dom(f"http://127.0.0.1:{a.port}/", lambda d: "source-badge hardware" in d) if chrome else ""
+        r = a.hist(); st = a.status()
+        badge, banner = (text(d, "sourceBadge"), text(d, "evidenceBanner")) if chrome else (None, None)
+        srcs = sorted({x["source"] for x in r}); lives = sum(bool(x.get("live_hardware")) for x in r)
+        ok = a.pid_ok and len(r) > 10 and srcs == ["hardware"] and badge == "HARDWARE"
+        summ = (f"pid_ok={a.pid_ok} port={ptyname} (virtual pty + firmware_bridge FakeFC, NO device) records={len(r)} source={srcs} live_hardware_true={lives}/{len(r)} "
+                f"source_status={st['source_status'].get('state')} DOM sourceBadge={badge!r} evidenceBanner={banner!r} "
+                f"=> OBSERVATION: a virtual serial port is shown as live HARDWARE (limitation L-SER, not a pass of hardware accuracy)")
+    finally:
+        out = a.close(); stop.set()
+        for fd in (slave, master):
+            try: os.close(fd)
+            except OSError: pass
+    rec("A10c serial transport over a virtual pty (fake FC): HARDWARE only via serial (observation L-SER)", a.cmdline().replace(ptyname, "<pty>"), ok, summ, out)
+else:
+    rec("A10c serial over virtual pty", "-", False, "NOT RUN: pyserial or openpty unavailable", "")
 
 json.dump(RESULTS, open(os.path.join(OUT, "integration_results.json"), "w"), indent=1)
 print(f"TOTAL {sum(r['pass'] for r in RESULTS)}/{len(RESULTS)} passed")
