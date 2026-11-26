@@ -56,7 +56,7 @@ def test_A1_R2_accuracy(scen):
 def test_A1_motor_interference_flagged():
     hc = load("heading_core"); rmse, outs = e2e("motor_interference", 1, hc)
     print(f"A1 motor_interference RMSE={rmse:.3f}")
-    assert any(o.get("warnings") for o in outs)
+    assert any([w for w in o.get("warnings", []) if w != "NOT_CALIBRATED"] for o in outs)
 
 @pytest.mark.parametrize("scen", ["static", "yaw_spin", "tilted_spin", "calibration_dance"])
 def test_S2_truth_vs_refmodel(scen):
@@ -65,3 +65,11 @@ def test_S2_truth_vs_refmodel(scen):
         s = json.loads(l); tr = s["truth"]; cfg_line = s
         m, _ = body_vectors(tr["heading_deg"], tr["pitch_deg"], tr["roll_deg"])
         assert np.max(np.abs(m - np.array(tr["earth_field_body_uT"]))) <= 0.05, (scen, s["t"], m, tr)
+
+@pytest.mark.parametrize("cc,gain", [(50, 20.0), (100, 38.0), (200, 75.0)])
+def test_S4_rm3100_scaling(cc, gain):
+    """Gain per PNI RM3100 User Manual Table 3-1 (20/38/75 LSB/uT @ CC 50/100/200) [DATASHEET], checked by T6 in the PDF."""
+    for l in sim("static", 1, dur=1, extra=["--cycle-count", str(cc)]).splitlines():
+        s = json.loads(l); assert s["rm3100_cycle_count"] == cc
+        for raw, ut in zip(s["mag_raw"], s["mag_uT"]):
+            assert abs(raw - ut * gain) <= 0.5 + 1e-6 or abs(ut) < 1  # quantisation to integer counts

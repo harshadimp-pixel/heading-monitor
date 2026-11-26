@@ -11,8 +11,16 @@ def S(t, yaw, p=0, r=0, src="sim", **kw):
     m, a = body_vectors(yaw, p, r)
     s = {"t": t, "source": src, "mag_uT": m.tolist(), "accel_g": a.tolist()}; s.update(kw); return s
 
+def flags(o):
+    """Warnings other than NOT_CALIBRATED (which would make every 'was it flagged?' check pass trivially)."""
+    return [w for w in (o.get("warnings") or []) if w != "NOT_CALIBRATED"]
+
+def EST(hc, **kw):
+    kw.setdefault("calibration", hc.Calibration())  # identity calibration -> calibrated=True, no NOT_CALIBRATED noise
+    return hc.HeadingEstimator(**kw)
+
 def run(hc, samples, **kw):
-    est = hc.HeadingEstimator(**kw)
+    est = EST(hc, **kw)
     return [call(est.update, s) for s in samples]
 
 def valid(o): jsonschema.validate(o, SCHEMA); return True
@@ -48,7 +56,7 @@ def test_F2_step(hc):
 def test_E1_E3_bad_mag(hc, bad):
     seq = [S(i * .02, 45) for i in range(20)] + [dict(S(0.4, 45), mag_uT=bad)] + [S(0.42 + i * .02, 45) for i in range(20)]
     outs = []
-    est = hc.HeadingEstimator()
+    est = EST(hc)
     for s in seq:
         try:
             outs.append(call(est.update, s))
@@ -57,32 +65,32 @@ def test_E1_E3_bad_mag(hc, bad):
     o = outs[20]
     if "rejected" not in o:
         assert math.isfinite(o["heading_deg"]) and 0 <= o["heading_deg"] < 360
-        assert o.get("warnings") or o.get("quality", 1) <= 0.2, f"bad mag {bad} not flagged: {o}"
+        assert flags(o) or o.get("quality", 1) <= 0.2, f"bad mag {bad} not flagged: {o}"
     after = outs[-1]
     assert math.isfinite(after["heading_deg"]) and abs(wrapdiff(after["heading_deg"], 45)) <= 1, "filter corrupted by bad sample"
 
 def test_E1_nan_accel(hc):
     s = S(0, 45); s["accel_g"] = [float("nan"), 0, -1]
-    est = hc.HeadingEstimator()
+    est = EST(hc)
     try: o = call(est.update, s)
     except (ValueError, TypeError): return
-    assert math.isfinite(o["heading_deg"]) and (o.get("warnings") or o.get("quality", 1) <= 0.2)
+    assert math.isfinite(o["heading_deg"]) and (flags(o) or o.get("quality", 1) <= 0.2)
 
 @pytest.mark.parametrize("scale", [0.3, 2.0, 20.0])
 def test_E2_field_out_of_range(hc, scale):
     s = S(0, 45); s["mag_uT"] = (np.array(s["mag_uT"]) * scale).tolist()
-    o = call(hc.HeadingEstimator().update, s)
-    assert o.get("warnings"), f"|B| x{scale} not flagged"
+    o = call(EST(hc).update, s)
+    assert flags(o), f"|B| x{scale} not flagged"
 
 def test_E3_frozen_sensor(hc):
     s0 = S(0, 45); outs = run(hc, [dict(s0, t=i * .02) for i in range(150)])  # 3 s identical, zero noise
-    print("E3 frozen-sensor last warnings:", outs[-1].get("warnings"), "quality", outs[-1].get("quality"))
-    assert outs[-1].get("warnings") or outs[-1].get("quality", 1) < 1, "stuck/identical data never flagged (stale)"
+    print("E3 frozen-sensor last warnings:", flags(outs[-1]), "quality", outs[-1].get("quality"))
+    assert flags(outs[-1]) or outs[-1].get("quality", 1) < 1, "stuck/identical data never flagged (stale)"
 
 def test_E4_time_anomalies(hc):
     ts = [i * .02 for i in range(50)] + [0.98, 0.5, 0.5] + [3.0 + i * .02 for i in range(50)]
     outs = []
-    est = hc.HeadingEstimator()
+    est = EST(hc)
     for i, t in enumerate(ts):
         try: outs.append(call(est.update, S(t, 120)))
         except ValueError: outs.append(None)
@@ -95,14 +103,14 @@ def test_E5_interference_step(hc):
         if i >= 100: s["mag_uT"] = (np.array(s["mag_uT"]) + [25, 0, 0]).tolist()
         samples.append(s)
     outs = run(hc, samples)
-    first = next((i for i in range(100, 200) if outs[i].get("warnings")), None)
+    first = next((i for i in range(100, 200) if flags(outs[i])), None)
     print("E5 interference flagged at sample", first, "err after:", round(abs(wrapdiff(outs[-1]["heading_deg"], 30)), 2))
     assert first is not None and first - 100 <= 10  # <= 0.2 s at 50 Hz
 
 def test_E6_missing_accel(hc):
     s = S(0, 77); del s["accel_g"]
-    o = call(hc.HeadingEstimator().update, s)
-    assert abs(wrapdiff(o["heading_deg"], 77)) <= 0.5 and o.get("warnings")
+    o = call(EST(hc).update, s)
+    assert abs(wrapdiff(o["heading_deg"], 77)) <= 0.5 and flags(o)
 
 @pytest.mark.parametrize("mut", ["short", "str", "nosource"])
 def test_E6_malformed(hc, mut):
@@ -110,7 +118,7 @@ def test_E6_malformed(hc, mut):
     if mut == "short": s["mag_uT"] = [1, 2]
     elif mut == "str": s["mag_uT"] = ["a", "b", "c"]
     else: del s["source"]
-    est = hc.HeadingEstimator()
+    est = EST(hc)
     try: o = call(est.update, s)
     except (ValueError, TypeError, KeyError): return
     valid(o)
