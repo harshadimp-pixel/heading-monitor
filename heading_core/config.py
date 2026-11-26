@@ -65,7 +65,9 @@ class CoreConfig:
     quant_gyro_lp_tau_s: float = 0.5
     quant_accel_lp_tau_s: float = 0.2
     quant_accel_1g_tol_g: float = 0.05
-    quant_nogyro_time_rule: bool = True          # no gyro: MAG_STALE (warning only, quality not cut) after 5 s
+    # Opt-in (PM D3 decision 2026-11-27, default False): with no gyro, also raise MAG_STALE (warning only,
+    # quality not cut) after stale_quant_window_s bit-identical. Default: no gyro -> accel-tilt evidence only.
+    quant_nogyro_time_rule: bool = False
     infer_mag_quant: bool = True                 # PM-approved 2026-11-27. fallback when meta.mag_quant_uT is absent: detect a decimal
     infer_quant_candidates_uT: tuple = (1.0, 0.5, 0.1, 0.05, 0.01)  # grid (e.g. MSP mG) from the data. PROVISIONAL
     infer_quant_min_samples: int = 5

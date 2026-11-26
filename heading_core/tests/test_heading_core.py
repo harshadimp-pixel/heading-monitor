@@ -443,10 +443,24 @@ def _quant_stream(n, rate=50.0, q=0.1, mag_noise=0.0, accel_noise=0.002, seed=0,
     return out
 
 
-def test_quantised_nogyro_fallback_5s_warning_only():
-    """D3 (c): no gyro -> MAG_STALE after 5 s bit-identical, warning only (quality not cut)."""
-    from heading_core import WARN_MAG_STALE, WARN_SENSOR_STALE, ALL_WARNINGS
+def test_quantised_nogyro_default_no_time_rule():
+    """D3 default (PM decision (a)): no gyro, still vehicle, bit-identical mag -> never MAG_STALE / SENSOR_STALE."""
+    from heading_core import WARN_MAG_STALE, WARN_SENSOR_STALE
+    assert CoreConfig().quant_nogyro_time_rule is False
     e = HeadingEstimator(Calibration(field_uT=50.0))
+    ref = HeadingEstimator(Calibration(field_uT=50.0), config=CoreConfig(stale_detection=False))
+    stream = _quant_stream(600)                                # 12 s, bit-identical mag, live accel, no gyro
+    for s in stream:
+        o, r = e.update(s), ref.update(s)
+        assert not ({WARN_MAG_STALE, WARN_SENSOR_STALE} & set(o["warnings"]))
+        assert o["quality"] == pytest.approx(r["quality"])
+    assert e.last_debug["quant_motion"]["frozen_s"] > 11
+
+
+def test_quantised_nogyro_fallback_5s_warning_only_opt_in():
+    """D3 opt-in quant_nogyro_time_rule=True: MAG_STALE after 5 s bit-identical, warning only (quality not cut)."""
+    from heading_core import WARN_MAG_STALE, WARN_SENSOR_STALE, ALL_WARNINGS
+    e = HeadingEstimator(Calibration(field_uT=50.0), config=CoreConfig(quant_nogyro_time_rule=True))
     ref = HeadingEstimator(Calibration(field_uT=50.0), config=CoreConfig(stale_detection=False))
     stream = _quant_stream(300)                                # 6 s, bit-identical mag, live accel
     outs = [e.update(s) for s in stream]

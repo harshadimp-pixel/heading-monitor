@@ -216,9 +216,10 @@ mag data alone a still sensor and a frozen one are indistinguishable (defect D3)
   acceleration does not fake a tilt change. Accel bias cancels (difference).
 * Flag when θ_g > `quant_motion_threshold_deg` (3°) **or** accel evidence > 3°: `MAG_STALE`, quality ×
   max(0.3, `mag_stale_quality_factor`) = 0.3 (never below 0.3×).
-* **No gyro** in the sample: accel evidence as above (quality ×0.3), and otherwise the fallback
-  `quant_nogyro_time_rule` (default on, per PM): bit-identical for ≥ `stale_quant_window_s` (5 s) → `MAG_STALE`
-  as a **warning only, quality not cut**. With gyro present the 5 s time rule is not used.
+* **No gyro** in the sample: **only** the accel-tilt evidence rule above (quality ×0.3) — default since the PM's
+  D3 decision (a), 2026-11-27. The time rule `quant_nogyro_time_rule` is **opt-in (default False)**: if enabled,
+  bit-identical for ≥ `stale_quant_window_s` (5 s) → `MAG_STALE` as a **warning only, quality not cut**. With gyro
+  present the time rule is never used.
 
 `SENSOR_STALE` (mag near-identical **and** accel frozen or absent, 0.5 s, ×0.05) and `TIMESTAMP_STALE` are
 unchanged in both modes; non-quantised mode is unchanged (0.5 s near-identical rule, ×0.3).
@@ -310,7 +311,7 @@ heading RMS vs `truth.heading_deg` is 0.71–0.83° on static / yaw_spin / tilte
 against 34–42° RMS uncalibrated on the spin scenarios. This uses the simulator's own noise/bias models, so it checks that the interfaces and
 conventions agree, not real-world accuracy.
 
-## 11. Reference test cases (all in `heading_core/tests/test_heading_core.py`, 75 tests)
+## 11. Reference test cases (all in `heading_core/tests/test_heading_core.py`, 76 tests)
 
 | Case | Input | Expected |
 |---|---|---|
@@ -334,7 +335,8 @@ conventions agree, not real-world accuracy.
 | D3 frozen mag while turning | 30°/s and 5°/s yaw, mag stuck from 2 s | MAG_STALE, quality = 0.3 × unflagged |
 | D3 tilt, no gyro | pitch 0→10°, mag stuck, live accel | MAG_STALE by accel evidence, quality cut |
 | D3 bias | 0.2°/s/axis constant for 60 s, mag bit-identical | gyro evidence stays 0, no MAG_STALE |
-| D3 no-gyro fallback | 0.1 µT stationary, no gyro | MAG_STALE from 5.0 s, quality equal to unflagged |
+| D3 no-gyro default | 0.1 µT stationary 12 s, no gyro | no MAG_STALE / SENSOR_STALE, quality = unflagged |
+| D3 no-gyro opt-in time rule | same, `quant_nogyro_time_rule=True` | MAG_STALE from 5.0 s, quality equal to unflagged |
 | fc_mag_calibrated | true / false / "unknown" / absent | same heading and warnings; quality ×0.7 only for true |
 | Accel convention | (0,0,−1) level; nose-up 10° → x = +sin 10°; (0,0,+1) fed in | 0/0; pitch 10°; `TILT_TOO_LARGE` |
 | Schema | every estimator output (incl. 300 random-garbage samples) | validates against contracts/heading_estimate.schema.json |
@@ -396,9 +398,10 @@ Unresolved at REVIEW (mirrored in TEAM_TRACKER.md, T2 row):
     0.1 µT steps and 15 nT noise a healthy still sensor repeats bit-identical readings, so without motion there is
     no evidence to separate "frozen" from "still". Detection needs rotation > 3° (beyond the 1°/s deadband) or a
     > 3° tilt change. Consequences: slow turns < 1°/s, or rotation about the field direction, with a frozen mag go
-    unflagged; a gyro bias > ~1°/s (magnitude) could cause false alarms; without gyro the PM's 5 s fallback still
-    warns on healthy still sensors (warning only, quality kept) — it fails the Auditor's no-gyro stress test E3b
-    unless `quant_nogyro_time_rule=False`. Quantised stationary data with **no** accel channel still raises
+    unflagged; a gyro bias > ~1°/s (magnitude) could cause false alarms. **Default `quant_nogyro_time_rule=False`**
+    (PM D3 decision (a)): without gyro only a > 3° accel tilt change is evidence, so a frozen mag on a vehicle that
+    only yaws (level turn) with no gyro is not detected. The opt-in 5 s rule (True) catches long freezes without
+    gyro but also warns on healthy still sensors (4/20 Auditor E3b sessions; warning only, quality kept). Quantised stationary data with **no** accel channel still raises
     `SENSOR_STALE` after 0.5 s (unchanged rule).
 15. Temperature drift, RM3100 linearity (0.5 % [DATASHEET]) and cycle-count changes are not modelled.
 16. Heading is not course over ground; no speed, distance or place estimate is provided or implied (section 1).
