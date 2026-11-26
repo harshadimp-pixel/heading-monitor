@@ -11,6 +11,7 @@ Labels used: `[DATASHEET]` (PNI documents), `[OFFICIAL-DOC]` (mateksys.com, ardu
 | `docs/hardware/key_numbers.json` | Machine-readable key numbers for the Math, Sim and Firmware teams |
 | `docs/hardware/SOURCES.md` | All source URLs, pinned firmware commit SHAs, sha256 of the verified PDFs, and the audit note on the captcha download |
 | `docs/hardware/verify_datasheet.py` | Script that checks every `[DATASHEET]` value with a regex against the `pdftotext` output of the PNI PDFs |
+| `docs/hardware/check_key_numbers.py` | Consistency check of key_numbers.json plus recomputation of derived values (`python3 docs/hardware/check_key_numbers.py` from the repo root) |
 | `docs/hardware/VERIFICATION.md` | Output of the 2026-11-27 verification run |
 | `TEAM_TRACKER.md` (T1 row + "Limitations — T1 Hardware") | Status and limitations mirror |
 | Outside the repo (not cited as evidence): `/workspace/hwsrc/refetch/` | Verified PDF copies (not committed, for copyright reasons). Failed downloads renamed `INVALID-*` in `/workspace/hwsrc/` (see `README-INVALID.txt`) |
@@ -115,23 +116,10 @@ PASS S3   [sales] Sales: gain 20/38/75
 Result: **66/66 PASS**, so nothing was downgraded to `[UNVERIFIED]`. This only proves the values appear in the PNI documents. It is not a measurement.
 
 ### 2.3 key_numbers.json consistency and derived values
-Command: `python3 /tmp/kn_check.py`. The script is quoted below. It loads `docs/hardware/key_numbers.json`, asserts gain, range and I2C addresses, and recomputes the `[DERIVED]` values used in the fact sheet.
-```python
-import json, struct
-d = json.load(open("docs/hardware/key_numbers.json"))
-r = d["rm3100"]; g = r["gain_lsb_per_uT"]
-assert (g["50"], g["100"], g["200"]) == (20, 38, 75)
-assert r["range_uT"]["min"] == -800 and r["range_uT"]["max"] == 800
-assert r["i2c_addresses"] == ["0x20", "0x21", "0x22", "0x23"]
-for cc in ("50", "100", "200"):
-    print(f"CC={cc}: {1/g[cc]:.4f} uT/LSB")
-print(f"24-bit full scale at CC=200: {8388607/75:.0f} uT")
-print(f"INAV counts>>8 at CC=200: {256/75:.3f} uT/LSB")
-def f16step(x):
-    i = struct.unpack('<H', struct.pack('<e', x))[0]
-    return struct.unpack('<e', struct.pack('<H', i+1))[0] - struct.unpack('<e', struct.pack('<H', i))[0]
-print(f"float16 step @0.3 G = {f16step(0.3)*1e5:.1f} nT, @0.6 G = {f16step(0.6)*1e5:.1f} nT")
-print("key_numbers.json: valid JSON, asserts OK")
+Script: `docs/hardware/check_key_numbers.py` (committed). It loads `docs/hardware/key_numbers.json`, which it finds relative to its own location, asserts the gain, range and I2C addresses, and recomputes the `[DERIVED]` values used in the fact sheet.
+Command, run from the repo root (re-run 2026-11-27 ~00:28 IST):
+```
+python3 docs/hardware/check_key_numbers.py
 ```
 Actual output (exit code 0):
 ```
