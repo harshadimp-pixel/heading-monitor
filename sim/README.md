@@ -2,7 +2,8 @@
 
 > **THIS IS A SIMULATION, NOT HARDWARE CHARACTERISATION.**
 > Every value this package emits is **[SIMULATED]**. RM3100 constants are datasheet *typical* values
-> (**[DATASHEET]**, **PROVISIONAL** until T1 publishes `docs/hardware/`); IMU, interference and environment
+> (**[DATASHEET]** at cycle counts 50/100/200, cross-checked against T1's `docs/hardware/FACTSHEET.md`; other cycle
+> counts are **[DERIVED-APPROX]** and flagged `provisional`); IMU, interference and environment
 > constants are **ASSUMED** round numbers chosen for testing. Nothing here describes the behaviour of our
 > physical RM3100 or Matek FC, and no result from it may be tagged `[HARDWARE-VERIFIED]`.
 
@@ -48,7 +49,7 @@ environmental noise, before sensor noise and quantisation), `interference_uT` (=
 `motor_current_A`.
 `meta`: `scenario`, `seed`, `i` (sample index); `rm3100_saturated: true` when clipped; the first line also carries
 `disclaimer` and `sim_config` (full resolved config incl. hard/soft-iron truth, Earth field vector, IMU bias truth,
-RM3100 gain/noise and their source), so a replayed file describes itself.
+RM3100 gain/noise, evidence label, `provisional` flag and source), so a replayed file describes itself.
 
 `truth.heading_deg` is the **magnetic** heading (yaw − declination), in [0, 360), so it matches
 `heading_core` output with `declination_deg=0`; `true_heading_deg` is the true heading.
@@ -71,8 +72,10 @@ Frames: NED, body x forward, y right, z down; ZYX Euler (yaw, pitch, roll), yaw 
    | noise, nT | 30 | 20 | 15 |
    | max single-axis rate, Hz (÷3 for 3-axis) | 1600 | 850 | 440 |
 
-   Default cycle count 200 (register default 0x00C8). Gain and noise are piecewise-linear between table points.
-   Outside 50–200 (ASSUMED): gain ∝ cycle count (≈ 0.3755 LSB/µT per cycle) and noise ∝ 1/√cycle count.
+   These match T1's `docs/hardware/FACTSHEET.md` (DRAFT, commit bccda22), and a test checks it.
+   Default cycle count 200 (register default 0x00C8). At any other cycle count the values are **[DERIVED-APPROX]**
+   and `sim_config.rm3100.provisional` is `true`: piecewise-linear between table points, and outside 50–200
+   gain ∝ cycle count (≈ 0.3755 LSB/µT per cycle) and noise ∝ 1/√cycle count.
    The datasheet noise figure is used as per-axis 1σ white Gaussian noise. The reading is quantised to integer counts,
    clipped at ±800 µT·gain (manual's monotonic range) and at the 24-bit signed limits, and flagged as saturated.
    A rate above the datasheet's 3-axis maximum prints a warning on stderr but is still simulated.
@@ -86,9 +89,10 @@ Frames: NED, body x forward, y right, z down; ZYX Euler (yaw, pitch, roll), yaw 
    accel, gyro and FC models.
 
 ## LIMITATIONS (unresolved)
-1. **The RM3100 gain, noise, range and rate figures are PROVISIONAL.** They are my own reading of PNI's typical values,
-   not yet cross-checked against T1's `docs/hardware/`, which was empty at the time of writing. Typicals are not
-   per-unit values. They were specified at 3.0 V with Rb 121 Ω and R_EXT 33 kΩ, and the Matek or breakout board circuit
+1. **The RM3100 figures are datasheet typicals, not per-unit values.** They match T1's FACTSHEET, but that sheet is
+   still DRAFT; if T1 revises it, `test_matches_t1_factsheet` will fail. Gain and noise at cycle counts other than
+   50, 100 and 200 are **PROVISIONAL / [DERIVED-APPROX]**, because PNI publishes no formula. The typicals were
+   specified at 3.0 V with Rb 121 Ω and R_EXT 33 kΩ, and the Matek or breakout board circuit
    may differ.
 2. **The two PNI documents disagree on the field range** (manual ±800 µT, 2020 sales sheet ±1100 µT). The sim uses ±800 µT
    and models saturation as hard clipping, whereas the real sensor goes non-monotonic beyond its range.

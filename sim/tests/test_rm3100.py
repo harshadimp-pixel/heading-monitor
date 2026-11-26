@@ -75,3 +75,20 @@ def test_saturation_and_24bit_clip():
     assert sat2 and c2[0] == COUNTS_MAX
     s = generate(scenario="static", duration_s=0.1, hard_iron_uT=[0, 0, 900.0])
     assert all(x["meta"].get("rm3100_saturated") for x in s)
+
+
+def test_matches_t1_key_numbers_json():
+    """Machine-readable cross-check against T1's docs/hardware/key_numbers.json when present."""
+    import json
+    from .conftest import REPO
+    from sim.rm3100 import CC_TABLE, GAIN_TABLE_LSB_PER_UT, NOISE_TABLE_NT, MAX_SINGLE_AXIS_RATE_HZ, DEFAULT_CYCLE_COUNT
+    f = REPO / "docs" / "hardware" / "key_numbers.json"
+    if not f.exists():
+        pytest.skip("docs/hardware/key_numbers.json not present")
+    k = json.loads(f.read_text())["rm3100"]
+    for cc, g, n, r in zip(CC_TABLE, GAIN_TABLE_LSB_PER_UT, NOISE_TABLE_NT, MAX_SINGLE_AXIS_RATE_HZ):
+        key = str(int(cc))
+        assert k["gain_lsb_per_uT"][key] == g and k["noise_nT"][key] == n
+        assert k["max_rate_single_axis_hz"][key] == r
+    assert k["range_uT"]["max"] == FIELD_RANGE_UT and k["range_uT"]["min"] == -FIELD_RANGE_UT
+    assert k["default_cycle_count"] == DEFAULT_CYCLE_COUNT and k["raw_bits"] == 24
