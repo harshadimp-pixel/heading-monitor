@@ -12,6 +12,7 @@ code{background:#0f1720;padding:1px 4px;border-radius:4px;font-size:12px}
 .source-badge.sim{color:#1a1203;background:var(--sim);border-color:#fcd34d}
 .source-badge.replay{color:#fff;background:var(--replay);border-color:#93c5fd}
 .source-badge.hardware{color:#03140e;background:var(--hw);border-color:#6ee7b7}
+.source-badge.unverified{color:#fff;background:#7f1d1d;border-color:#fca5a5}
 .source-badge.none{color:var(--muted);background:#1b2430;border-color:#334155}
 .source-badge.stale{opacity:.45;filter:grayscale(.6)}
 .badge-sub{font-size:11px;color:var(--muted);margin-top:2px}

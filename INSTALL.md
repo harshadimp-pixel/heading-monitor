@@ -9,7 +9,7 @@ the "Verification log" at the end.
 |---|---|---|
 | Python | 3.10+ (verified with 3.13.5) | everything |
 | git | any | cloning |
-| Google Chrome or Chromium | any recent (verified with google-chrome) | *optional*: the 3 headless-UI tests in `app/tests/test_app_ui_headless.py` (skipped when absent) and the demo video |
+| Google Chrome or Chromium | any recent (verified with google-chrome) | *optional*: the 5 headless-UI tests in `app/tests/test_app_ui_headless.py` (skipped when absent) and the demo video |
 | Node.js | any recent (verified with 24) | *optional*: 2 app tests that run the front-end JS maths and badge mapping (skipped when absent) |
 | ffmpeg (with libx264) | verified with 7.1 | *optional*: only `reports/demo/make_demo.py` |
 | pyserial | — | *optional*: only `--source serial:<port>` against a real FC (`pip install pyserial`) |

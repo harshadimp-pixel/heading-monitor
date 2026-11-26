@@ -5,6 +5,27 @@
   const SOURCE_LABEL = { sim: "SIMULATED", replay: "REPLAY", hardware: "HARDWARE" };
   /** DATA SOURCE badge text: a pure mapping of sample.source; anything else -> null (UI shows NO DATA) */
   function badgeLabel(source) { return Object.prototype.hasOwnProperty.call(SOURCE_LABEL, source) ? SOURCE_LABEL[source] : null; }
+  const ORIGIN_WORD = { hardware: "hardware", sim: "simulator" };
+  /** Displayed badge (D6). Derived from sample.source (+ meta.original_source, + the transport that delivered it).
+   *  - sim                      -> SIMULATED
+   *  - replay + original_source -> "REPLAY (recorded hardware)" / "REPLAY (recorded simulator)"; else "REPLAY"
+   *  - hardware via serial      -> HARDWARE (the ONLY path that shows HARDWARE / live)
+   *  - hardware via anything else (replay, ingest, unknown) -> "UNVERIFIED SOURCE" (never shown as live hardware)
+   *  - anything else            -> null (UI shows NO DATA)
+   *  Returns {text, cls, live} or null. */
+  function badgeInfo(source, originalSource, transport) {
+    const base = badgeLabel(source);
+    if (!base) return null;
+    if (source === "replay") {
+      const w = Object.prototype.hasOwnProperty.call(ORIGIN_WORD, originalSource) ? ORIGIN_WORD[originalSource] : null;
+      return { text: w ? `REPLAY (recorded ${w})` : "REPLAY", cls: "replay", live: false };
+    }
+    if (source === "hardware") {
+      return transport === "serial" ? { text: "HARDWARE", cls: "hardware", live: true }
+                                    : { text: "UNVERIFIED SOURCE", cls: "unverified", live: false };
+    }
+    return { text: base, cls: source, live: false };
+  }
   const isNum = (v) => typeof v === "number" && isFinite(v);
   /** wrap any angle to [0, 360) */
   function wrap360(d) { let x = d % 360; if (x < 0) x += 360; return x >= 360 ? 0 : x; }
@@ -15,6 +36,6 @@
   /** level heading (NED body: x fwd, y right, z down) = atan2(-By, Bx) */
   function levelHeading(bx, by) { return wrap360(Math.atan2(-by, bx) * 180 / Math.PI); }
   function cardinal(h) { return isNum(h) ? CARD16[Math.round(roundHeading(h) / 22.5) % 16] : ""; }
-  const api = { SOURCE_LABEL, badgeLabel, wrap360, angleDiff, roundHeading, levelHeading, cardinal, isNum };
+  const api = { SOURCE_LABEL, badgeLabel, badgeInfo, wrap360, angleDiff, roundHeading, levelHeading, cardinal, isNum };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.HeadingMath = api;
 })(this);

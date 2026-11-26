@@ -67,7 +67,7 @@ python -m pytest app/tests -q
 
 | Panel | Contents |
 |---|---|
-| Header | **DATA SOURCE badge**: SIMULATED / REPLAY / HARDWARE, mapped only from the latest sample's `source` field. It shows NO DATA when nothing current exists. The transport (CLI `--source`) is shown separately, in small text, and is never used for the badge. An evidence banner follows the source. |
+| Header | **DATA SOURCE badge**, derived from the latest sample's `source` field (plus `meta.original_source`; see D6 below): SIMULATED (`sim`), REPLAY (recorded hardware) (`replay` + original_source `hardware`), REPLAY (recorded simulator), REPLAY, and HARDWARE only for `hardware` samples from a live serial source. A `hardware`-labelled sample arriving any other way (ingest) shows UNVERIFIED SOURCE and is never presented as live. NO DATA when nothing current exists. The transport (CLI `--source`) is shown in small text. An evidence banner follows the badge; for replayed data it says the data is recorded, not a live sensor stream. |
 | Heading | SVG compass rose: ticks every 10°, numbers every 30°, N/E/S/W. It has three distinct indicators: measured heading needle in cyan (heading_core `heading_deg`: filtered estimate, using the calibration when one is applied), unfiltered needle in grey (heading_core `heading_raw_deg`: instantaneous, before smoothing), and the reference marker as an amber dashed line with a rim triangle. Below it: the numeric measured and unfiltered heading with a 16-point cardinal; calibration state is shown in the status panel and \|B\| raw vs calibrated in the field panel; a reference heading input with slider, "use current", clear, or click on the rose; and the signed deviation (measured − reference) wrapped to (−180, 180]. |
 | Sensor status & accuracy | Status: OK / DEGRADED / FAULT / STALE / NO DATA, with the reason. Also: last-sample age, rate, accepted/invalid counts, heading_core quality (0–1) with quality bar, short-term noise 1σ, calibration state and residual, error versus sim truth (simulated data only), and warnings. |
 | Roll / pitch | Artificial-horizon canvas plus numbers, taken from the HeadingEstimate. |
@@ -119,20 +119,36 @@ curl -X POST localhost:8080/api/sample -H 'Content-Type: application/json' \
 * `POST /api/calib/{start,stop,fit,apply,clear,save,load}`, `GET /api/calib/{list,current}`.
 * `POST /api/record/{start,stop}` (`{"format":"csv"|"jsonl"}`), `GET /api/recordings`, `GET /recordings/<name>`.
 
+### D6: replayed hardware is never shown as live (ARCHITECTURE.md, PM decision 2026-11-27)
+* `--source replay:<file>`: every sample with `source:"hardware"` is relabelled on read to `source:"replay"`, with
+  `meta.original_source:"hardware"` and `meta.replayed_from:<file>` (the same fields `firmware_bridge --replay` sets;
+  `app/sources.py: relabel_replayed_sample`). Other meta keys are kept. Samples with `source:"sim"` or `"replay"` are
+  not changed, so a replayed sim log still shows SIMULATED.
+* Each history/WebSocket record carries `source` (after relabelling), `original_source` (copied from
+  `meta.original_source`, never inferred), `transport` (`sim|replay|serial|ingest`, from `--source`) and
+  `live_hardware` (true only for `source:"hardware"` via `serial`).
+* Recordings keep the relabelled data: CSV has `source`, `original_source`, `transport` columns; JSONL stores the
+  relabelled Sample including `meta.original_source`.
+* `ingest` keeps `sample.source` as posted (contract), but a `hardware` sample via ingest shows UNVERIFIED SOURCE
+  and a banner saying it is not a live serial source.
+
 CSV columns: `recv_time_iso, t, source, heading_deg, heading_raw_deg, reference_deg, deviation_deg, roll_deg,
 pitch_deg, bx_uT, by_uT, bz_uT, field_raw_uT, field_cal_uT, calibrated, quality, noise_1sigma_deg, warnings,
-sensor_status, estimator_backend, truth_heading_deg_sim_only, gps_status, gps_fix, gps_num_sat, gps_hdop, mag_raw_x, mag_raw_y, mag_raw_z`
+sensor_status, estimator_backend, truth_heading_deg_sim_only, gps_status, gps_fix, gps_num_sat, gps_hdop, mag_raw_x, mag_raw_y, mag_raw_z, original_source, transport`
 (the `mag_raw_*` cells are empty when the sample has no raw counts).
 
 ## Tests (run 2026-11-27, real results)
-`python -m pytest app/tests -v` gives **45 passed**, about 20 s per run. Three consecutive full runs passed (45/45
-each), and a fresh clone in a fresh venv also gave 45 passed (see `INSTALL.md`, Verification log).
+`python -m pytest app/tests -q` gives **52 passed**, about 24 s per run, after the D6 fix (2026-11-27, about 01:01–01:09 IST):
+three consecutive full runs 52/52, and `test_app_ui_headless.py` 5 consecutive runs 5/5. Whole repo `python -m pytest -q`:
+512 passed, 45 skipped; `tests/` (T6): 111 passed. The Auditor's `reports/audit/integration_run.py` run with output to
+/tmp gave 27/27, including A8 and A8b. Before D6 (commit 41bb756): 45 passed, also on a fresh clone in a fresh venv
+(see `INSTALL.md`, Verification log).
 `app/tests/test_app_ui_headless.py` passed 10 consecutive times (3/3 each, about 4 s). The auditor's
 `tests/test_t6_app.py` and `tests/test_t6_claims.py` give 14 passed. `test_sim_duration_end_goes_stale` checks that
 when the sim ends (`--sim-duration`) the app goes stale and shows Unknown. Label semantics: "Measured heading" is the
 filtered estimate (`heading_deg`). "Unfiltered" is `heading_raw_deg`, the instantaneous value before smoothing, and
 it is calibrated whenever a calibration is applied.
-Environment: Python 3.13.5, pytest 9.2.0, Node 24 for the JS mapping tests, google-chrome headless for the 3 DOM tests.
+Environment: Python 3.13.5, pytest 9.2.0, Node 24 for the JS mapping tests, google-chrome headless for the 5 DOM tests.
 Every test starts its own app with `--port 0` (OS-assigned ephemeral port, read back from the start-up log line), never 8080.
 The headless smoke tests need no browser:
 * start-up, `GET /` and `GET /api/health` (`test_sim_source_serves_ui_and_streams`)
@@ -145,6 +161,11 @@ The headless smoke tests need no browser:
 * GPS availability: absent → Unknown, present → fix/satellites/HDOP passed through, invalid → heading kept and GPS
   Unknown, stale → Unknown, plus CSV columns and CSV/JSONL recordings (`test_gps_availability_absent_present_invalid`,
   `test_gps_in_recordings`); rendered values in headless Chrome (`test_gps_indicator_renders_fix_sats_hdop`)
+* D6 (`test_app_d6_replay.py`): the relabel uses the same fields as `firmware_bridge.bridge.replay`; app replay of a
+  hardware JSONL gives `source:"replay"` + `original_source:"hardware"` in history, CSV and JSONL recordings; a sim
+  replay is unchanged; ingest `hardware` is not live; the frontend `badgeInfo` mapping in Node. In headless Chrome:
+  badge `REPLAY (recorded hardware)` with a banner that does not contain "Live"
+  (`test_d6_replayed_hardware_log_shows_replay_badge_not_live`), and a replayed sim log stays SIMULATED.
 * `mag_raw` optional (`test_mag_raw_is_optional`), Unknown/stale (`test_ingest_unknown_until_data_then_stale_...`),
   replay + CSV export, JSONL recording, serial without hardware gives FAULT with no fabricated data, heading maths and
   wrap/deviation, stub fallback versus real-module errors.
@@ -174,9 +195,12 @@ The headless-Chrome DOM tests are deterministic:
    CLI verified compatible via `--help`). It has only been exercised with a non-existent port, where it reports FAULT and no data. It
    has never been run against a real flight controller, a live firmware_bridge session or the CAN-L4-3100.
    Everything here is virtual.
-4. **Replay keeps the original `source`.** A JSONL file recorded from the simulator still says `source:"sim"`, so the
-   badge shows SIMULATED while the transport line shows `replay`. This follows the "badge from sample.source only"
-   rule. A replayer that rewrites `source` to `replay` belongs in T3/T4/PM scope.
+4. **Replay labels (D6 fixed, pending the Auditor's re-run).** A replayed `hardware` sample becomes `source:"replay"`
+   with `meta.original_source:"hardware"` and shows REPLAY (recorded hardware), never live. A replayed sim log keeps
+   `source:"sim"` and shows SIMULATED, with the transport shown as replay. The relabel mirrors the three fields of
+   `firmware_bridge --replay` rather than importing it, because the bridge's Python helper is not an ARCHITECTURE
+   interface (CLI only) and it relabels sim too. The app trusts `meta.original_source` as written in the file; a file
+   could claim anything. HARDWARE is shown only for the serial transport, which has never run against a real FC (3).
 5. **Stubs.** `_stubs.py` (min/max hard-iron + diagonal scale calibration, no smoothing, simple quality, simple
    simulator) is used only when the real module is missing or raises `NotImplementedError`. In the current repo state,
    heading_core (T2) and sim (T3) are real and the stubs are **inactive** (the UI shows which backend is in use).

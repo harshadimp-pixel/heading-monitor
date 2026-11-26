@@ -13,7 +13,7 @@ window.__hmProbe = () => ({ connected: S.connected, messages: S.messages, record
   latestSeq: S.records.length ? S.records[S.records.length - 1].seq : 0, renderedSeq: S.renderedSeq, renders: S.renders });
 
 // ---------------------------------------------------------------- math helpers (mirrored in tests)
-const { wrap360, angleDiff, roundHeading, cardinal, isNum, badgeLabel } = window.HeadingMath;
+const { wrap360, angleDiff, roundHeading, cardinal, isNum, badgeLabel, badgeInfo } = window.HeadingMath;
 function fmtHeading(h) { return isNum(h) ? roundHeading(h).toFixed(1) + "°" : UNKNOWN; }
 function fmtSigned(d, nd = 1) { return isNum(d) ? (d > 0 ? "+" : d < 0 ? "−" : "±") + Math.abs(d).toFixed(nd) + "°" : UNKNOWN; }
 function fmtNum(v, nd = 2, unit = "") { return isNum(v) ? v.toFixed(nd) + unit : UNKNOWN; }
@@ -199,17 +199,25 @@ function render() {
 
   // DATA SOURCE badge — from sample.source only
   const badge = $("sourceBadge");
-  if (fresh && badgeLabel(r.source)) {
-    badge.textContent = badgeLabel(r.source); badge.className = "source-badge " + r.source;
-    $("sourceSub").textContent = `from sample.source = "${r.source}"`;
+  const bi = r ? badgeInfo(r.source, r.original_source, r.transport) : null;
+  if (fresh && bi) {
+    badge.textContent = bi.text; badge.className = "source-badge " + bi.cls;
+    $("sourceSub").textContent = `from sample.source = "${r.source}"` +
+      (r.original_source ? ` · meta.original_source = "${r.original_source}"` : "") + ` · via ${r.transport || "?"}`;
   } else {
     badge.textContent = "NO DATA"; badge.className = "source-badge none";
     $("sourceSub").textContent = r ? `last sample.source "${r.source}" · ${isNum(age) ? age.toFixed(1) + " s ago" : "connection lost"}` : "no sample received";
   }
-  const evid = { sim: "[SIMULATED] Values come from the simulator. They are not hardware measurements.",
-                 replay: "[REPLAYED] Values come from a recorded log.",
-                 hardware: "Live hardware samples. Accuracy is not hardware-verified until the auditor signs off a committed log." };
-  $("evidenceBanner").textContent = fresh ? evid[r.source] : "No current data. All measurements below are Unknown.";
+  let evidText = "No current data. All measurements below are Unknown.";
+  if (fresh && bi) {
+    if (r.source === "sim") evidText = "[SIMULATED] Values come from the simulator. They are not hardware measurements.";
+    else if (r.source === "replay" && r.original_source === "hardware")
+      evidText = "[REPLAYED] Recorded hardware log played back from a file. This is recorded data, not a live sensor stream. Nothing here is hardware-verified.";
+    else if (r.source === "replay") evidText = "[REPLAYED] Values come from a recorded log, not a live sensor stream.";
+    else if (bi.live) evidText = "Live hardware samples (serial). Accuracy is not hardware-verified until the auditor signs off a committed log.";
+    else evidText = `[UNVERIFIED] Samples are labelled "hardware" but arrived via ${r.transport || "an unknown transport"}, not a live serial source. They are not treated as live sensor data.`;
+  }
+  $("evidenceBanner").textContent = evidText;
 
   // heading
   const declTxt = st && st.core.declination_deg ? "true, declination applied" : "magnetic";
@@ -310,7 +318,7 @@ function renderTable() {
   const rows = S.records.slice(-20).reverse().map((x) => {
     const m = x.mag_uT || [];
     return `<tr><td>${new Date(x.recv_ms).toLocaleTimeString([], { hour12: false })}.${String(Math.floor(x.recv_ms % 1000)).padStart(3, "0")}</td>` +
-      `<td>${badgeLabel(x.source) || x.source}</td>` + cell(x.heading_deg, (v) => roundHeading(v).toFixed(1)) +
+      `<td>${(badgeInfo(x.source, x.original_source, x.transport) || {}).text || x.source}</td>` + cell(x.heading_deg, (v) => roundHeading(v).toFixed(1)) +
       cell(x.heading_raw_deg, (v) => roundHeading(v).toFixed(1)) + cell(x.reference_deg, (v) => v.toFixed(1)) +
       cell(x.deviation_deg, (v) => v.toFixed(1)) + cell(m[0], (v) => v.toFixed(2)) + cell(m[1], (v) => v.toFixed(2)) +
       cell(m[2], (v) => v.toFixed(2)) + cell(x.field_raw_uT, (v) => v.toFixed(2)) + cell(x.quality, (v) => v.toFixed(2)) +

@@ -96,6 +96,24 @@ def _module_available(name: str) -> bool:
         return False
 
 
+def relabel_replayed_sample(sample, path):
+    """D6 (ARCHITECTURE.md, PM 2026-11-27): a replayed sample labelled source "hardware" is never presented as live.
+    Same field semantics as firmware_bridge --replay (bridge._replay_jsonl): source -> "replay",
+    meta.original_source = the original label, meta.replayed_from = the file. Unlike the bridge, only "hardware"
+    is relabelled here: a replayed sim log keeps source "sim" (SIMULATED is the more conservative label, per the
+    same decision). The bridge's Python helper is not part of the ARCHITECTURE interfaces (CLI only), so the
+    three field assignments are mirrored rather than imported."""
+    if not isinstance(sample, dict) or sample.get("source") != "hardware":
+        return sample
+    s = dict(sample)
+    meta = dict(s.get("meta") or {}) if isinstance(s.get("meta"), dict) else {}
+    meta["original_source"] = "hardware"
+    meta["replayed_from"] = path
+    s["meta"] = meta
+    s["source"] = "replay"
+    return s
+
+
 class Source:
     kind = "?"
 
@@ -128,7 +146,7 @@ class Source:
         raise NotImplementedError
 
     # ---- shared JSONL reader with pacing by sample t
-    def _pump_lines(self, lines, pace=True, speed=1.0):
+    def _pump_lines(self, lines, pace=True, speed=1.0, transform=None):
         t_first = wall_first = None
         n = 0
         for line in lines:
@@ -149,7 +167,7 @@ class Source:
                 if delay > 0:
                     if self.stop_event.wait(min(delay, 5.0)):
                         break
-            self.emit(s)
+            self.emit(transform(s) if transform else s)
             n += 1
         return n
 
@@ -261,7 +279,8 @@ class ReplaySource(Source):
         self.set_status(state="running", backend="app file reader", detail=self.path)
         while not self.stop_event.is_set():
             with open(self.path, encoding="utf-8") as f:
-                self._pump_lines(f, pace=True, speed=self.speed)
+                self._pump_lines(f, pace=True, speed=self.speed,
+                                 transform=lambda x: relabel_replayed_sample(x, self.path))
             if not self.loop:
                 break
         if not self.stop_event.is_set():

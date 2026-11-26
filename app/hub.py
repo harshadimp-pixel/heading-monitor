@@ -32,7 +32,8 @@ CSV_COLUMNS = ["recv_time_iso", "t", "source", "heading_deg", "heading_raw_deg",
                "deviation_deg", "roll_deg", "pitch_deg", "bx_uT", "by_uT", "bz_uT",
                "field_raw_uT", "field_cal_uT", "calibrated", "quality", "noise_1sigma_deg",
                "warnings", "sensor_status", "estimator_backend", "truth_heading_deg_sim_only",
-               "gps_status", "gps_fix", "gps_num_sat", "gps_hdop", "mag_raw_x", "mag_raw_y", "mag_raw_z"]
+               "gps_status", "gps_fix", "gps_num_sat", "gps_hdop", "mag_raw_x", "mag_raw_y", "mag_raw_z",
+               "original_source", "transport"]
 
 
 def _iso(ms: float) -> str:
@@ -55,7 +56,8 @@ def record_to_row(r: dict) -> list:
             _num(r.get("quality")), _num(r.get("noise_1sigma_deg")),
             ";".join(r.get("warnings") or []), r.get("sensor_status", ""), r.get("estimator_backend", ""),
             _num(r.get("truth_heading_deg")), r.get("gps_status", "unknown"),
-            r.get("gps_fix") or "", _num(r.get("gps_num_sat")), _num(r.get("gps_hdop")), *raw]
+            r.get("gps_fix") or "", _num(r.get("gps_num_sat")), _num(r.get("gps_hdop")), *raw,
+            r.get("original_source") or "", r.get("transport") or ""]
 
 
 def safe_name(name: str, ext: str) -> str:
@@ -147,6 +149,13 @@ class Hub:
              "estimator_backend": backend, "error": est_err,
              "truth_heading_deg": (s.get("truth") or {}).get("heading_deg") if s["source"] == "sim" else None,
              "gps_status": "unknown", "gps_fix": None, "gps_num_sat": None, "gps_hdop": None}
+        # D6: provenance for the badge/banner. original_source is copied from meta (never inferred);
+        # transport is how this process received the sample (sim | replay | serial | ingest).
+        meta = s.get("meta") if isinstance(s.get("meta"), dict) else {}
+        orig = meta.get("original_source")
+        r["original_source"] = orig if isinstance(orig, str) else None
+        r["transport"] = self.source_spec.split(":")[0]
+        r["live_hardware"] = s["source"] == "hardware" and r["transport"] == "serial"
         gps, gps_err = parse_gps(s.get("gps"))
         if gps_err:
             r["gps_error"] = gps_err

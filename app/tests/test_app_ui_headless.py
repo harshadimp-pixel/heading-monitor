@@ -34,6 +34,7 @@ def test_dashboard_renders_in_headless_chrome():
 
 def test_gps_indicator_renders_fix_sats_hdop():
     ids = ["sourceBadge", "gpsStatus", "gpsFix", "gpsSats", "gpsHdop"]
+    # source "hardware" via ingest is not a live serial source -> UNVERIFIED SOURCE (D6), never HARDWARE
     with run_app("--source", "ingest", "--stale", "30") as (base, port):
         with HeadlessPage(base + "/") as page:
             page.wait_for("window.__hmProbe && window.__hmProbe().connected")
@@ -41,12 +42,14 @@ def test_gps_indicator_renders_fix_sats_hdop():
                                                  gps={"fix": "3d", "num_sat": 9, "hdop": 0.9}))
             page.wait_for(_rendered(get_json(base + "/api/history")["records"][-1]["seq"]))
             with_gps = page.texts(ids)
+            banner = page.texts(["evidenceBanner"])["evidenceBanner"]
             post_json(base + "/api/sample", sample(0.1, 200.0, source="hardware"))       # gps absent
             page.wait_for(_rendered(get_json(base + "/api/history")["records"][-1]["seq"]))
             without_gps = page.texts(ids)
-    assert with_gps == {"sourceBadge": "HARDWARE", "gpsStatus": "Available", "gpsFix": "3D",
+    assert "Live" not in banner and "not a live serial source" in banner
+    assert with_gps == {"sourceBadge": "UNVERIFIED SOURCE", "gpsStatus": "Available", "gpsFix": "3D",
                         "gpsSats": "9", "gpsHdop": "0.9"}
-    assert without_gps == {"sourceBadge": "HARDWARE", "gpsStatus": "Unknown", "gpsFix": "Unknown",
+    assert without_gps == {"sourceBadge": "UNVERIFIED SOURCE", "gpsStatus": "Unknown", "gpsFix": "Unknown",
                            "gpsSats": "Unknown", "gpsHdop": "Unknown"}
 
 
@@ -63,3 +66,29 @@ def test_stale_data_renders_unknown_not_last_value():
     assert fresh["sourceBadge"] == "SIMULATED" and fresh["headingValue"].startswith("123.0°")
     assert stale["sourceBadge"] == "NO DATA" and stale["headingValue"] == "Unknown"
     assert "STALE" in stale["headingHint"] and stale["sensorStatus"] == "STALE"
+
+
+def _replay_page(tmpdir, source, ids):
+    import json, os
+    path = os.path.join(tmpdir, f"{source}.jsonl")
+    with open(path, "w") as f:
+        for i in range(400):                                  # 20 s of samples at 20 Hz: still streaming when read
+            f.write(json.dumps(sample(i * 0.05, (i * 3) % 360, source=source)) + "\n")
+    with run_app("--source", f"replay:{path}", "--stale", "30",
+                 wait_for=lambda st: st["counts"]["accepted"] > 2) as (base, port):
+        with HeadlessPage(base + "/") as page:
+            page.wait_for(_rendered(get_json(base + "/api/history")["records"][-1]["seq"]))
+            return page.texts(ids)
+
+
+def test_d6_replayed_hardware_log_shows_replay_badge_not_live(tmp_path):
+    t = _replay_page(str(tmp_path), "hardware", ["sourceBadge", "evidenceBanner", "sourceSub"])
+    assert t["sourceBadge"] == "REPLAY (recorded hardware)"
+    assert "Live" not in t["evidenceBanner"] and "recorded" in t["evidenceBanner"]
+    assert "not a live sensor stream" in t["evidenceBanner"]
+    assert 'sample.source = "replay"' in t["sourceSub"] and 'original_source = "hardware"' in t["sourceSub"]
+
+
+def test_d6_replayed_sim_log_still_simulated(tmp_path):
+    t = _replay_page(str(tmp_path), "sim", ["sourceBadge", "evidenceBanner"])
+    assert t["sourceBadge"] == "SIMULATED" and "Live" not in t["evidenceBanner"]
