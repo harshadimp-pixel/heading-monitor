@@ -12,6 +12,7 @@ https://www.pnisensor.com/wp-content/uploads/RM3100-RM2100-Sensor-Suite-User-Man
 says V11.0 but the file content is V16.0).
 
 ## Key numbers (for Math / Sim / Firmware)
+Machine-readable copy: `docs/hardware/key_numbers.json`. Derived values (µT/LSB, float16 steps, full scale) were computed and checked with Python on 2026-11-27.
 
 | Quantity | Value | Tag / source |
 |---|---|---|
@@ -262,10 +263,11 @@ Pinned sources: ArduPilot `6034266b5a` (master, 2026-11-26), INAV `fce6c94b38` (
 - **For our CAN module** the FC uses the DroneCAN compass backend (not AP_Compass_RM3100):
   - `CAN_P1_DRIVER = 1` (values 0 disabled / 1 first driver …), `CAN_D1_PROTOCOL = 1` (DroneCAN), `CAN_P1_BITRATE`
     default 1,000,000. [SOURCE-CODE] `AP_CANIfaceParams.cpp`, `AP_CANManager_CANDriver_Params.cpp`
-  - `COMPASS_TYPEMASK`: bitmask of drivers to **disable**; bit 11 = DroneCAN, bit 16 = RM3100, bit 17 = MSP → keep 0
-    (or at least bits 11/17 clear). [SOURCE-CODE] `AP_Compass.cpp` line ~535
+  - Driver-disable bitmask — named **`COMPASS_DISBLMSK`** on current master (Matek pages and older firmware call it
+    `COMPASS_TYPEMASK`; the rename's release version is UNKNOWN): bit 11 = DroneCAN, bit 16 = RM3100, bit 17 = MSP →
+    keep 0 (or at least bits 11/17 clear); default 0. [SOURCE-CODE] `AP_Compass.cpp` L532-537 @6034266
   - `COMPASS_ORIENT` (rotation), `COMPASS_EXTERNAL`, `COMPASS_AUTO_ROT`, `COMPASS_AUTODEC` (default 1), `COMPASS_DEC`,
-    `COMPASS_OFFS_MAX` (default **1800** mGauss-units), `COMPASS_MOTCT` (0 disabled / 1 throttle / 2 current). [SOURCE-CODE]
+    `COMPASS_OFFS_MAX` (default **1800**), `COMPASS_MOTCT` (0 disabled / 1 throttle / 2 current). [SOURCE-CODE]
   - Calibration warning "Compass Offsets High: one of your compass offsets exceeds 600, indicating likely magnetic
     interference" [OFFICIAL-DOC] https://ardupilot.org/copter/docs/common-compass-setup-advanced.html
 - MSP compass path: `SERIALx_PROTOCOL = 32`, baud 115 (see §2.2). [OFFICIAL-DOC]
@@ -327,8 +329,8 @@ Source **AP-MAGINT**: https://ardupilot.org/copter/docs/common-magnetic-interfer
   area and current and falls ~1/distance³ for z ≫ loop radius → twist power leads, keep them short, prefer 4-in-1 ESCs;
   aluminium shielding helps only for AC, not DC. [OFFICIAL-DOC AP-MAGINT]
 - Environment: minimum distances during calibration — 15 cm (keys, phones, batteries…), 50 cm (computers, radios), 2 m
-  (steel poles, vehicles' small parts, magnets), 5 m (cars, power lines, steel/concrete buildings), 10 m (trucks, metal
-  buildings) ("not objectively tested" per ArduPilot). [OFFICIAL-DOC AP-MAGINT]
+  (bicycle, fire hydrant, road signs, steel pole, magnets, chain-link/barbed-wire fence), 5 m (electrical box, small car/truck,
+  power line, concrete & steel building), 10 m (large truck, metal building, heavy machinery) ("not objectively tested" per ArduPilot). [OFFICIAL-DOC AP-MAGINT]
 - CompassMot (ArduPilot): throttle 50–75 % for 5–10 s; result < 30 % acceptable, 31–60 % "grey zone", > 60 % move the
   compass. [OFFICIAL-DOC] https://ardupilot.org/copter/docs/common-compass-setup-advanced.html
 - Offsets > 600 flagged as likely interference; `COMPASS_OFFS_MAX` default 1800. [OFFICIAL-DOC]/[SOURCE-CODE]
@@ -363,6 +365,7 @@ Source **AP-MAGINT**: https://ardupilot.org/copter/docs/common-magnetic-interfer
 - L12 H743-MINI, F405-HDTE/WMN/MINI-TE, H7A3 boards were not verified (CAN/I2C pads UNKNOWN).
 - L13 H743-WING V3 / H743-SLIM V3 specs were read from reseller copies of Matek's pages (mateksys.com URLs for those boards
   returned 404 to our fetcher); pins cross-checked against ArduPilot hwdef only.
+- L15 `COMPASS_TYPEMASK` → `COMPASS_DISBLMSK` rename: first ArduPilot release containing it not identified.
 - L14 mateksys.com pages may change; values captured 2026-11-26. Source files are not mirrored in the repo (copyright);
   URLs, commit SHAs and file hashes are in `docs/hardware/SOURCES.md`.
 

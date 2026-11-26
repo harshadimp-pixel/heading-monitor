@@ -1,0 +1,23 @@
+{
+  "_note": "T1 key numbers. Tags: DATASHEET=PNI-UM V16.0, SOURCE-CODE=pinned commits in SOURCES.md, DERIVED=arithmetic. Not hardware-verified.",
+  "rm3100": {
+    "gain_lsb_per_uT": {"50": 20, "100": 38, "200": 75, "_tag": "DATASHEET Table 3-1; other cycle counts UNKNOWN"},
+    "noise_nT": {"50": 30, "100": 20, "200": 15, "_tag": "DATASHEET; RMS vs p-p UNKNOWN"},
+    "sensitivity_nT": {"50": 50, "100": 26, "200": 13, "_tag": "DATASHEET"},
+    "max_rate_single_axis_hz": {"50": 1600, "100": 850, "200": 440, "_tag": "DATASHEET"},
+    "max_rate_3axis_hz": {"50": 534, "100": 284, "200": 147, "_tag": "DATASHEET sales sheet"},
+    "range_uT": {"min": -800, "max": 800, "_tag": "DATASHEET user manual; product page says +/-1100"},
+    "default_cycle_count": 200,
+    "raw_bits": 24,
+    "i2c_addresses": ["0x20", "0x21", "0x22", "0x23"],
+    "revid_expected_by_inav": "0x22",
+    "spi_max_clock_hz": 1000000,
+    "spi_modes": [0, 3]
+  },
+  "can_l4_3100": {
+    "supply_v": [4.5, 5.5], "current_mA": 22,
+    "dronecan_msg": "uavcan.equipment.ahrs.MagneticFieldStrength", "dronecan_units": "gauss_float16", "dronecan_max_rate_hz": 25,
+    "msp_msg": "MSP2_SENSOR_COMPASS", "msp_units": "milligauss_int16", "msp_baud": 115200,
+    "_tag": "OFFICIAL-DOC mateksys + SOURCE-CODE AP_Periph"
+  }
+}
