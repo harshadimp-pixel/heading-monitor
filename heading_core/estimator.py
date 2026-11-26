@@ -36,7 +36,7 @@ class _FrozenTracker:
         self.t0 = None
         self.n = 0
 
-    def update(self, t: float, v: np.ndarray, tol: float, cfg) -> bool:
+    def update(self, t: float, v: np.ndarray, tol: float, cfg, window_s: float | None = None) -> bool:
         if not np.all(np.isfinite(v)):
             self.ref, self.t0, self.n = None, None, 0
             return False
@@ -44,7 +44,8 @@ class _FrozenTracker:
             self.ref, self.t0, self.n = v.copy(), t, 1  # data changed -> recover immediately
             return False
         self.n += 1
-        return (t - self.t0) >= cfg.stale_window_s and self.n >= cfg.stale_min_samples
+        w = cfg.stale_window_s if window_s is None else window_s
+        return (t - self.t0) >= w and self.n >= cfg.stale_min_samples
 
 
 class HeadingEstimator:
@@ -63,6 +64,10 @@ class HeadingEstimator:
         self.declination_deg = float(declination_deg)
         self.config = config or CoreConfig()
         self.last_debug: dict = {}
+        self._meta_quant_uT: float | None = None     # sticky per stream (meta may be on first line only)
+        self._fc_mag_calibrated = None               # True / False / "unknown" / None (never reported)
+        self._grid_ok = {q: True for q in self.config.infer_quant_candidates_uT}  # lattice inference state
+        self._grid_n = 0
         self.reset()
 
     def reset(self) -> None:
@@ -71,12 +76,28 @@ class HeadingEstimator:
         self._t: float | None = None
         self._win: deque = deque(maxlen=max(1, self.config.window))
         self._innov: deque = deque(maxlen=max(2, self.config.noise_window))
-        self._frozen = {"mag": _FrozenTracker(), "accel": _FrozenTracker()}
+        self._frozen = {"mag": _FrozenTracker(), "accel": _FrozenTracker(), "mag_exact": _FrozenTracker()}
         self._t_last_seen: float | None = None
 
     def set_calibration(self, calibration: Calibration | None) -> None:
         self.calibration = calibration
         self.reset()
+
+    def _infer_quant(self, m: np.ndarray):
+        """Largest candidate step q such that every mag component seen so far is a multiple of q (within
+        1e-6 uT). Sticky per estimator: once a reading falls off a grid, that grid is ruled out for good."""
+        if not np.all(np.isfinite(m)):
+            return None
+        for q in self._grid_ok:
+            if self._grid_ok[q]:
+                r = m / q
+                if np.max(np.abs(r - np.round(r))) * q > 1e-6:
+                    self._grid_ok[q] = False
+        self._grid_n += 1
+        if self._grid_n < self.config.infer_quant_min_samples:
+            return None
+        ok = [q for q, v in self._grid_ok.items() if v]
+        return max(ok) if ok else None
 
     # ------------------------------------------------------------------ main
     def update(self, sample: dict) -> dict:
@@ -89,6 +110,18 @@ class HeadingEstimator:
         warnings: list[str] = []
         t = float(sample["t"])
         m = np.asarray(sample["mag_uT"], dtype=float).reshape(3)
+
+        meta = sample.get("meta") or {}
+        if isinstance(meta, dict):
+            mq = meta.get("mag_quant_uT")
+            if isinstance(mq, (int, float)) and not isinstance(mq, bool) and math.isfinite(mq) and mq >= 0:
+                self._meta_quant_uT = float(mq)
+            if "fc_mag_calibrated" in meta:
+                self._fc_mag_calibrated = meta["fc_mag_calibrated"]
+        inferred = self._infer_quant(m) if cfg.infer_mag_quant else None
+        quant = cfg.mag_quant_uT if cfg.mag_quant_uT is not None else (
+            self._meta_quant_uT if self._meta_quant_uT is not None else inferred)
+        quantised = quant is not None and quant >= cfg.quant_noise_ratio * cfg.expected_mag_noise_uT
 
         # 0. stale / frozen data (D1)
         if self._t_last_seen is not None and t < self._t_last_seen - cfg.max_dt_s:
@@ -108,9 +141,14 @@ class HeadingEstimator:
                                                           cfg.stale_accel_tol_g, cfg)
             else:
                 acc_frozen = True  # absent channel cannot contradict a frozen mag
+            mag_exact = self._frozen["mag_exact"].update(t, m, 0.0, cfg, cfg.stale_quant_window_s)
             if mag_frozen and acc_frozen:
                 warnings.append(WARN_SENSOR_STALE)
                 stale_q *= cfg.sensor_stale_quality_factor
+            elif quantised:
+                if mag_exact:  # bit-identical for >= stale_quant_window_s
+                    warnings.append(WARN_MAG_STALE)
+                    stale_q *= max(cfg.mag_stale_quality_factor, cfg.quant_mag_stale_min_factor)
             elif mag_frozen:
                 warnings.append(WARN_MAG_STALE)
                 stale_q *= cfg.mag_stale_quality_factor
@@ -241,11 +279,15 @@ class HeadingEstimator:
         if not have_tilt:
             q *= cfg.no_accel_quality_factor
         q *= stale_q
+        if self._fc_mag_calibrated is True:
+            q *= cfg.fc_mag_calibrated_quality_factor
         q = float(min(1.0, max(0.0, q)))
 
         self.last_debug = {"field_vec_uT": b.tolist(), "raw_mag_uT": m.tolist(), "dip_deg": dip,
                            "tilt_deg": tilt, "noise_deg": noise, "innovation_deg": innov,
-                           "field_ref_uT": b0, "horizontal_uT": horiz}
+                           "field_ref_uT": b0, "horizontal_uT": horiz,
+                           "mag_quant_uT": quant, "quantised_mode": quantised, "mag_quant_inferred_uT": inferred,
+                           "fc_mag_calibrated": self._fc_mag_calibrated}
         return {
             "t": t,
             "source": sample["source"],

@@ -1,6 +1,6 @@
 # Heading mathematics, calibration and filtering (T2, `heading_core/`)
 
-Owner: Mathematics & Sensor Scientist. Status: REVIEW (D1 fixed 2026-11-27). Implementation: `heading_core/` (numpy only).
+Owner: Mathematics & Sensor Scientist. Status: REVIEW (D1 fixed; PM review decisions 3–4 implemented 2026-11-27). Implementation: `heading_core/` (numpy only).
 Evidence labels follow README ground rule 1. Every performance number in this document is
 **[SIMULATED]** (synthetic data from `heading_core/synth.py`) unless tagged [DATASHEET]. Nothing here is
 hardware-verified; no physical RM3100 / Matek FC was used.
@@ -191,8 +191,31 @@ sample. An absent accel channel counts as frozen (it cannot contradict the mag).
 staleness. All thresholds are in `CoreConfig` (`stale_detection=False` disables the frozen check). Test cases:
 3 s identical at 50 Hz flagged from 0.5 s with quality ≤ 0.05 and cleared on the first noisy live sample.
 
-Warning codes (`heading_core/warnings_codes.py`; the contract only says "array of strings", codes are T2's
-proposal pending PM confirmation):
+**Quantised sources (PM decision 2026-11-27; thresholds PROVISIONAL).** A source with coarse mag steps sets
+`meta.mag_quant_uT` (MSP: 0.1 µT). The value is remembered for the stream (meta may appear on the first line only);
+`CoreConfig.mag_quant_uT` overrides it. If neither is present, q is **inferred** from the data
+(`infer_mag_quant`, PROVISIONAL): the largest candidate step in {1, 0.5, 0.1, 0.05, 0.01} µT on which every mag
+component seen so far lies (within 1e-6 µT), after ≥ 5 samples; one off-grid reading rules a step out for the
+stream. Continuous data and RM3100 counts/75 are never on such a grid. Priority: config > meta > inferred. If q ≥ `quant_noise_ratio` (3) × `expected_mag_noise_uT` (0.015 µT,
+RM3100 @ CC 200 [DATASHEET]) the estimator is in *quantised mode*: `MAG_STALE` then needs **bit-identical** mag
+(exact equality) for ≥ `stale_quant_window_s` (5 s), and its quality factor is max(0.3, `mag_stale_quality_factor`),
+never below 0.3×. Rationale: with 0.1 µT steps ≫ 15 nT noise a still vehicle legitimately repeats readings.
+`SENSOR_STALE` (mag near-identical **and** accel frozen or absent, 0.5 s, ×0.05) and `TIMESTAMP_STALE` are
+unchanged in both modes.
+
+**Single-calibration rule (ARCHITECTURE.md 2026-11-27).** The ellipsoid fit in heading_core is the only intended
+magnetometer calibration; the FC's own mag calibration is kept neutral (INAV magzero = 0, maggain = 1024). The
+bridge reports `meta.fc_mag_calibrated` (true / false / "unknown"), remembered per stream. heading_core handles it
+within the frozen codes:
+* `false`, `"unknown"` or absent: no effect.
+* `true`: our calibration is still applied unchanged and no warning code is added (none of the frozen codes means
+  "FC calibration active"; `NOT_CALIBRATED` would be false). Quality is multiplied by
+  `fc_mag_calibrated_quality_factor` (0.7, PROVISIONAL). Reason: a *fixed* FC affine correction composed with our
+  fit is still an affine map and is absorbed by the fit, but it may change after our fit (FC re-calibration),
+  which silently invalidates it. The app shows the user-facing warning (ARCHITECTURE.md: "the app warns if not
+  false"). `last_debug["fc_mag_calibrated"]` exposes the flag.
+
+Warning codes (frozen as contract in ARCHITECTURE.md 2026-11-27; `heading_core/warnings_codes.py`; the schema only says "array of strings"):
 
 | Code | Trigger (defaults) |
 |---|---|
@@ -204,7 +227,7 @@ proposal pending PM confirmation):
 | `HIGH_NOISE` | innovation RMS > 3° (also fires during fast turns without gyro — it measures lag too) |
 | `INVALID_MAG` | non-finite mag, zero field or zero horizontal field; sample ignored |
 | `SENSOR_STALE` | mag **and** accel (if present) frozen for ≥ `stale_window_s` (0.5 s) and ≥ 10 samples (D1); quality × 0.05 |
-| `MAG_STALE` | mag frozen as above while accel still changes; quality × 0.3 |
+| `MAG_STALE` | mag frozen as above while accel still changes; quality × 0.3. Quantised mode: bit-identical for ≥ 5 s, factor ≥ 0.3 (PROVISIONAL) |
 | `TIMESTAMP_STALE` | `t` ≤ previous `t` (repeated or out-of-order); sample not fed to the filter, held heading output; quality × 0.05 |
 
 ## 9. API summary
@@ -259,7 +282,7 @@ heading RMS vs `truth.heading_deg` is 0.71–0.83° on static / yaw_spin / tilte
 against 34–42° RMS uncalibrated on the spin scenarios. This uses the simulator's own noise/bias models, so it checks that the interfaces and
 conventions agree, not real-world accuracy.
 
-## 11. Reference test cases (all in `heading_core/tests/test_heading_core.py`, 59 tests)
+## 11. Reference test cases (all in `heading_core/tests/test_heading_core.py`, 67 tests)
 
 | Case | Input | Expected |
 |---|---|---|
@@ -276,6 +299,11 @@ conventions agree, not real-world accuracy.
 | Warnings | no cal; \|B\| = 70 µT; pitch 50°; dip 55° vs 40°; no accel; σ = 8 µT noise; NaN/inf/zero mag | each code fires; invalid sample leaves filter at 45° |
 | D1 frozen sensor | 150 identical samples (3 s @ 50 Hz), then live noisy data | `SENSOR_STALE` from 0.5 s, quality ≤ 0.05; clears on first live sample, quality > 0.9 |
 | Frozen variants | mag frozen + live accel; no accel; 1e-9 µT jitter; repeated/backward `t`; >1 s backwards jump | `MAG_STALE`; `SENSOR_STALE`; still frozen; `TIMESTAMP_STALE` + held heading; reset, no warning |
+| Quantised stationary | 0.1 µT steps, bit-identical mag, live accel (2 mg), meta on first line | no MAG_STALE before 5 s (quality = unflagged); MAG_STALE from 5.0 s with quality ≥ 0.3× and < 1× unflagged; never SENSOR_STALE |
+| Quantised varying | 0.1 µT steps with 0.06 µT noise (12 s); slow 2°/s turn | never MAG_STALE / SENSOR_STALE |
+| Quantised edge cases | q = 0.02 µT (< 3×noise); CoreConfig override; mag+accel frozen | normal 0.5 s rule; quantised mode; SENSOR_STALE ×0.05 unchanged |
+| Quantised, no meta | 0.1 µT grid, 4 s bit-identical; continuous noisy data | grid 0.1 inferred, no MAG_STALE; nothing inferred |
+| fc_mag_calibrated | true / false / "unknown" / absent | same heading and warnings; quality ×0.7 only for true |
 | Accel convention | (0,0,−1) level; nose-up 10° → x = +sin 10°; (0,0,+1) fed in | 0/0; pitch 10°; `TILT_TOO_LARGE` |
 | Schema | every estimator output (incl. 300 random-garbage samples) | validates against contracts/heading_estimate.schema.json |
 
@@ -324,12 +352,16 @@ Unresolved at REVIEW (mirrored in TEAM_TRACKER.md, T2 row):
 11. **HIGH_NOISE conflates noise and lag**: without gyro, fast turns raise innovation RMS and can trigger it.
 12. **Noise/bias parameters of the experiment** (accel 3 mg / 5 mg, 0.3 µT platform noise, gyro values, hard/soft
     iron ranges) are assumptions, not measurements of our board.
-13. **Warning codes and the extra `config` / `accel_convention` keywords** are T2 proposals not yet confirmed
-    by the PM; contract `warnings` items are free strings.
-14. **Frozen-data detection limits**: thresholds are untuned. On the MSP path the field arrives in mG (0.1 µT
-    steps), coarser than RM3100 noise, so a perfectly still vehicle could repeat identical mag vectors; this
-    raises only `MAG_STALE` while the accel still varies, but `SENSOR_STALE` if accel is also coarse/absent.
-    A sensor stuck at a *noisy* value or slowly drifting is not detected. Behaviour on hardware unknown.
+13. Warning codes and the `config` / `accel_convention` keywords were approved by the PM (ARCHITECTURE.md
+    2026-11-27); new codes need PM sign-off, so some conditions (e.g. FC calibration active) have no own code.
+14. **Frozen-data and quantised-mode thresholds are PROVISIONAL** until a hardware replay log exists (0.5 s /
+    10 samples / 1e-6 µT / 1e-7 g; quantised mode: ratio 3, 5 s, ≥ 0.3×; `expected_mag_noise_uT` 0.015 µT;
+    `fc_mag_calibrated_quality_factor` 0.7). Quantised stationary data with **no** accel channel (or a coarsely
+    quantised accel) still raises `SENSOR_STALE` after 0.5 s, by design of the unchanged rule. A sensor stuck at a
+    noisy value or slowly drifting is not detected. If `meta.mag_quant_uT` is missing on an MSP stream, the
+    estimator infers the grid from the data; a source quantised on a non-decimal step would not be inferred and
+    falls back to the 0.5 s near-identical rule (MAG_STALE ×0.3), so false alarms remain possible there.
+    `fc_mag_calibrated = true` cannot be expressed by a frozen warning code; only quality reflects it in the core.
 15. Temperature drift, RM3100 linearity (0.5 % [DATASHEET]) and cycle-count changes are not modelled.
 16. Heading is not course over ground; no speed, distance or place estimate is provided or implied (section 1).
 17. **Scope rule (Auditor condition, binding):** heading_core does not and will not provide a position,

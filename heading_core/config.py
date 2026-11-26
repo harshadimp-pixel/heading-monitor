@@ -18,6 +18,12 @@ ACCEL_GRAVITY = "gravity"
 
 @dataclass
 class CoreConfig:
+    """Estimator thresholds and filter settings.
+
+    PROVISIONAL (until a hardware replay log exists, ARCHITECTURE.md 2026-11-27): all stale_* / quant_*
+    thresholds, expected_mag_noise_uT and fc_mag_calibrated_quality_factor. They were chosen on synthetic
+    data only and must be re-tuned on replayed RM3100 / Matek FC logs.
+    """
     expected_field_uT: float = NOMINAL_FIELD_UT  # used when calibration has no fitted field radius
     prefer_calibration_field: bool = True        # use Calibration.field_uT as |B| reference if present
     field_tolerance_frac: float = 0.15           # warn if | |B|/B0 - 1 | > this
@@ -42,5 +48,21 @@ class CoreConfig:
     sensor_stale_quality_factor: float = 0.05    # all present channels frozen (sharp drop)
     mag_stale_quality_factor: float = 0.3        # mag frozen, accel live (could be coarse mG quantisation)
     timestamp_stale_quality_factor: float = 0.05
+    # Quantised sources (PM decision 2026-11-27). PROVISIONAL. Sample meta.mag_quant_uT (MSP: 0.1 uT) is
+    # remembered per stream; mag_quant_uT here overrides it. If quant >= quant_noise_ratio * expected noise,
+    # MAG_STALE requires bit-identical mag (exact equality) for >= stale_quant_window_s and its quality factor
+    # is never below quant_mag_stale_min_factor. SENSOR_STALE / TIMESTAMP_STALE are unchanged.
+    expected_mag_noise_uT: float = 0.015         # [DATASHEET] RM3100 noise @ CC=200 (15 nT); PROVISIONAL use
+    mag_quant_uT: Optional[float] = None
+    quant_noise_ratio: float = 3.0
+    stale_quant_window_s: float = 5.0            # PROVISIONAL
+    infer_mag_quant: bool = True                 # fallback when meta.mag_quant_uT is absent: detect a decimal
+    infer_quant_candidates_uT: tuple = (1.0, 0.5, 0.1, 0.05, 0.01)  # grid (e.g. MSP mG) from the data. PROVISIONAL
+    infer_quant_min_samples: int = 5
+    quant_mag_stale_min_factor: float = 0.3      # PROVISIONAL
+    # Single-calibration rule (ARCHITECTURE.md 2026-11-27): FC mag calibration must be neutral. If a sample
+    # says meta.fc_mag_calibrated is True, our calibration is still applied (it is the only intended one) but
+    # quality is multiplied by this factor, because the FC correction may change after our fit. PROVISIONAL.
+    fc_mag_calibrated_quality_factor: float = 0.7
     uncalibrated_quality_factor: float = 0.5     # quality multiplier when NOT_CALIBRATED
     no_accel_quality_factor: float = 0.7         # quality multiplier when no tilt source

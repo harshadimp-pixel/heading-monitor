@@ -425,3 +425,117 @@ def test_accel_convention_matches_architecture():
     # wrong sign (gravity convention fed as specific force) is made visible
     o = HeadingEstimator(Calibration(field_uT=50.0)).update(sample(0, 30, accel_g=[0, 0, 1]))
     assert WARN_TILT_TOO_LARGE in o["warnings"]
+
+
+# ------------------------------------------------ quantised sources (PM decision 2026-11-27)
+def _quant_stream(n, rate=50.0, q=0.1, mag_noise=0.0, accel_noise=0.002, seed=0, yaw=45.0, meta_first_only=True):
+    rng = np.random.default_rng(seed)
+    out = []
+    for k in range(n):
+        s = sample(k / rate, yaw)
+        m = np.array(s["mag_uT"]) + rng.normal(0, mag_noise, 3)
+        s["mag_uT"] = (np.round(m / q) * q).tolist()
+        s["accel_g"] = (np.array(s["accel_g"]) + rng.normal(0, accel_noise, 3)).tolist()
+        if k == 0 or not meta_first_only:
+            s["meta"] = {"mag_quant_uT": q}
+        jsonschema.validate(s, SAMPLE_SCHEMA)
+        out.append(s)
+    return out
+
+
+def test_quantised_stationary_no_mag_stale_before_5s_then_flagged():
+    from heading_core import WARN_MAG_STALE, WARN_SENSOR_STALE, ALL_WARNINGS
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    ref = HeadingEstimator(Calibration(field_uT=50.0), config=CoreConfig(stale_detection=False))
+    stream = _quant_stream(300)                                # 6 s, bit-identical mag, live accel
+    outs = [e.update(s) for s in stream]
+    refs = [ref.update(s) for s in stream]                     # same data, never flagged
+    assert e.last_debug["quantised_mode"] is True
+    for o in outs:
+        validate(o)
+        assert set(o["warnings"]) <= set(ALL_WARNINGS) and WARN_SENSOR_STALE not in o["warnings"]
+    first = next(k for k, o in enumerate(outs) if WARN_MAG_STALE in o["warnings"])
+    assert first / 50.0 == pytest.approx(5.0, abs=0.021)      # not before 5 s
+    assert all(WARN_MAG_STALE not in o["warnings"] for o in outs[:first])
+    assert all(o["quality"] == pytest.approx(r["quality"]) for o, r in zip(outs[:first], refs[:first]))
+    assert all(o["quality"] >= 0.3 * r["quality"] - 1e-12 for o, r in zip(outs[first:], refs[first:]))
+    assert all(o["quality"] < r["quality"] for o, r in zip(outs[first:], refs[first:]))  # but it does drop
+    assert abs(angle_diff_deg(outs[-1]["heading_deg"], 45)) < 0.5
+
+
+def test_quantised_varying_stream_never_stale():
+    from heading_core import WARN_MAG_STALE, WARN_SENSOR_STALE
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    outs = [e.update(s) for s in _quant_stream(600, mag_noise=0.06, seed=3)]   # 12 s, 0.1 uT steps flip
+    assert not any(WARN_MAG_STALE in o["warnings"] or WARN_SENSOR_STALE in o["warnings"] for o in outs)
+    # slowly turning vehicle, quantised, meta on every line
+    e2 = HeadingEstimator(Calibration(field_uT=50.0))
+    for k in range(500):
+        s = sample(k * 0.02, wrap360(10 + 2.0 * k * 0.02), meta={"mag_quant_uT": 0.1})
+        s["mag_uT"] = (np.round(np.array(s["mag_uT"]) / 0.1) * 0.1).tolist()
+        o = e2.update(s)
+        assert WARN_MAG_STALE not in o["warnings"]
+
+
+def test_quantised_mode_threshold_override_and_sensor_stale_unchanged():
+    from heading_core import WARN_MAG_STALE, WARN_SENSOR_STALE
+    # quant 0.02 uT < 3 x 0.015 -> normal mode: MAG_STALE after 0.5 s as before
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    outs = [e.update(s) for s in _quant_stream(60, q=0.02)]
+    assert e.last_debug["quantised_mode"] is False and WARN_MAG_STALE in outs[-1]["warnings"]
+    # CoreConfig override without meta
+    e = HeadingEstimator(Calibration(field_uT=50.0), config=CoreConfig(mag_quant_uT=0.1))
+    s0 = _quant_stream(1)[0]
+    s0.pop("meta")
+    rng = np.random.default_rng(5)
+    outs = [e.update(dict(s0, t=k * 0.02, accel_g=(np.array(s0["accel_g"]) + rng.normal(0, 0.002, 3)).tolist()))
+            for k in range(100)]
+    assert e.last_debug["quantised_mode"] is True and WARN_MAG_STALE not in outs[-1]["warnings"]
+    # fully frozen (mag + accel) quantised data still gives SENSOR_STALE at 0.5 s with the sharp drop
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    s0 = _quant_stream(1)[0]
+    outs = [e.update(dict(s0, t=k * 0.02)) for k in range(60)]
+    assert WARN_SENSOR_STALE in outs[-1]["warnings"] and outs[-1]["quality"] <= 0.05
+
+
+# --------------------------------------------------- single-calibration rule (fc_mag_calibrated)
+@pytest.mark.parametrize("flag,factor", [(True, 0.7), (False, 1.0), ("unknown", 1.0), (None, 1.0)])
+def test_fc_mag_calibrated_handling(flag, factor):
+    from heading_core import ALL_WARNINGS
+    B, M, o, A = _cal_dataset(seed=31)
+    cal = Calibration.fit(M)
+    ref = HeadingEstimator(cal)
+    e = HeadingEstimator(cal)
+    for k in range(5):
+        s = sample(k * 0.02, 70, 5, -5)
+        s["mag_uT"] = distort(np.array(s["mag_uT"]), o, A).tolist()
+        r = ref.update(dict(s))
+        if flag is not None and k == 0:
+            s["meta"] = {"fc_mag_calibrated": flag}        # first line only: remembered per stream
+        jsonschema.validate(s, SAMPLE_SCHEMA)
+        out = e.update(s)
+        validate(out)
+        assert set(out["warnings"]) <= set(ALL_WARNINGS)  # no new codes
+        assert out["warnings"] == r["warnings"]
+        assert out["heading_deg"] == pytest.approx(r["heading_deg"])   # our calibration still applied
+        assert out["quality"] == pytest.approx(factor * r["quality"])
+    assert e.last_debug["fc_mag_calibrated"] == flag
+
+
+def test_quant_inferred_without_meta():
+    """No meta (e.g. older bridge): a 0.1 uT decimal grid is detected from the data itself."""
+    from heading_core import WARN_MAG_STALE
+    stream = _quant_stream(200)
+    stream[0].pop("meta")
+    e = HeadingEstimator(Calibration(field_uT=50.0))
+    outs = [e.update(s) for s in stream]                      # 4 s bit-identical, live accel
+    assert e.last_debug["mag_quant_inferred_uT"] == pytest.approx(0.1) and e.last_debug["quantised_mode"]
+    assert not any(WARN_MAG_STALE in o["warnings"] for o in outs)
+    # continuous (unquantised) data is never mistaken for a grid
+    e2 = HeadingEstimator(Calibration(field_uT=50.0))
+    rng = np.random.default_rng(8)
+    for k in range(50):
+        s = sample(k * 0.02, 45)
+        s["mag_uT"] = (np.array(s["mag_uT"]) + rng.normal(0, 0.015, 3)).tolist()
+        e2.update(s)
+    assert e2.last_debug["mag_quant_inferred_uT"] is None and not e2.last_debug["quantised_mode"]
