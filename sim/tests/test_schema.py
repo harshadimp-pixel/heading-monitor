@@ -67,5 +67,6 @@ def test_example_logs_validate_and_are_reproducible(tmp_path):
         regen = tmp_path / f.name
         subprocess.run([sys.executable, "-m", "sim", "--scenario", cfg["scenario"], "--rate", str(cfg["rate_hz"]),
                         "--duration", str(cfg["duration_s"]), "--seed", str(cfg["seed"]),
-                        "--cycle-count", str(cfg["cycle_count"]), "--out", str(regen)], cwd=REPO, check=True)
+                        "--cycle-count", str(cfg["cycle_count"]), "--output-mode", cfg.get("output_mode", "raw"),
+                        "--out", str(regen)], cwd=REPO, check=True)
         assert regen.read_bytes() == f.read_bytes(), f"{f.name} not reproducible"

@@ -12,19 +12,24 @@ ground-truth `truth` block, so `heading_core` and `app` can be developed and tes
 
 ## Install and run
 ```bash
-pip install -r requirements.txt          # numpy, pytest
-pip install jsonschema                   # only needed for the schema-validation tests (see Questions)
+pip install -r requirements.txt          # numpy, pytest, jsonschema
 
 python -m sim --rate 50 --duration 60 --scenario yaw_spin --seed 1            # JSONL on stdout
 python -m sim --rate 50 --duration 60 --scenario calibration_dance --seed 1 --out cal.jsonl
 python -m sim --list-scenarios
 python -m sim --scenario hard_iron --describe                                   # resolved config, JSON
+python -m sim --scenario yaw_spin --output-mode dronecan --rate 50 --duration 60   # what the FC receives
+python -m sim.spec_check                                                       # sim vs T2 sensor spec, 20 cases
 python -m pytest sim/tests -q
 ```
 Options: `--cycle-count N` (RM3100, default 200), `--field-total uT`, `--inclination deg` (+down),
 `--declination deg` (+east), `--hard-iron X Y Z`, `--soft-iron w11..w33` (row-major), `--motor-k X Y Z` (uT/A),
 `--env-noise uT`, `--imu-noise-scale k`, `--mag-noise-scale k`, `--no-fc-attitude`, `--realtime`
-(wall-clock pacing for a live feed), `--out FILE` (`--tee` to also print to stdout).
+(wall-clock pacing for a live feed), `--out FILE` (`--tee` to also print to stdout),
+`--output-mode raw|dronecan|msp` (default `raw`; see "Delivered output modes"), `--delivered-rate Hz` (25),
+`--periph-poll Hz` (80), `--attitude ROLL PITCH YAW` (hold a fixed attitude instead of the scenario's),
+`--misalignment RX RY RZ` (deg, spec term M), `--mag-bias-gm SIGMA_UT TAU_S` (Gauss-Markov bias, spec term b_rw),
+`--imu-bias-scale k` (0 = no accel/gyro bias).
 Output is byte-for-byte deterministic for a given seed and options. Defaults: seed 0, rate 50 Hz, 60 s.
 
 ## Scenarios
@@ -54,15 +59,56 @@ RM3100 gain/noise, evidence label, `provisional` flag and source), so a replayed
 `truth.heading_deg` is the **magnetic** heading (yaw − declination), in [0, 360), so it matches
 `heading_core` output with `declination_deg=0`; `true_heading_deg` is the true heading.
 
-Example logs (10 Hz, seed 42, ≤ 64 KB each) are in `examples/`; a test regenerates them and checks they match byte for byte.
+Example logs are in `examples/`: five raw-mode logs (10 Hz, seed 42, ≤ 64 KB each) and one each for `dronecan` and `msp` (`yaw_spin`, 50 Hz, 2 s, so they show sample-and-hold). A test regenerates every one and checks it matches byte for byte.
+
+## Delivered output modes (`--output-mode dronecan|msp`)
+Per T1 (`docs/hardware/FACTSHEET.md` §2) our module is a **Matek CAN-L4-3100**: the RM3100 sits behind an STM32 running
+ArduPilot **AP_Periph**, so the FC never sees RM3100 counts. These modes model what the FC receives. `raw` (the default)
+is unchanged, byte for byte.
+
+What I checked in the source code myself ([SOURCE-CODE], ArduPilot commit `6034266b5abffd36fb4b89f0bf61fb6db8aed85d`, the same pin T1 used):
+- `libraries/AP_Compass/AP_Compass_RM3100.cpp`: forces cycle count 200 (`CCP0 0xC8`), `_scaler = 1/75 µT/LSB → mG`,
+  `TMRC 0x94`, and a timer at **80 Hz** (`register_periodic_callback(1000000U/80U)`) that reads only when DRDY is set.
+  So the delivered modes require `--cycle-count 200`.
+- `libraries/AP_Compass/AP_Compass_Backend.cpp`: `accumulate_sample()` sums the readings and `drain_accumulated_samples()`
+  publishes their **mean**, so each delivered value averages the RM3100 readings since the last read (3 or 4 at 80→25 Hz).
+- `Tools/AP_Periph/compass.cpp`: `AP_PERIPH_MAG_MAX_RATE 25U`. It returns if less than 40 ms has passed, sends only
+  new data from a healthy compass, and sends `uavcan.equipment.ahrs.MagneticFieldStrength` with
+  `magnetic_field_ga = get_field() * 0.001` (mG → Gauss) as **float16** (the HiRes message only with `AP_PERIPH_MAG_HIRES`).
+- DSDL `uavcan/equipment/ahrs/1001.MagneticFieldStrength.uavcan` (dronecan/DSDL `b4653c7`): `float16[3] magnetic_field_ga`,
+  "in Gauss … SI units are avoided because of float16 range limitations". The message is marked deprecated in favour of 1002.
+- float16 conversion: libcanard `canardConvertNativeFloatToFloat16`, at the exact submodule pin of that ArduPilot commit
+  (DroneCAN/libcanard `601ed35`). `sim/delivery.py` ports it bit for bit. A test shows it equals IEEE round-to-nearest except at
+  exact ties, which it rounds away from zero. Step size: 2⁻¹² G = **0.0244 µT** for components of 25–50 µT,
+  0.0122 µT for 12.5–25 µT, and 0.0488 µT for 50–100 µT.
+- `Tools/AP_Periph/msp.cpp` + `libraries/AP_MSP/msp_sensors.h`: `MSP2_SENSOR_COMPASS`, `int16 magX/Y/Z` in **mGauss**
+  (0.1 µT), assigned straight from the float field, so it **truncates toward zero** (bias up to −0.1 µT per axis toward zero).
+  It is sent only when `compass.last_update_ms()` changes.
+
+What I **inferred** rather than verified: MSP updates are also limited to 25 Hz, because in AP_Periph `compass.read()`
+is called only from `can_mag_update()`. T1 lists the MSP rate as UNKNOWN; please confirm with a hardware log.
+
+The model: RM3100 polls on an exact 80 Hz grid, publishes on an exact 25 Hz grid, and each publish is the float32 mean of
+the polls in (previous, current], encoded as float16 Gauss or int16 mG and decoded back to µT for `mag_uT`. The JSONL `--rate` is
+what the FC/app samples; each line carries the **latest** message (**sample-and-hold**). Above 25 Hz, values repeat
+(stderr notes this); below it, messages are skipped. `mag_raw` and `rm3100_cycle_count` are left out (they're optional in the
+schema, and ARCHITECTURE.md 2026-11-27 says `mag_raw` is absent on hardware), so no contract change was needed. Extra `meta` keys:
+`output_mode`, `mag_seq` (message number), `mag_fresh` (new message since the previous line), `mag_age_s`,
+`mag_n_avg`, `mag_sample_mid_s` (mean time of the averaged polls, for latency analysis), `mag_quant_uT`
+(0.1 for MSP; the float16 step of the largest component for DroneCAN; key per PM decision 2026-11-27), and `msp_mag_mG` or
+`dronecan_float16_bits` (the exact wire values). In these modes `truth.field_at_sensor_uT` is the field at the line's time
+without environmental noise or GM bias.
 
 ## Model and assumptions
 Frames: NED, body x forward, y right, z down; ZYX Euler (yaw, pitch, roll), yaw from true north.
 
 1. **Earth field**: uniform and constant, `B_ned = F·[cos I cos D, cos I sin D, sin I]`. Defaults F = 50 µT,
    I = 60°, D = 0° are generic placeholders, not our site.
-2. **Field at the sensor**: `B = W·(Rᵀ B_ned) + h + k·I(t) + n_env`, where W is the soft-iron matrix (it acts on the
-   Earth field only), h the hard-iron offset, k the motor coefficient (µT/A), I(t) the motor current and n_env white noise.
+2. **Field at the sensor**: `B = W·M·(Rᵀ B_ned) + h + k·I(t) + b_GM(t) + n_env`, where W is the soft-iron matrix,
+   M an optional axis misalignment rotation (default I), h the hard-iron offset, k the motor coefficient (µT/A), I(t) the
+   motor current, b_GM an optional first-order Gauss-Markov bias and n_env white noise. This matches T2's spec
+   (`docs/math/sensor-spec/SPEC.md` §5.1) except that the spec routes interference through S·M. For a body-fixed source
+   that is the same as using k_sim = S·M·k_spec, so it doesn't change any heading result. Temperature terms aren't modelled.
 3. **RM3100** ([DATASHEET] typicals, PNI RM3100/RM2100 User Manual V16.0 Table 3-1 and Section 5.1,
    <https://www.pnisensor.com/wp-content/uploads/RM3100-RM2100-Sensor-Suite-User-Manual-V11.0.pdf>; PNI RM3100
    sales sheet 2020, <https://www.pnisensor.com/wp-content/uploads/PNI-Sensor-RM3100-Sales-Sheet.pdf>):
@@ -111,15 +157,27 @@ Frames: NED, body x forward, y right, z down; ZYX Euler (yaw, pitch, roll), yaw 
    (see T4).
 8. **fc_attitude_deg is a crude stand-in** and must not be used as a reference for heading accuracy.
 9. **GPS and true-north fusion are out of scope for T3** (they aren't in the Sample contract).
-10. **Accel sign convention** (specific force, z = −1 g when level) is my choice, because the contract doesn't specify one.
-    Some FC firmwares report z ≈ +1 g when level (unverified by T3; T4 to confirm for MSP_RAW_IMU). T2 and T4 must agree; this is raised with the PM.
+10. **Accel convention** is now fixed in ARCHITECTURE.md (specific force, level (0, 0, −1) g) and the sim follows it.
+    The Firmware Specialist still has to confirm the Matek FC's native sign; any conversion belongs in the bridge, not here.
 11. `calibration_dance` needs at least 30 s for good sphere coverage; the 10 s example is only a format sample.
-12. `jsonschema` isn't in the repo's `requirements.txt`. Without it the schema tests fall back to a structural check and the
-    full-schema parts are skipped.
+12. **The delivered modes come from reading source code, not from hardware.** They use exact 80 Hz and 25 Hz grids with no loop
+    jitter. The AP_Periph-side calibration (COMPASS_OFS/DIA/ODI, default 0/identity), board rotation and AP_RM3100_REVERSAL_MASK
+    are assumed to be identity. The FC-side processing after reception (ArduPilot `AP_Compass_DroneCAN` or INAV `compass_msp`,
+    including their own averaging, rotation and calibration) isn't modelled. The MSP ≤ 25 Hz rate is INFERRED. The firmware on our
+    unit (MatekL431-GPS vs -Periph) and its MSP availability are UNKNOWN (T1 L8). C overflow of int16 mG beyond ±3276.7 µT
+    is undefined behaviour; the sim clips and flags it.
+13. **Spec check (`sim/spec_check.py`)**: 35 applicable keys PASS. 44 keys are N/A (formulas, circular statistics, dipole/wire
+    sources, WMM, navigation and geodesy, which the sim doesn't model). One MISMATCH is logged: TC19 quantisation σ, where
+    the spec's LSB of 0.013 µT differs from the sim's 1/75 µT. The spec's temperature terms (k_T, k_off) and random-walk bias
+    are not modelled; misalignment and Gauss-Markov bias are, but are off by default.
 
 ## Tests
 `python -m pytest sim/tests -q` covers schema validation (every scenario, CLI output and example logs), determinism
 (same seed gives identical bytes, `--out` matches stdout), the gain table and scaling, counts↔µT consistency, noise vs
 model, saturation and 24-bit clipping, field magnitude and dip, truth heading against an independent tilt-compensation
 formula (three declinations), measured heading from accel+mag, gyro/accel consistency, calibration-dance sphere
-coverage, and hard-iron, soft-iron, motor-interference and high-noise behaviour.
+coverage, and hard-iron, soft-iron, motor-interference and high-noise behaviour. `test_delivery.py` covers the
+DroneCAN and MSP modes: the bit-exact float16 port, step sizes, truncation, the ≤ 25 Hz limit, sample-and-hold,
+80→25 Hz averaging, latency, schema, `mag_quant_uT`, and no false stale warnings in `heading_core`.
+`test_spec_cases.py` runs all 20 of T2's spec cases through the sim (see LIMITATIONS 13), plus misalignment and
+Gauss-Markov checks.
