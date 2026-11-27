@@ -21,3 +21,5 @@
 - [pm] Approved provisional quantisation-step inference in heading_core (infer_mag_quant, default on).
 
 - 2026-11-27 (PM): N6 updated. The repository is public by owner decision; no secrets or personal data may be committed.
+
+- 2026-11-27 (PM, d5374a1): D8 label decision. A live serial device whose self-reported UID is on the allowlist now displays "ALLOWLISTED DEVICE (identity not authenticated)" instead of HARDWARE. Internal `source: "hardware"` and provenance `verified` are unchanged. A UID is spoofable and is not proof of physical hardware (F11/L11). Updated R8, README rule 2 and ARCHITECTURE D8.
