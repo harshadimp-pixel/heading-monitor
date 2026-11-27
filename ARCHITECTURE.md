@@ -59,3 +59,10 @@ class HeadingEstimator:
 
 - 2026-11-27 (PM, D6, supersedes the line-55 replay rule for hardware data): A sample whose source is `hardware` must never be presented as live when it is replayed. Both `python -m app --source replay:<file>` and `firmware_bridge --replay` relabel it as `source: "replay"` and keep `meta.original_source: "hardware"`. The UI badge then reads `REPLAY (recorded hardware)`, and the banner says the data is recorded and not live. A replayed sim log still shows SIMULATED, since that is the more conservative label, with the transport shown as replay. HARDWARE appears only for a live serial source.
 - 2026-11-27 (PM, D6 follow-up): A `hardware` sample POSTed to the ingest endpoint /api/sample keeps its label, but the badge reads `UNVERIFIED SOURCE` and the banner says it is not a live serial source. The app trusts `original_source` as written in a replay file (LIMITATIONS 4). Accepted.
+
+- 2026-11-27 (PM, D8, from Codex audit of f1a0e3e): **A serial connection is not proof of hardware.**
+  1. `firmware_bridge` reads the device's self-reported identity over MSP at connect: MSP_API_VERSION, MSP_FC_VARIANT, MSP_FC_VERSION, MSP_BOARD_INFO and MSP_UID where available. It stores this in `meta.device_identity` as values *reported by the device*, not verified.
+  2. The fake FC and simulators identify themselves with an FC variant `SIML` and board id `SIMF`. The bridge maps those to `source: "sim"`, so the badge reads SIMULATED.
+  3. Any other serial origin, including an unknown, unidentified or failed identity query, is shown as **UNVERIFIED SOURCE**, with the reported board and variant shown as "reported by device".
+  4. The HARDWARE badge appears only when the device UID matches an entry in `config/verified_devices.json`. That file ships empty, and an entry may be added only after the HV checklist passes with the Auditor's sign-off and a committed hardware log. Today, nothing can display HARDWARE.
+  5. REPLAY (recorded hardware), REPLAY of sim (shown as SIMULATED) and ingest (UNVERIFIED SOURCE) are unchanged. Supersedes L-SER.
