@@ -145,7 +145,10 @@ def _repo_copy_with_allowlist(tmp, uid_strings):
     Schema: D8 does not define it (ambiguity A1). The shipped file's top-level shape is reused:
     {"devices": [...]} -> entries {"uid": U, "label": ...}; a bare list -> [U, ...]."""
     dst = os.path.join(tmp, "repo")
-    shutil.copytree(ROOT, dst, ignore=shutil.ignore_patterns(".git", "__pycache__", "reports", "recordings", "*.pyc"))
+    # D13 (T6 self-reported): if / is full, tempfile/pytest fall back to the CWD (the repo) for temp dirs;
+    # never copy our own temp dirs into the copy (that recursed: repo/t6_d8_x/repo/t6_d8_x/...).
+    shutil.copytree(ROOT, dst, ignore=shutil.ignore_patterns(".git", "__pycache__", "reports", "recordings", "*.pyc",
+                                                          "t6_d8_*", "t6-chrome-*", "pytest-of-*", "tmp*"))
     cfg = os.path.join(dst, "config", "verified_devices.json")
     shipped = None
     if os.path.exists(os.path.join(ROOT, "config", "verified_devices.json")):

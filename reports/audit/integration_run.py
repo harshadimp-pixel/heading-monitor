@@ -467,7 +467,7 @@ if have_serial and hasattr(os, "openpty"):
         import tempfile
         tmpd = tempfile.mkdtemp(prefix="t6_d8_int_")
         root2 = os.path.join(tmpd, "repo")
-        shutil.copytree(ROOT, root2, ignore=shutil.ignore_patterns(".git", "__pycache__", "reports", "recordings"))
+        shutil.copytree(ROOT, root2, ignore=shutil.ignore_patterns(".git", "__pycache__", "reports", "recordings", "t6_d8_*", "t6-chrome-*", "pytest-of-*", "tmp*"))  # D13
         os.makedirs(os.path.join(root2, "config"), exist_ok=True)
         json.dump({"devices": [{"uid": uids[0], "label": "T6 temporary (emulator, NOT hardware)"}]},
                   open(os.path.join(root2, "config", "verified_devices.json"), "w"))
