@@ -1,0 +1,103 @@
+........................................................................ [ 10%]
+........................................................................ [ 20%]
+........................................................................ [ 31%]
+........................................................................ [ 41%]
+........................................................................ [ 51%]
+........................................................................ [ 62%]
+.ss.ss.....s...s...ssss.....sssssssssssssssssssss.s............sssssssss [ 72%]
+.s.ss................................................................... [ 82%]
+.............F.............F............................................ [ 93%]
+...............................................                          [100%]
+=================================== FAILURES ===================================
+_____________________ test_d8_allowlisted_uid_is_hardware ______________________
+
+allow_repo = ('/tmp/t6_d8_rkbqw11r/repo', '3654002b1147333039383101', None)
+
+    def test_d8_allowlisted_uid_is_hardware(allow_repo):
+        """Only path to the allowlisted live badge (formerly HARDWARE; now 'ALLOWLISTED DEVICE (identity not authenticated)'). NOTE (F11): the 'device' here is T6's emulator on a pty, i.e. a spoofer reporting an
+        allowlisted UID; it is accepted because the UID is self-reported. This passing is the D8 design, and it is
+        also the evidence for unresolved limitation F11."""
+        root, uid, err = allow_repo
+        assert err is None, err
+        dev = MSPDevice(variant="INAV", board="MKH7", uid=ALLOWED_UID)
+        try:
+            badge, r, txt, pid_ok, out = _run_serial(root, dev)
+        finally:
+            dev.close()
+        assert pid_ok
+        assert r and all(x.get("live_hardware") for x in r[-5:]), "allowlisted device: records should be live (allowlisted)"
+>       assert badge in ALLOWLISTED_BADGES, badge
+E       AssertionError: HARDWARE
+E       assert 'HARDWARE' in ('ALLOWLISTED DEVICE (identity not authenticated)',)
+
+tests/test_t6_d8_provenance.py:291: AssertionError
+_ test_d8_F11_spoof_virtual_pty_inav_mkf4_with_allowlisted_uid_passes_allowlist _
+
+allow_repo = ('/tmp/t6_d8_rkbqw11r/repo', '3654002b1147333039383101', None)
+
+    def test_d8_F11_spoof_virtual_pty_inav_mkf4_with_allowlisted_uid_passes_allowlist(allow_repo):
+        """LIMITATION DEMONSTRATION (F11), NOT hardware validation.
+        A virtual pty with NO hardware behind it (T6 MSPDevice emulator) claims to be INAV on a Matek F4 board ("MKF4")
+        and reports a UID that is on the allowlist. It gets past the allowlist and the app shows the allowlisted/live badge.
+        UID matching is an ADMINISTRATIVE TRUST DECISION ("this UID passed the HV checklist"), not hardware
+        authentication: MSP identity is self-reported over the same wire and any device or script can claim any UID.
+        This test passing proves the limitation exists; it must never be counted as hardware validation."""
+        root, uid, err = allow_repo
+        assert err is None, err
+        dev = MSPDevice(variant="INAV", board="MKF4", uid=ALLOWED_UID)
+        try:
+            badge, r, txt, pid_ok, out = _run_serial(root, dev)
+        finally:
+            dev.close()
+        assert pid_ok
+>       assert badge in ALLOWLISTED_BADGES, f"spoof not reproduced or label not as decided: badge {badge!r}"
+E       AssertionError: spoof not reproduced or label not as decided: badge 'HARDWARE'
+E       assert 'HARDWARE' in ('ALLOWLISTED DEVICE (identity not authenticated)',)
+
+tests/test_t6_d8_provenance.py:407: AssertionError
+=========================== short test summary info ============================
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC03.arith_mean_deg: circular statistics are analysis maths, not part of the simulator
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC03.circ_mean_deg: circular statistics are analysis maths, not part of the simulator
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC03.circ_mean_spread_deg: circular statistics are analysis maths, not part of the simulator
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC03.circ_std_spread_deg: circular statistics are analysis maths, not part of the simulator
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC05.error_first_order_deg: first-order approximation formula; the sim generates exact fields
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC06.first_order_at_45_deg: first-order approximation formula; the sim generates exact fields
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC08.B_axial_uT: sim has no dipole source model (motor field is k*I, ASSUMED)
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC08.B_equatorial_uT: sim has no dipole source model
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC08.B_wire_uT: sim has no straight-wire source model
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC08.dipole_at_0.6m_axial_uT: sim has no dipole source model
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC09.track_deg: navigation (wind/track) - sim has no position/velocity model
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC09.ground_speed_mps: navigation (wind/track) - sim has no position/velocity model
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC09.crab_angle_deg: navigation (wind/track) - sim has no position/velocity model
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC10.u_distance_m: navigation (path geometry) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC10.u_displacement_m: navigation (path geometry) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC10.u_displacement_bearing_deg: navigation (path geometry) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC10.semi_distance_m: navigation (path geometry) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC10.semi_displacement_m: navigation (path geometry) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC11.gc_angle_rad: geodesy (great circle / rhumb) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC11.gc_distance_nm: geodesy (great circle / rhumb) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC11.initial_course_deg: geodesy (great circle / rhumb) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC11.rhumb_course_deg: geodesy (great circle / rhumb) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC11.rhumb_distance_nm: geodesy (great circle / rhumb) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC11.gc_distance_km_Rmean: geodesy (great circle / rhumb) - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC12.cross_track_m: dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC12.along_track_m: dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC12.total_position_error_m: dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC12.small_angle_cross_track_m: dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC13.sigma_psi_deg: analytic formula; sim Monte Carlo cross-check reported as extra row
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC13.amplification: analytic ratio
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC13.wmm2025_sigma_D_deg: WMM declination error model not in sim (uniform field model)
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC14.first_order_tanI_deg: first-order approximation formula
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC17.M_equator_m: WGS84 radii / dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC17.N_equator_m: WGS84 radii / dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC17.M_45_m: WGS84 radii / dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC17.N_45_m: WGS84 radii / dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC17.dlat_equator_1km_north_deg: WGS84 radii / dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC17.dlon_45N_1km_east_deg: WGS84 radii / dead reckoning - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC18.bias_crosstrack_m: dead-reckoning Monte Carlo - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC18.white_rms_crosstrack_theory_m: dead-reckoning Monte Carlo - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC18.white_rms_crosstrack_mc_m: dead-reckoning Monte Carlo - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC19.quant_sigma_uT[1]: 0.15 uT LSB is a generic consumer part, not an RM3100 setting
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC20.convergence_deg: grid convergence - not modelled
+SKIPPED [1] sim/tests/test_spec_cases.py:28: TC20.grid_heading_deg: grid convergence - not modelled
+2 failed, 649 passed, 44 skipped in 210.62s (0:03:30)

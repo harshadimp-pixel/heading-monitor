@@ -1,0 +1,27 @@
+....F................................................................... [ 84%]
+.............                                                            [100%]
+=================================== FAILURES ===================================
+____________ test_replay_of_hardware_log_is_relabelled_and_recorded ____________
+app/tests/test_app_d6_replay.py:72: in test_replay_of_hardware_log_is_relabelled_and_recorded
+    jsonl = urllib.request.urlopen(f"{base}/recordings/{names[1]}").read().decode().splitlines()
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.13/urllib/request.py:189: in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.13/urllib/request.py:495: in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.13/urllib/request.py:604: in http_response
+    response = self.parent.error(
+/usr/lib/python3.13/urllib/request.py:533: in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.13/urllib/request.py:466: in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+/usr/lib/python3.13/urllib/request.py:613: in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+E   urllib.error.HTTPError: HTTP Error 404: Not Found
+=========================== short test summary info ============================
+FAILED app/tests/test_app_d6_replay.py::test_replay_of_hardware_log_is_relabelled_and_recorded
+1 failed, 84 passed in 32.01s

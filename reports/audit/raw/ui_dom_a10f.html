@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Heading Monitor</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>Virtual Heading Monitor</h1>
+    <div class="sub">RM3100 magnetometer + Matek FC · T5 dashboard</div>
+  </div>
+  <div class="badge-wrap">
+    <div class="badge-label">DATA SOURCE</div>
+    <div id="sourceBadge" class="source-badge hardware" title="Taken only from the source field of the latest sample">ALLOWLISTED DEVICE (identity not authenticated)</div>
+    <div id="sourceSub" class="badge-sub">from sample.source = "hardware" · via serial</div>
+    <div id="deviceIdentity" class="badge-sub device-id">
+      board <span id="deviceBoard">MKF4 (reported by device)</span> ·
+      variant <span id="deviceVariant">INAV (reported by device)</span> ·
+      target <span id="deviceTarget">T6_EMULATED_DEVICE (reported by device)</span> ·
+      uid <span id="deviceUid">3654002b1147333039383101 (reported by device)</span> · <span id="deviceVerify">UID on the local allowlist (config/verified_devices.json); not authenticated</span>
+    </div>
+  </div>
+  <div class="conn">
+    <div><span id="connDot" class="dot ok"></span><span id="connText">live (WebSocket)</span></div>
+    <div class="small" id="transportText">transport: serial:/dev/pts/1 · running · firmware_bridge (T4)</div>
+    <div class="small" id="backendText">heading estimator: heading_core</div>
+  </div>
+</header>
+<div id="evidenceBanner" class="evidence">Live serial device whose self-reported UID is on the local allowlist. The UID is not cryptographic proof; this is not hardware verification.</div>
+
+<main class="grid">
+  <!-- HEADING -->
+  <section class="panel heading-panel" id="panelHeading">
+    <h2>Heading <span class="tag">orientation · magnetometer</span></h2>
+    <div class="heading-body">
+      <svg id="compass" viewBox="-170 -170 340 340" role="img" aria-label="Compass rose: measured vs reference heading"><circle r="150" fill="#0f1720" stroke="#2b3b4f" stroke-width="2"></circle><circle r="112" fill="none" stroke="#1e2a38" stroke-width="1"></circle><line x1="0" y1="-148" x2="0" y2="-130" stroke="#9fb2c8" stroke-width="2"></line><line x1="25.699930294705688" y1="-145.75154744580678" x2="23.963448518036387" y2="-135.9034699156847" stroke="#4b5d73" stroke-width="1"></line><line x1="50.61898121219897" y1="-139.07450787631444" x2="47.19877977894228" y2="-129.67758166845536" stroke="#4b5d73" stroke-width="1"></line><line x1="73.99999999999999" y1="-128.17175976009693" x2="64.99999999999999" y2="-112.58330249197704" stroke="#9fb2c8" stroke-width="2"></line><text x="59.99999999999999" y="-99.92304845413264" text-anchor="middle" fill="#8a9bb0" font-size="11">30</text><line x1="95.1325662336078" y1="-113.37457758160875" x2="88.70469013674241" y2="-105.71413315041896" stroke="#4b5d73" stroke-width="1"></line><line x1="113.37457758160875" y1="-95.13256623360783" x2="105.71413315041896" y2="-88.70469013674243" stroke="#4b5d73" stroke-width="1"></line><line x1="128.1717597600969" y1="-74.00000000000001" x2="112.58330249197702" y2="-65.00000000000001" stroke="#9fb2c8" stroke-width="2"></line><text x="103.92304845413263" y="-56.000000000000014" text-anchor="middle" fill="#8a9bb0" font-size="11">60</text><line x1="139.07450787631444" y1="-50.61898121219899" x2="129.67758166845536" y2="-47.198779778942296" stroke="#4b5d73" stroke-width="1"></line><line x1="145.75154744580678" y1="-25.699930294705702" x2="135.9034699156847" y2="-23.963448518036397" stroke="#4b5d73" stroke-width="1"></line><line x1="148" y1="-9.062386313690414e-15" x2="130" y2="-7.960204194457796e-15" stroke="#9fb2c8" stroke-width="2"></line><line x1="145.75154744580678" y1="25.699930294705684" x2="135.9034699156847" y2="23.963448518036383" stroke="#4b5d73" stroke-width="1"></line><line x1="139.07450787631444" y1="50.61898121219897" x2="129.67758166845536" y2="47.19877977894228" stroke="#4b5d73" stroke-width="1"></line><line x1="128.17175976009693" y1="73.99999999999997" x2="112.58330249197704" y2="64.99999999999997" stroke="#9fb2c8" stroke-width="2"></line><text x="103.92304845413264" y="63.99999999999997" text-anchor="middle" fill="#8a9bb0" font-size="11">120</text><line x1="113.37457758160875" y1="95.13256623360783" x2="105.71413315041896" y2="88.70469013674243" stroke="#4b5d73" stroke-width="1"></line><line x1="95.13256623360785" y1="113.37457758160873" x2="88.70469013674244" y2="105.71413315041895" stroke="#4b5d73" stroke-width="1"></line><line x1="73.99999999999999" y1="128.17175976009693" x2="64.99999999999999" y2="112.58330249197704" stroke="#9fb2c8" stroke-width="2"></line><text x="59.99999999999999" y="107.92304845413264" text-anchor="middle" fill="#8a9bb0" font-size="11">150</text><line x1="50.618981212198996" y1="139.07450787631444" x2="47.1987797789423" y2="129.67758166845536" stroke="#4b5d73" stroke-width="1"></line><line x1="25.69993029470568" y1="145.75154744580678" x2="23.96344851803638" y2="135.9034699156847" stroke="#4b5d73" stroke-width="1"></line><line x1="1.8124772627380827e-14" y1="148" x2="1.592040838891559e-14" y2="130" stroke="#9fb2c8" stroke-width="2"></line><line x1="-25.69993029470571" y1="145.75154744580678" x2="-23.963448518036405" y2="135.9034699156847" stroke="#4b5d73" stroke-width="1"></line><line x1="-50.61898121219896" y1="139.07450787631444" x2="-47.198779778942274" y2="129.67758166845536" stroke="#4b5d73" stroke-width="1"></line><line x1="-74.00000000000001" y1="128.1717597600969" x2="-65.00000000000001" y2="112.58330249197702" stroke="#9fb2c8" stroke-width="2"></line><text x="-60.000000000000014" y="107.92304845413263" text-anchor="middle" fill="#8a9bb0" font-size="11">210</text><line x1="-95.1325662336078" y1="113.37457758160875" x2="-88.70469013674241" y2="105.71413315041896" stroke="#4b5d73" stroke-width="1"></line><line x1="-113.37457758160873" y1="95.13256623360785" x2="-105.71413315041895" y2="88.70469013674244" stroke="#4b5d73" stroke-width="1"></line><line x1="-128.17175976009688" y1="74.00000000000007" x2="-112.583302491977" y2="65.00000000000006" stroke="#9fb2c8" stroke-width="2"></line><text x="-103.92304845413261" y="64.00000000000006" text-anchor="middle" fill="#8a9bb0" font-size="11">240</text><line x1="-139.0745078763144" y1="50.61898121219907" x2="-129.67758166845533" y2="47.198779778942374" stroke="#4b5d73" stroke-width="1"></line><line x1="-145.75154744580678" y1="25.699930294705688" x2="-135.9034699156847" y2="23.963448518036387" stroke="#4b5d73" stroke-width="1"></line><line x1="-148" y1="2.718715894107124e-14" x2="-130" y2="2.3880612583373385e-14" stroke="#9fb2c8" stroke-width="2"></line><line x1="-145.7515474458068" y1="-25.699930294705634" x2="-135.90346991568472" y2="-23.963448518036337" stroke="#4b5d73" stroke-width="1"></line><line x1="-139.07450787631447" y1="-50.61898121219889" x2="-129.6775816684554" y2="-47.1987797789422" stroke="#4b5d73" stroke-width="1"></line><line x1="-128.1717597600969" y1="-74.00000000000001" x2="-112.58330249197702" y2="-65.00000000000001" stroke="#9fb2c8" stroke-width="2"></line><text x="-103.92304845413263" y="-56.000000000000014" text-anchor="middle" fill="#8a9bb0" font-size="11">300</text><line x1="-113.37457758160876" y1="-95.1325662336078" x2="-105.71413315041899" y2="-88.70469013674241" stroke="#4b5d73" stroke-width="1"></line><line x1="-95.13256623360786" y1="-113.37457758160872" x2="-88.70469013674246" y2="-105.71413315041893" stroke="#4b5d73" stroke-width="1"></line><line x1="-74.00000000000007" y1="-128.17175976009688" x2="-65.00000000000006" y2="-112.583302491977" stroke="#9fb2c8" stroke-width="2"></line><text x="-60.00000000000006" y="-99.92304845413261" text-anchor="middle" fill="#8a9bb0" font-size="11">330</text><line x1="-50.61898121219895" y1="-139.07450787631444" x2="-47.19877977894227" y2="-129.67758166845536" stroke="#4b5d73" stroke-width="1"></line><line x1="-25.69993029470583" y1="-145.75154744580678" x2="-23.963448518036515" y2="-135.9034699156847" stroke="#4b5d73" stroke-width="1"></line><text x="0" y="-109" text-anchor="middle" fill="#f87171" font-size="20" font-weight="800">N</text><text x="116" y="6.999999999999993" text-anchor="middle" fill="#e3eaf2" font-size="20" font-weight="800">E</text><text x="1.4205902870109298e-14" y="123" text-anchor="middle" fill="#e3eaf2" font-size="20" font-weight="800">S</text><text x="-116" y="7.000000000000021" text-anchor="middle" fill="#e3eaf2" font-size="20" font-weight="800">W</text><g visibility="hidden"><line x1="0" y1="0" x2="0" y2="-146" stroke="#ffb547" stroke-width="2.5" stroke-dasharray="7 5"></line><polygon points="0,-150 -9,-164 9,-164" fill="#ffb547"></polygon></g><g visibility="visible" transform="rotate(37.191007539704266)"><line x1="0" y1="0" x2="0" y2="-100" stroke="#7f8ea3" stroke-width="2"></line><circle cx="0" cy="-100" r="4" fill="#7f8ea3"></circle></g><g visibility="visible" transform="rotate(37.20418716610485)"><polygon points="0,-108 9,0 0,14 -9,0" fill="#38d6ff" stroke="#0b1016" stroke-width="1"></polygon><polygon points="0,14 9,0 0,40 -9,0" fill="#25414f"></polygon></g><circle r="6" fill="#e3eaf2"></circle><text y="60" text-anchor="middle" fill="#8a9bb0" font-size="14" font-style="italic"></text></svg>
+      <div class="heading-readout">
+        <div class="metric big">
+          <div class="label" id="headingLabel">Measured heading (filtered estimate, magnetic)</div>
+          <div class="value" id="headingValue">37.2° NE</div>
+          <div class="hint" id="headingHint">Not calibrated: heading uses the uncalibrated field (see Calibration wizard)</div>
+        </div>
+        <div class="metric">
+          <div class="label">Unfiltered heading (heading_raw_deg: instantaneous, before smoothing)</div>
+          <div class="value mid" id="rawHeadingValue">37.2° NE</div>
+        </div>
+        <div class="metric">
+          <div class="label">Reference heading (user-selected)</div>
+          <div class="ref-row">
+            <input id="refNumber" type="number" min="0" max="359.9" step="0.1" placeholder="not set" aria-label="Reference heading degrees">
+            <button id="refSet">Set</button>
+            <button id="refUseCurrent" title="Use the current measured heading">Use current</button>
+            <button id="refClear" class="ghost">Clear</button>
+          </div>
+          <input id="refSlider" type="range" min="0" max="359" step="1" value="0" aria-label="Reference heading slider">
+          <div class="hint">Tip: click the compass rose to set the reference.</div>
+        </div>
+        <div class="metric">
+          <div class="label">Deviation (measured − reference, ±180°)</div>
+          <div class="value mid unknown unk" id="deviationValue">Unknown</div>
+        </div>
+        <div class="legend">
+          <span><i class="sw measured"></i>Measured (filtered)</span>
+          <span><i class="sw raw"></i>Unfiltered</span>
+          <span><i class="sw reference"></i>Reference</span>
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>Heading is orientation, not movement or position.</b> It is the direction the sensor's
+      forward (x) axis points, measured clockwise from magnetic north (true north only if a declination is configured).
+      A vehicle can point one way and travel another (wind, drift, reversing).</p>
+  </section>
+
+  <!-- STATUS / ACCURACY -->
+  <section class="panel" id="panelStatus">
+    <h2>Sensor status &amp; accuracy</h2>
+    <div class="kv"><span>Sensor status</span><b id="sensorStatus" class="pill ok">OK</b></div>
+    <div class="hint" id="sensorReason"></div>
+    <div class="kv"><span>Last sample</span><b id="lastAge" class="">1.0 s ago</b></div>
+    <div class="kv"><span>Data rate</span><b id="rateValue" class="">11.0 Hz</b></div>
+    <div class="kv"><span>Samples accepted / invalid</span><b id="countsValue">22 / 0</b></div>
+    <h3>Measurement accuracy</h3>
+    <div class="kv"><span>Quality (heading_core, 0–1)</span><b id="qualityValue" class="">0.50</b></div>
+    <div class="qbar"><div id="qualityBar" style="width: 49.9792%;"></div></div>
+    <div class="kv"><span>Short-term noise (1σ)</span><b id="noiseValue" class="">±0.02°</b></div>
+    <div class="kv"><span>Calibration</span><b id="calState" class="">not calibrated</b></div>
+    <div class="kv"><span>Calibration residual</span><b id="calResidual" class="unknown unk">Unknown</b></div>
+    <div class="kv" id="simErrRow" style="display: none;"><span>Error vs sim truth <span class="tag sim">SIMULATED</span></span><b id="simErr" class="unknown unk">Unknown</b></div>
+    <p class="note small">Noise is precision (sample-to-sample scatter), not absolute accuracy. Absolute accuracy is
+      Unknown without an independent reference; the sim-truth error exists only for simulated data.</p>
+    <h3>Warnings</h3>
+    <ul id="warnings" class="warnings"><li>NOT_CALIBRATED</li></ul>
+  </section>
+
+  <!-- ATTITUDE -->
+  <section class="panel" id="panelAttitude">
+    <h2>Roll / pitch <span class="tag">tilt · accelerometer</span></h2>
+    <canvas id="horizon" width="260" height="200" aria-label="Roll and pitch indicator"></canvas>
+    <div class="kv"><span>Roll</span><b id="rollValue" class="">0.0°</b></div>
+    <div class="kv"><span>Pitch</span><b id="pitchValue" class="">0.0°</b></div>
+    <p class="note small">Tilt is used to tilt-compensate the heading. It is not movement.</p>
+  </section>
+
+  <!-- GPS AVAILABILITY (status only) -->
+  <section class="panel unknown-panel" id="panelGps">
+    <h2>GPS availability <span class="tag gps">status only</span></h2>
+    <div class="kv"><span>GPS</span><b id="gpsStatus" class="pill unknown">Unknown</b></div>
+    <div class="kv"><span>Fix</span><b id="gpsFix" class="unk unknown">Unknown</b></div>
+    <div class="kv"><span>Satellites</span><b id="gpsSats" class="unk unknown">Unknown</b></div>
+    <div class="kv"><span>HDOP</span><b id="gpsHdop" class="unk unknown">Unknown</b></div>
+    <p class="note" id="gpsNote">This app shows heading only. Heading is orientation, not movement or position. GPS availability comes only from the optional sample.gps object (fix, satellites, HDOP). Absent or unknown fix is shown as Unknown. No coordinates are used, and nothing is inferred from heading.</p>
+  </section>
+
+  <!-- FIELD -->
+  <section class="panel wide" id="panelField">
+    <h2>Magnetic field <span class="tag">µT · body frame (x fwd, y right, z down)</span></h2>
+    <div class="field-nums">
+      <div class="metric"><div class="label">Bx</div><div class="value mid" id="bx">19.90 µT</div></div>
+      <div class="metric"><div class="label">By</div><div class="value mid" id="by">-15.10 µT</div></div>
+      <div class="metric"><div class="label">Bz</div><div class="value mid" id="bz">43.30 µT</div></div>
+      <div class="metric"><div class="label">|B| raw</div><div class="value mid" id="bmag">49.99 µT</div></div>
+      <div class="metric"><div class="label">|B| calibrated</div><div class="value mid unknown unk" id="bmagCal">n/a (not calibrated)</div></div>
+    </div>
+    <div class="kv"><span>RM3100 raw counts (mag_raw, optional)</span><b id="magRaw" class="unknown unk">Unknown</b></div>
+    <canvas id="fieldChart" class="chart" height="200" width="691"></canvas>
+    <div class="legend"><span><i class="sw bx"></i>Bx</span><span><i class="sw by"></i>By</span><span><i class="sw bz"></i>Bz</span><span><i class="sw bm"></i>|B| raw</span></div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="panel wide" id="panelHistory">
+    <h2>Heading history
+      <select id="windowSel" aria-label="History window">
+        <option value="30">30 s</option><option value="60" selected="">60 s</option>
+        <option value="180">3 min</option><option value="300">5 min</option>
+      </select>
+    </h2>
+    <canvas id="headingChart" class="chart" height="200" width="691"></canvas>
+    <div class="legend"><span><i class="sw measured"></i>Measured</span><span><i class="sw raw"></i>Unfiltered</span><span><i class="sw reference"></i>Reference</span><span><i class="sw truth"></i>Sim truth</span><span class="muted">gaps = no data</span></div>
+    <h3>Recent samples</h3>
+    <div class="table-wrap">
+      <table id="samplesTable">
+        <thead><tr><th>Time (local)</th><th>Source</th><th>Heading °</th><th>Unfilt. °</th><th>Ref °</th><th>Dev °</th>
+          <th>Bx</th><th>By</th><th>Bz</th><th>|B|</th><th>Quality</th><th>Status</th><th>GPS fix</th></tr></thead>
+        <tbody><tr><td>11:56:35.795</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>37.2</td><td>37.2</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>19.90</td><td>-15.10</td><td>43.30</td><td>49.99</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.746</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>35.7</td><td>35.7</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>20.30</td><td>-14.60</td><td>43.30</td><td>50.00</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.746</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>35.7</td><td>35.7</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>20.30</td><td>-14.60</td><td>43.30</td><td>50.00</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.695</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>34.2</td><td>34.3</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>20.70</td><td>-14.10</td><td>43.30</td><td>50.02</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.646</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>32.7</td><td>32.7</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>21.00</td><td>-13.50</td><td>43.30</td><td>49.98</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.595</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>31.2</td><td>31.3</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>21.40</td><td>-13.00</td><td>43.30</td><td>50.02</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.548</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>29.8</td><td>29.7</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>21.70</td><td>-12.40</td><td>43.30</td><td>50.00</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.495</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>28.2</td><td>28.2</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>22.00</td><td>-11.80</td><td>43.30</td><td>49.98</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.446</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>26.7</td><td>26.7</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>22.30</td><td>-11.20</td><td>43.30</td><td>49.98</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.393</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>25.1</td><td>25.1</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>22.60</td><td>-10.60</td><td>43.30</td><td>49.98</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.343</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>23.6</td><td>23.6</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>22.90</td><td>-10.00</td><td>43.30</td><td>49.99</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.293</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>22.1</td><td>22.1</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>23.20</td><td>-9.40</td><td>43.30</td><td>50.01</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.243</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>20.6</td><td>20.6</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>23.40</td><td>-8.80</td><td>43.30</td><td>50.00</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.192</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>19.1</td><td>19.2</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>23.60</td><td>-8.20</td><td>43.30</td><td>49.99</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.142</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>17.6</td><td>17.7</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>23.80</td><td>-7.60</td><td>43.30</td><td>49.99</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.092</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>16.1</td><td>16.0</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>24.00</td><td>-6.90</td><td>43.30</td><td>49.98</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:35.042</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>14.6</td><td>14.6</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>24.20</td><td>-6.30</td><td>43.30</td><td>50.00</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:34.992</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>13.1</td><td>13.2</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>24.30</td><td>-5.70</td><td>43.30</td><td>49.98</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:34.942</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>11.6</td><td>11.5</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>24.50</td><td>-5.00</td><td>43.30</td><td>50.00</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr><tr><td>11:56:34.892</td><td>ALLOWLISTED DEVICE (identity not authenticated)</td><td>10.1</td><td>10.1</td><td class="unk">Unknown</td><td class="unk">Unknown</td><td>24.60</td><td>-4.40</td><td>43.30</td><td>49.99</td><td>0.50</td><td>OK</td><td class="unk">Unknown</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CALIBRATION -->
+  <section class="panel" id="panelCalib">
+    <h2>Calibration wizard</h2>
+    <ol class="steps">
+      <li>Start collecting, then rotate the sensor through as many orientations as possible (a full yaw turn at several tilts).</li>
+      <li>Fit: calls <code>heading_core.Calibration.fit</code> (hard + soft iron).</li>
+      <li>Review, apply, and save as JSON.</li>
+    </ol>
+    <div class="btn-row">
+      <button id="calStart">Start collecting</button>
+      <button id="calStop" class="ghost">Stop</button>
+      <button id="calFit">Fit</button>
+      <button id="calApply" disabled="">Apply</button>
+      <button id="calClear" class="ghost">Remove calibration</button>
+    </div>
+    <div class="kv"><span>Samples</span><b id="calN">0 / 300</b></div>
+    <div class="qbar"><div id="calProgress" style="width: 0%;"></div></div>
+    <div class="kv"><span>Heading coverage (30° bins)</span><b id="calBins">0/12</b></div>
+    <div class="kv"><span>Axis-sign octants covered</span><b id="calOct">0/8</b></div>
+    <pre id="calResult" class="calresult">No fit yet.</pre>
+    <div class="btn-row">
+      <input id="calName" placeholder="file name" value="calibration">
+      <button id="calSave">Save JSON</button>
+      <a id="calDownload" class="btn ghost" href="/api/calib/current" download="">Download</a>
+    </div>
+    <div class="btn-row">
+      <select id="calFiles"><option value="">saved files…</option></select>
+      <button id="calLoad">Load</button>
+      <label class="btn ghost">Upload JSON<input id="calUpload" type="file" accept=".json,application/json" hidden=""></label>
+    </div>
+    <div id="calMsg" class="hint"></div>
+  </section>
+
+  <!-- RECORDING -->
+  <section class="panel" id="panelRecord">
+    <h2>Recording &amp; export</h2>
+    <div class="btn-row">
+      <a class="btn" href="/api/export.csv" id="exportCsv">Export history CSV</a>
+    </div>
+    <p class="note small">Exports the in-memory history (last 6000 samples). Empty cells mean Unknown / not reported.</p>
+    <div class="btn-row">
+      <button id="recCsv">Record CSV</button>
+      <button id="recJsonl">Record JSONL</button>
+      <button id="recStop" class="ghost" disabled="">Stop</button>
+    </div>
+    <div class="kv"><span>Recording</span><b id="recState">off</b></div>
+    <p class="note small">JSONL recordings contain the original contract Samples and can be replayed with
+      <code>--source replay:&lt;file&gt;</code>.</p>
+    <ul id="recList" class="files"><li class="muted">no recordings yet</li></ul>
+  </section>
+
+  <!-- TEST CONTROLS -->
+  <section class="panel test-panel" id="panelTest">
+    <h2>Test controls <span class="tag warn">app-side only</span></h2>
+    <p class="note small">These drop samples inside the app to exercise Unknown/stale handling. They do not
+      change the simulator or the sensor.</p>
+    <div class="btn-row">
+      <button id="pauseBtn">Pause intake</button>
+      <button id="dropoutBtn">Inject 5 s dropout</button>
+    </div>
+    <div class="kv"><span>Intake</span><b id="intakeState">normal</b></div>
+    <div class="kv"><span>Last error</span><b id="lastError" class="small">none</b></div>
+  </section>
+</main>
+<footer>Headings: degrees clockwise from north, range [0, 360). Unknown = not measured, not reported, or stale (&gt; <span id="staleS">60</span> s old).</footer>
+<script src="/headingmath.js"></script>
+<script src="/app.js"></script>
+
+
+</body></html>

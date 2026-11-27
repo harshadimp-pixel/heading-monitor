@@ -1,0 +1,261 @@
+[
+ {
+  "step": "A1 sim:static -> heading_core -> app",
+  "cmd": "-m app --host 127.0.0.1 --port 52269 --source sim:static --rate 50 --seed 3",
+  "pass": true,
+  "summary": "pid_ok=True records=156 sources=['sim'] badge=SIMULATED backend=['heading_core'] RMSE_vs_truth(after 1 s, uncalibrated app)=0.29 deg warnings=['NOT_CALIBRATED'] sim_status=sim (T3, real module) port_released=True",
+  "raw": "2026-11-27 11:56:40,354 INFO root: Heading monitor UI on http://127.0.0.1:52269  (source sim:static)\n"
+ },
+ {
+  "step": "A1 sim:yaw_spin -> heading_core -> app",
+  "cmd": "-m app --host 127.0.0.1 --port 52519 --source sim:yaw_spin --rate 50 --seed 3",
+  "pass": true,
+  "summary": "pid_ok=True records=150 sources=['sim'] badge=SIMULATED backend=['heading_core'] RMSE_vs_truth(after 1 s, uncalibrated app)=0.31 deg warnings=['NOT_CALIBRATED'] sim_status=sim (T3, real module) port_released=True",
+  "raw": "2026-11-27 11:56:43,769 INFO root: Heading monitor UI on http://127.0.0.1:52519  (source sim:yaw_spin)\n"
+ },
+ {
+  "step": "A1 sim:tilted_spin -> heading_core -> app",
+  "cmd": "-m app --host 127.0.0.1 --port 57991 --source sim:tilted_spin --rate 50 --seed 3",
+  "pass": true,
+  "summary": "pid_ok=True records=155 sources=['sim'] badge=SIMULATED backend=['heading_core'] RMSE_vs_truth(after 1 s, uncalibrated app)=0.42 deg warnings=['NOT_CALIBRATED'] sim_status=sim (T3, real module) port_released=True",
+  "raw": "2026-11-27 11:56:47,038 INFO root: Heading monitor UI on http://127.0.0.1:57991  (source sim:tilted_spin)\n"
+ },
+ {
+  "step": "A1 sim:calibration_dance -> heading_core -> app",
+  "cmd": "-m app --host 127.0.0.1 --port 39393 --source sim:calibration_dance --rate 50 --seed 3",
+  "pass": true,
+  "summary": "pid_ok=True records=154 sources=['sim'] badge=SIMULATED backend=['heading_core'] RMSE_vs_truth(after 1 s, uncalibrated app)=13.91 deg warnings=['FIELD_MAGNITUDE_OUT_OF_RANGE', 'NOT_CALIBRATED', 'TILT_TOO_LARGE'] sim_status=sim (T3, real module) port_released=True",
+  "raw": "2026-11-27 11:56:50,403 INFO root: Heading monitor UI on http://127.0.0.1:39393  (source sim:calibration_dance)\n"
+ },
+ {
+  "step": "A1 sim:hard_iron -> heading_core -> app",
+  "cmd": "-m app --host 127.0.0.1 --port 37053 --source sim:hard_iron --rate 50 --seed 3",
+  "pass": true,
+  "summary": "pid_ok=True records=150 sources=['sim'] badge=SIMULATED backend=['heading_core'] RMSE_vs_truth(after 1 s, uncalibrated app)=10.75 deg warnings=['FIELD_MAGNITUDE_OUT_OF_RANGE', 'HIGH_NOISE', 'NOT_CALIBRATED'] sim_status=sim (T3, real module) port_released=True",
+  "raw": "2026-11-27 11:56:53,733 INFO root: Heading monitor UI on http://127.0.0.1:37053  (source sim:hard_iron)\n"
+ },
+ {
+  "step": "A1 sim:soft_iron -> heading_core -> app",
+  "cmd": "-m app --host 127.0.0.1 --port 42433 --source sim:soft_iron --rate 50 --seed 3",
+  "pass": true,
+  "summary": "pid_ok=True records=153 sources=['sim'] badge=SIMULATED backend=['heading_core'] RMSE_vs_truth(after 1 s, uncalibrated app)=10.56 deg warnings=['NOT_CALIBRATED'] sim_status=sim (T3, real module) port_released=True",
+  "raw": "2026-11-27 11:56:57,040 INFO root: Heading monitor UI on http://127.0.0.1:42433  (source sim:soft_iron)\n"
+ },
+ {
+  "step": "A1 sim:motor_interference -> heading_core -> app",
+  "cmd": "-m app --host 127.0.0.1 --port 49045 --source sim:motor_interference --rate 50 --seed 3",
+  "pass": true,
+  "summary": "pid_ok=True records=154 sources=['sim'] badge=SIMULATED backend=['heading_core'] RMSE_vs_truth(after 1 s, uncalibrated app)=0.32 deg warnings=['NOT_CALIBRATED'] sim_status=sim (T3, real module) port_released=True",
+  "raw": "2026-11-27 11:57:00,404 INFO root: Heading monitor UI on http://127.0.0.1:49045  (source sim:motor_interference)\n"
+ },
+ {
+  "step": "A1 sim:high_noise -> heading_core -> app",
+  "cmd": "-m app --host 127.0.0.1 --port 55165 --source sim:high_noise --rate 50 --seed 3",
+  "pass": true,
+  "summary": "pid_ok=True records=154 sources=['sim'] badge=SIMULATED backend=['heading_core'] RMSE_vs_truth(after 1 s, uncalibrated app)=0.35 deg warnings=['HIGH_NOISE', 'NOT_CALIBRATED'] sim_status=sim (T3, real module) port_released=True",
+  "raw": "2026-11-27 11:57:03,709 INFO root: Heading monitor UI on http://127.0.0.1:55165  (source sim:high_noise)\n"
+ },
+ {
+  "step": "A1b sim:motor_interference (--sim-duration 10) -> app: interference must be warned",
+  "cmd": "-m app --host 127.0.0.1 --port 43321 --source sim:motor_interference --rate 20 --seed 3 --sim-duration 10 --stale 60",
+  "pass": true,
+  "summary": "pid_ok=True records=199 warnings_seen=['FIELD_MAGNITUDE_OUT_OF_RANGE', 'HIGH_NOISE'] max|err|=14.7 deg samples err>5deg=76 of which without any warning=0",
+  "raw": "2026-11-27 11:57:07,228 INFO root: Heading monitor UI on http://127.0.0.1:43321  (source sim:motor_interference)\n"
+ },
+ {
+  "step": "A2 replay sim/examples/calibration_dance_10hz_10s_seed42.jsonl",
+  "cmd": "-m app --host 127.0.0.1 --port 42207 --source replay:sim/examples/calibration_dance_10hz_10s_seed42.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True file_lines=100 records=100 invalid=0 sample.source=['sim'] badge=['SIMULATED'] state=ended",
+  "raw": "2026-11-27 11:57:17,529 INFO root: Heading monitor UI on http://127.0.0.1:42207  (source replay:/workspace/audit/clone_03fc993/sim/examples/calibration_dance_10hz_10s_seed42.jsonl)\n"
+ },
+ {
+  "step": "A2 replay sim/examples/hard_iron_10hz_5s_seed42.jsonl",
+  "cmd": "-m app --host 127.0.0.1 --port 46113 --source replay:sim/examples/hard_iron_10hz_5s_seed42.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True file_lines=50 records=50 invalid=0 sample.source=['sim'] badge=['SIMULATED'] state=ended",
+  "raw": "2026-11-27 11:57:18,288 INFO root: Heading monitor UI on http://127.0.0.1:46113  (source replay:/workspace/audit/clone_03fc993/sim/examples/hard_iron_10hz_5s_seed42.jsonl)\n"
+ },
+ {
+  "step": "A2 replay sim/examples/motor_interference_10hz_5s_seed42.jsonl",
+  "cmd": "-m app --host 127.0.0.1 --port 37149 --source replay:sim/examples/motor_interference_10hz_5s_seed42.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True file_lines=50 records=50 invalid=0 sample.source=['sim'] badge=['SIMULATED'] state=ended",
+  "raw": "2026-11-27 11:57:18,759 INFO root: Heading monitor UI on http://127.0.0.1:37149  (source replay:/workspace/audit/clone_03fc993/sim/examples/motor_interference_10hz_5s_seed42.jsonl)\n"
+ },
+ {
+  "step": "A2 replay sim/examples/static_10hz_5s_seed42.jsonl",
+  "cmd": "-m app --host 127.0.0.1 --port 43221 --source replay:sim/examples/static_10hz_5s_seed42.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True file_lines=50 records=50 invalid=0 sample.source=['sim'] badge=['SIMULATED'] state=ended",
+  "raw": "2026-11-27 11:57:19,264 INFO root: Heading monitor UI on http://127.0.0.1:43221  (source replay:/workspace/audit/clone_03fc993/sim/examples/static_10hz_5s_seed42.jsonl)\n"
+ },
+ {
+  "step": "A2 replay sim/examples/yaw_spin_10hz_5s_seed42.jsonl",
+  "cmd": "-m app --host 127.0.0.1 --port 60691 --source replay:sim/examples/yaw_spin_10hz_5s_seed42.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True file_lines=50 records=50 invalid=0 sample.source=['sim'] badge=['SIMULATED'] state=ended",
+  "raw": "2026-11-27 11:57:19,779 INFO root: Heading monitor UI on http://127.0.0.1:60691  (source replay:/workspace/audit/clone_03fc993/sim/examples/yaw_spin_10hz_5s_seed42.jsonl)\n"
+ },
+ {
+  "step": "A2 replay sim/examples/yaw_spin_dronecan_50hz_2s_seed42.jsonl",
+  "cmd": "-m app --host 127.0.0.1 --port 51529 --source replay:sim/examples/yaw_spin_dronecan_50hz_2s_seed42.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True file_lines=100 records=100 invalid=0 sample.source=['sim'] badge=['SIMULATED'] state=ended",
+  "raw": "2026-11-27 11:57:20,343 INFO root: Heading monitor UI on http://127.0.0.1:51529  (source replay:/workspace/audit/clone_03fc993/sim/examples/yaw_spin_dronecan_50hz_2s_seed42.jsonl)\n"
+ },
+ {
+  "step": "A2 replay sim/examples/yaw_spin_msp_50hz_2s_seed42.jsonl",
+  "cmd": "-m app --host 127.0.0.1 --port 58191 --source replay:sim/examples/yaw_spin_msp_50hz_2s_seed42.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True file_lines=100 records=100 invalid=0 sample.source=['sim'] badge=['SIMULATED'] state=ended",
+  "raw": "2026-11-27 11:57:20,856 INFO root: Heading monitor UI on http://127.0.0.1:58191  (source replay:/workspace/audit/clone_03fc993/sim/examples/yaw_spin_msp_50hz_2s_seed42.jsonl)\n"
+ },
+ {
+  "step": "A3a fake-FC --capture -> firmware_bridge --replay",
+  "cmd": "python -m firmware_bridge --fake-fc --count 60 --capture fake_capture.jsonl --out fake_samples.jsonl ; python -m firmware_bridge --replay fake_capture.jsonl --out capture_replayed.jsonl",
+  "pass": true,
+  "summary": "rc=0/0 capture_header_source=sim live=60 (source ['sim']) replayed=60 (source ['replay']) mag bit-identical=True",
+  "raw": "[firmware_bridge] device identity (self-reported): variant='SIML' board='SIMF' uid='a0a1a2a3a4a5a6a7a8a9aaab' -> source=sim provenance=simulated (simulated transport (fake FC))\n[firmware_bridge] FC mag calibration: fc_mag_calibrated=False\n"
+ },
+ {
+  "step": "A3b capture replay -> app",
+  "cmd": "-m app --host 127.0.0.1 --port 49929 --source replay:<out>/capture_replayed.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True records=60 sample.source=['replay'] badge=['REPLAY'] heading[0..3]=[0.7, 2.1, 3.7]",
+  "raw": "2026-11-27 11:57:21,456 INFO root: Heading monitor UI on http://127.0.0.1:49929  (source replay:/workspace/audit/final2_03fc993/integ_noserial/capture_replayed.jsonl)\n"
+ },
+ {
+  "step": "A4 firmware_bridge --fake-fc | POST -> app (ingest)",
+  "cmd": "python -m firmware_bridge --fake-fc --count 100 | POST each line to /api/sample ; -m app --host 127.0.0.1 --port 49501 --source ingest --stale 30",
+  "pass": true,
+  "summary": "pid_ok=True posted=100 accepted=100 rejected=[] sources=['sim'] badge=['SIMULATED'] heading range=0.2..151.7",
+  "raw": "2026-11-27 11:57:21,988 INFO root: Heading monitor UI on http://127.0.0.1:49501  (source ingest)\n"
+ },
+ {
+  "step": "A5 calibration wizard start/stop/fit/apply/save/clear/load",
+  "cmd": "-m app --host 127.0.0.1 --port 46551 --source sim:calibration_dance --rate 50 --seed 5",
+  "pass": true,
+  "summary": "pid_ok=True collected n=304/300 bins=9/12 octants=5/8 fit ok=True backend=heading_core offset_uT=[11.84591381228662, -8.111246721023761, 4.991328129384055] (sim truth hard-iron [12,-8,5]) | after apply: calibrated=True, RMSE vs truth last 50=0.72 deg | clear -> active=False; load -> active=True",
+  "raw": "[[\"start\", {\"ok\": true}], [\"stop\", {\"ok\": true}], [\"fit\", {\"ok\": true, \"backend\": \"heading_core\", \"error\": null}], [\"apply\", {\"ok\": true}], [\"save\", {\"ok\": true, \"file\": \"t6_audit_cal.json\"}], [\"list\", {\"files\": [\"t6_audit_cal.json\"]}], [\"load\", {\"ok\": true}]]\n2026-11-27 11:57:22,445 INFO root: Heading monitor UI on http://127.0.0.1:46551  (source sim:calibration_dance)\n"
+ },
+ {
+  "step": "A6 frozen + stale data",
+  "cmd": "-m app --host 127.0.0.1 --port 49567 --source ingest --stale 1.5 ; POST 60 identical samples, then silence",
+  "pass": true,
+  "summary": "pid_ok=True 3 s identical samples -> warnings=['SENSOR_STALE', 'NOT_CALIBRATED'] quality=0.025 sensor_status=OK; then 2.2 s silence (stale 1.5 s) -> sensor_status=STALE reason='no sample for 2.2 s (timeout 1.5 s)'",
+  "raw": "2026-11-27 11:57:31,516 INFO root: Heading monitor UI on http://127.0.0.1:49567  (source ingest)\n"
+ },
+ {
+  "step": "A7 serial to missing port (app)",
+  "cmd": "-m app --host 127.0.0.1 --port 57725 --source serial:/dev/ttyT6_DOES_NOT_EXIST",
+  "pass": true,
+  "summary": "pid_ok=True app alive=True source_status={'transport': 'serial', 'state': 'fault', 'backend': 'firmware_bridge (T4)', 'detail': 'firmware_bridge exited rc=2 after 0 samples. [firmware_bridge] ERROR: pyserial is not installed; live --port mode needs it: pip install pyserial  (replay and --fake-fc work without it)', 'command': '/workspace/audit/venv_clean/bin/python -m firmware_bridge --port /dev/ttyT6_DOES_NOT_EXIST --baud 115200 --verified-devices /workspace/audit/clone_03fc993/config/verified_devices.json'} sensor_status=FAULT records=0 (no live or allowlisted samples fabricated)",
+  "raw": "2026-11-27 11:57:34,060 INFO root: Heading monitor UI on http://127.0.0.1:57725  (source serial:/dev/ttyT6_DOES_NOT_EXIST)\n"
+ },
+ {
+  "step": "A7b firmware_bridge --port missing",
+  "cmd": "python -m firmware_bridge --port /dev/ttyT6_DOES_NOT_EXIST",
+  "pass": true,
+  "summary": "rc=2 stdout_lines=0 stderr='[firmware_bridge] ERROR: pyserial is not installed; live --port mode needs it: pip install pyserial  (replay and --fake-fc work without it)'",
+  "raw": "[firmware_bridge] ERROR: pyserial is not installed; live --port mode needs it: pip install pyserial  (replay and --fake-fc work without it)\n"
+ },
+ {
+  "step": "A8 app replay of a hardware-labelled log: badge must be REPLAY (recorded hardware), never live/allowlisted",
+  "cmd": "-m app --host 127.0.0.1 --port 42267 --source replay:<out>/hw_labelled.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True file sample.source=hardware -> app records=20 source=['replay'] original_source=['hardware'] transport=['replay'] live_hardware_true=0 -> badgeInfo (app's headingmath.js in Node)=['REPLAY (recorded hardware)']",
+  "raw": "2026-11-27 11:57:37,362 INFO root: Heading monitor UI on http://127.0.0.1:42267  (source replay:/workspace/audit/final2_03fc993/integ_noserial/hw_labelled.jsonl)\n"
+ },
+ {
+  "step": "A9a UI render (headless Chrome, sim)",
+  "cmd": "-m app --host 127.0.0.1 --port 42581 --source sim:yaw_spin --stale 60 ; google-chrome --headless=new --dump-dom http://127.0.0.1:<port>/",
+  "pass": true,
+  "summary": "Google Chrome 156.0.8078.47; pid_ok=True sourceBadge='SIMULATED' headingValue='44.9\u00b0 NE' gpsStatus='Unknown' warnings='NOT_CALIBRATED'",
+  "raw": "2026-11-27 11:57:37,694 INFO root: Heading monitor UI on http://127.0.0.1:42581  (source sim:yaw_spin)\n"
+ },
+ {
+  "step": "A9b UI render (headless Chrome, 3x field -> warning)",
+  "cmd": "-m app --host 127.0.0.1 --port 58423 --source ingest --stale 600 ; POST |B|~150 uT samples at 20 Hz continuously during render ; dump-dom",
+  "pass": true,
+  "summary": "pid_ok=True fed=19 feed_errors=[] sourceBadge='REPLAY' headingValue='6.8\u00b0 N' (api heading_deg=6.842) warnings='NOT_CALIBRATED | FIELD_MAGNITUDE_OUT_OF_RANGE'",
+  "raw": "2026-11-27 11:57:40,609 INFO root: Heading monitor UI on http://127.0.0.1:58423  (source ingest)\n"
+ },
+ {
+  "step": "A8b UI render of a replayed hardware-labelled log (headless Chrome)",
+  "cmd": "-m app --host 127.0.0.1 --port 50019 --source replay:<out>/hw_labelled.jsonl --speed 1 --loop --stale 60 ; dump-dom",
+  "pass": true,
+  "summary": "pid_ok=True sourceBadge='REPLAY (recorded hardware)' evidenceBanner='[REPLAYED] Recorded hardware log played back from a file. This is recorded data, not a live sensor stream. Nothing here is hardware-verified.' transportText='transport: replay:/workspace/audit/final2_03fc993/integ_noserial/hw_labelled.jsonl \u00b7 running \u00b7 app file reader'",
+  "raw": "2026-11-27 11:57:41,842 INFO root: Heading monitor UI on http://127.0.0.1:50019  (source replay:/workspace/audit/final2_03fc993/integ_noserial/hw_labelled.jsonl)\n"
+ },
+ {
+  "step": "A10a replayed file cannot defeat the D6 relabel (case variants, original_source/transport/live tricks)",
+  "cmd": "-m app --host 127.0.0.1 --port 33023 --source replay:<out>/replay_tricks.jsonl --speed 20",
+  "pass": true,
+  "summary": "pid_ok=True lines=9 accepted=7 invalid=2 last_error=\"invalid sample: source must be one of ('sim', 'replay', 'hardware')\"; records (t, source, original_source, transport, live_hardware, badge)=[(0.1, 'replay', 'hardware', 'replay', False, 'REPLAY (recorded hardware)'), (0.15000000000000002, 'replay', 'hardware', 'replay', False, 'REPLAY (recorded hardware)'), (0.2, 'replay', 'hardware', 'replay', False, 'REPLAY (recorded hardware)'), (0.25, 'replay', 'HARDWARE', 'replay', False, 'REPLAY'), (0.30000000000000004, 'replay', None, 'replay', False, 'REPLAY'), (0.35000000000000003, 'sim', 'hardware', 'replay', False, 'SIMULATED'), (0.4, 'replay', 'hardware', 'replay', False, 'REPLAY (recorded hardware)')]; violations=[]",
+  "raw": "variants: [\"upper-case HARDWARE\", \"title-case Hardware\", \"hardware + meta.original_source=sim\", \"replay + original_source=hardware + top-level transport=serial, live_hardware=true\", \"hardware + top-level transport=serial, live_hardware=true\", \"replay + meta.original_source=HARDWARE\", \"replay + meta.original_source=object\", \"sim + meta.original_source=hardware\", \"hardware + meta.replayed_from spoof\"]\n2026-11-27 11:57:43,024 INFO root: Heading monitor UI on http://127.0.0.1:33023  (source replay:/workspace/audit/final2_03fc993/integ_noserial/replay_tricks.jsonl)\n"
+ },
+ {
+  "step": "A10b ingest of source=hardware (+ injected transport=serial) -> UNVERIFIED SOURCE, never live",
+  "cmd": "-m app --host 127.0.0.1 --port 38527 --source ingest --stale 600 ; POST hardware samples ; dump-dom",
+  "pass": true,
+  "summary": "pid_ok=True records=28 sample.source=['hardware'] transport=['ingest'] live_hardware_true=0 badgeInfo(Node)=['UNVERIFIED SOURCE'] DOM sourceBadge='UNVERIFIED SOURCE' evidenceBanner='[UNVERIFIED] Samples are labelled \"hardware\" but arrived via ingest, not a live serial source. They are not treated as live sensor data.'",
+  "raw": "2026-11-27 11:57:43,288 INFO root: Heading monitor UI on http://127.0.0.1:38527  (source ingest)\n"
+ },
+ {
+  "step": "A10h D8: shipped config/verified_devices.json exists and is empty",
+  "cmd": "cat config/verified_devices.json",
+  "pass": true,
+  "summary": "exists=True entries=[]",
+  "raw": "{\"_comment\": \"D8 (ARCHITECTURE.md 2026-11-27): the ONLY path to provenance 'verified' / the HARDWARE badge. Ships EMPTY. Add an entry only after reports/HARDWARE_VALIDATION_CHECKLIST.md passes with the Auditor's sign-off and a committed hardware log. uid = 24 hex chars = the 12 MSP_UID (160) payload bytes in wire order. A device reporting fc_variant SIML or board SIMF is never verified, even if listed. A UID is self-reported and not cryptographic proof.\", \"devices\": []}"
+ },
+ {
+  "step": "A10c D8: product fake FC on a virtual pty via serial: SIMULATED",
+  "cmd": "-",
+  "pass": false,
+  "summary": "NOT RUN (counts as FAIL): pyserial or os.openpty unavailable; install pyserial (requirements.txt optional entry)",
+  "raw": ""
+ },
+ {
+  "step": "A10d D8: unknown device via serial: UNVERIFIED SOURCE",
+  "cmd": "-",
+  "pass": false,
+  "summary": "NOT RUN (counts as FAIL): pyserial or os.openpty unavailable; install pyserial (requirements.txt optional entry)",
+  "raw": ""
+ },
+ {
+  "step": "A10e D8: unidentified device via serial: UNVERIFIED SOURCE",
+  "cmd": "-",
+  "pass": false,
+  "summary": "NOT RUN (counts as FAIL): pyserial or os.openpty unavailable; install pyserial (requirements.txt optional entry)",
+  "raw": ""
+ },
+ {
+  "step": "A10f D8/F11: emulator reporting an allowlisted UID: allowlisted label (limitation demonstration)",
+  "cmd": "-",
+  "pass": false,
+  "summary": "NOT RUN (counts as FAIL): pyserial or os.openpty unavailable; install pyserial (requirements.txt optional entry)",
+  "raw": ""
+ },
+ {
+  "step": "A10g D8: non-allowlisted UID: UNVERIFIED SOURCE",
+  "cmd": "-",
+  "pass": false,
+  "summary": "NOT RUN (counts as FAIL): pyserial or os.openpty unavailable; install pyserial (requirements.txt optional entry)",
+  "raw": ""
+ },
+ {
+  "step": "A10i D8: forged ingest claims into a serial app with a non-empty allowlist: never live",
+  "cmd": "-",
+  "pass": false,
+  "summary": "NOT RUN (counts as FAIL): pyserial or os.openpty unavailable; install pyserial (requirements.txt optional entry)",
+  "raw": ""
+ },
+ {
+  "step": "A10z D8 label: no rendered sourceBadge in this run is the bare word 'HARDWARE'",
+  "cmd": "scan ui_dom_*.html",
+  "pass": true,
+  "summary": "dom_dumps_scanned=4 bare_HARDWARE=[]",
+  "raw": ""
+ }
+]

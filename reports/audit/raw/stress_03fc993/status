@@ -1,0 +1,35 @@
+clone /workspace/audit/clone_03fc993 at 03fc993 clean=0
+python: Python 3.13.5; venv=/workspace/audit/venv_clean/bin/python; pyserial=3.5
+SUITE DONE 11:55:24: 652 passed, 44 skipped in 203.61s (0:03:23)
+INTEG DONE 11:56:40: TOTAL 37/37 passed; leftover in TMPDIR: 0
+NOSERIAL DONE 11:57:44: TOTAL 31/37 passed
+clone /workspace/audit/clone_03fc993_py3.12 at 03fc993 clean=0
+clone /workspace/audit/clone_03fc993_py3.10 at 03fc993 clean=0
+PY DONE 12:01:50: 3.12 652 passed, 44 skipped in 203.94s (0:03:23) | 3.10 652 passed, 44 skipped in 244.60s (0:04:04)
+clone /workspace/audit/stress_1ddd6b9 at 1ddd6b9 clean=0
+stress 1ddd6b9 loop a run 1 12:02:22: 1 failed, 84 passed in 32.01s
+stress 1ddd6b9 loop b run 1 12:02:22: 1 failed, 84 passed in 32.37s
+stress 1ddd6b9 loop a run 2 12:02:54: 85 passed in 31.91s
+stress 1ddd6b9 loop b run 2 12:02:55: 1 failed, 84 passed in 32.44s
+stress 1ddd6b9 loop a run 3 12:03:26: 85 passed in 31.47s
+stress 1ddd6b9 loop b run 3 12:03:27: 1 failed, 84 passed in 31.64s
+stress 1ddd6b9 loop a run 4 12:03:57: 85 passed in 31.28s
+stress 1ddd6b9 loop b run 4 12:03:59: 85 passed in 31.89s
+stress 1ddd6b9 loop a run 5 12:04:28: 85 passed in 31.12s
+stress 1ddd6b9 loop b run 5 12:04:30: 85 passed in 31.32s
+stress 1ddd6b9 loop a run 6 12:05:00: 85 passed in 31.69s
+stress 1ddd6b9 loop b run 6 12:05:03: 85 passed in 32.31s
+clone /workspace/audit/stress_03fc993 at 03fc993 clean=0
+stress 03fc993 loop b run 1 12:05:33: 86 passed in 30.29s
+stress 03fc993 loop a run 1 12:05:34: 86 passed in 30.66s
+stress 03fc993 loop a run 2 12:06:04: 86 passed in 30.16s
+stress 03fc993 loop b run 2 12:06:04: 86 passed in 30.53s
+stress 03fc993 loop b run 3 12:06:36: 86 passed in 31.20s
+stress 03fc993 loop a run 3 12:06:36: 86 passed in 31.29s
+stress 03fc993 loop b run 4 12:07:05: 86 passed in 29.73s
+stress 03fc993 loop a run 4 12:07:06: 86 passed in 29.66s
+stress 03fc993 loop a run 5 12:07:34: 86 passed in 28.62s
+stress 03fc993 loop b run 5 12:07:39: 86 passed in 33.23s
+stress 03fc993 loop a run 6 12:08:03: 86 passed in 28.97s
+stress 03fc993 loop b run 6 12:08:08: 86 passed in 28.52s
+ALLDONE

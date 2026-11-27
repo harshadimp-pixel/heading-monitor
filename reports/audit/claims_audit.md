@@ -1,5 +1,7 @@
 # Claims audit, whole repo (T6)
 
+**v4 (2026-11-27, D8):** §4 runtime claims are updated for D8, the label decision and F11. The text scan (`tests/test_t6_claims.py`) is part of the full suite at the final HEAD (TEST_RESULTS.md); v5 re-run at 03fc993 and b1a2153: passed. The flake fix 3cf0d1f adds no positioning, distance or navigation claim.
+
 Scope: every tracked text file at HEAD **`dc3123a`** (clean `git archive` export), including the contribution reports, `reports/demo/` and INSTALL.md added in the last hour.
 Tool: `tests/test_t6_claims.py` (T6), run as `python -m pytest tests/test_t6_claims.py -s` → **4 passed** (Q1a, Q1a rule self-check, Q1b, Q3). Raw: `/workspace/audit/claims_dc3123a.log` (box). T6 also read the new documents by hand.
 
@@ -63,8 +65,10 @@ Special case: `app/static/app.js:211` is the banner text for `source:"hardware"`
 ## 4. Runtime claims (what the running app tells the user)
 - Badge/banner for sim and replay data: correct (A1, A2, A3b, A4, A9a, A9b).
 - D6 (CRITICAL, found at 471724e) is **CLOSED** after 0ca6b0f. A replayed hardware-labelled file now shows "REPLAY (recorded hardware)" with a not-live banner (A8, A8b at f058c9a), and the relabel could not be defeated (A10a). An ingest `hardware` sample shows UNVERIFIED SOURCE (A10b).
-- Limitation L-SER: a *virtual* serial port fed by a simulator is shown as live HARDWARE (A10c). The serial transport cannot tell it from a real FC.
-- Ingest (`POST /api/sample`) trusts the client-declared `source` (documented limitation, app/README). A local client could post `source:"hardware"`. Only the bridge should feed it.
+- ~~Limitation L-SER~~ **WITHDRAWN (v4).** The behaviour where a virtual serial port fed by a simulator was shown as live HARDWARE is defect **D8 (CRITICAL)**, fixed in e37430b/edc3ee0 (bridge) and e538cea/6c1e5b5 (app) and re-tested by T6 (verification_report §2e). The fake FC now shows SIMULATED and unknown devices show UNVERIFIED SOURCE (A10c–A10e, A10g).
+- **D8 label decision (v4, §2d; PM d5374a1).** The allowlisted live badge reads "ALLOWLISTED DEVICE (identity not authenticated)", with the banner "Live serial device whose self-reported UID is on the local allowlist. The UID is not cryptographic proof; this is not hardware verification." The previous text "HARDWARE" with "Live hardware samples from a verified device" over-stated an administrative allowlist match as verification, and is being replaced (status in verification_report §2d).
+- **Limitation F11.** The device identity is self-reported. A simulator that reports an allowlisted UID passes the allowlist (T6 spoof tests, A10f). **No T6 report, test or traceability text treats an allowlist match as proof of physical authenticity or as hardware validation.** T6 swept the repo for that wording at v4 (verification_report §2g). UI's `test_e2e_bridge_over_pty` is an F11 limitation demonstration, not hardware validation (D9).
+- Ingest (`POST /api/sample`) keeps the client-declared `source`, but hardware via ingest is always UNVERIFIED SOURCE and never live. Since 6c1e5b5 any sample-supplied `provenance`, `device_verified` or `live_hardware` is ignored; T6 A10b and A10i plus the app/DOM ingest tests confirm this. `POST /api/sample` is refused (409) unless the app runs with `--source ingest`.
 
 ## LIMITATIONS of this audit
 - Text pattern scan plus manual reading; claims phrased in ways no pattern covers could be missed in text T6 did not read. T6 read every matched line in context, plus README, REQUIREMENTS, TEAM_RULES, the ARCHITECTURE decision log, the INSTALL.md serial/pyserial sections, the demo README caption, app/README §U0/U4 and HEADING_MATH 14a. The contribution reports were checked by pattern scan plus a hand read of the matched lines, not cover to cover.
