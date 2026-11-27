@@ -164,6 +164,31 @@ Screenshots in this commit were produced by `/workspace/heading-monitor-runlogs/
 
 These are my runs, not the Auditor's sign-off.
 
+### Flaky app/tests: root cause and fix (2026-11-27, 11:11–11:52 IST)
+- **Root cause:** recordings were named per second (`rec-YYYYmmdd-HHMMSS`) in the shared `app/recordings/`, and the
+  calibration test used a fixed name. Two app/tests runs overlapping in one checkout overwrote or deleted each
+  other's files. The download then returned HTTP 404, in `test_replay_of_hardware_log_is_relabelled_and_recorded`
+  and `test_gps_in_recordings`.
+- **Fix:**
+  - recording names now carry milliseconds, the process id and a counter, and the file is opened exclusively;
+  - the calibration test uses a per-process unique name;
+  - the 1.1 s sleep that kept names apart is removed;
+  - new regression test `test_recording_names_never_collide_across_processes`.
+- **Evidence**, pyserial venv, logs in /tmp/hm-flaky*:
+
+| Condition | Runs failed |
+|---|---|
+| Fresh clone, one loop, before the fix | 0 / 30 |
+| Two concurrent loops in one fresh clone, before the fix | 7 / 16 (9 failures, all 404 on a recording download) |
+| The same two concurrent loops, after the fix | 0 / 30 |
+
+- **Shared copy after the fix:**
+  - system python: 83 passed, 3 skipped, ×3;
+  - venv: 86 passed (final confirmation run).
+- **Not explained:** a venv batch at 11:45–11:48 IST gave 3–5 failed (plus errors) per app/tests run, and 23
+  failed / 34 errors in `tests/`. The next venv run, at about 11:52, gave 86 passed. I captured only the summary
+  lines, and per the PM I did not investigate further. `/tmp/hm-venv` is also used by other agents' processes.
+
 ## 3. Open limitations
 Full text in `app/README.md` → LIMITATIONS (mirrored in the T5 row):
 - U0. Heading only by PM decision: no position, coordinate, map, speed, course or distance features. The GPS indicator reads the optional `sample.gps` {fix, num_sat, hdop}; no current source (sim) emits it, so it normally reads Unknown. firmware_bridge's MSP_RAW_GPS path is untested with the app.

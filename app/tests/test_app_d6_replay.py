@@ -64,7 +64,7 @@ def test_replay_of_hardware_log_is_relabelled_and_recorded():
             names = []
             for fmt in ("csv", "jsonl"):
                 names.append(post_json(base + "/api/record/start", {"format": fmt})[1]["file"])
-                time.sleep(1.2)
+                time.sleep(1.2)                    # let replayed samples reach the recording (names are unique)
                 post_json(base + "/api/record/stop", {})
             st = get_json(base + "/api/status")
             recs = get_json(base + "/api/history")["records"]

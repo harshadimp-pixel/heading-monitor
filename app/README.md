@@ -77,7 +77,7 @@ python -m pytest app/tests -q
 | Magnetic field | Bx/By/Bz (µT, body frame), raw and calibrated \|B\|, and a time plot of the 3 axes plus \|B\|. `mag_raw` (RM3100 counts) is **optional**: it is shown when a sample carries it, otherwise it reads Unknown. The CAN-L4-3100 / DroneCAN stream never carries it. |
 | Heading history | Time plot of measured, unfiltered, reference and sim truth (30 s – 5 min), with gaps where data is missing. Below it, a table of the last 20 samples. |
 | Calibration wizard | Start/stop collecting, live coverage (12 yaw bins, 8 axis-sign octants), **Fit** (heading_core `Calibration.fit`), review the parameters, Apply / Remove, Save JSON (`app/calibrations/`), Download, Load a saved file, Upload JSON. A bad file keeps the previous calibration. |
-| Recording & export | **Export history CSV** (in-memory ring) · Record CSV or JSONL to `app/recordings/` with download links. JSONL recordings are the original contract Samples, so they can be replayed with `--source replay:`. |
+| Recording & export | **Export history CSV** (in-memory ring) · Record CSV or JSONL to `app/recordings/` with download links (unique names `rec-<date>-<time>-<ms>-p<pid>-<n>.csv|jsonl`, never overwritten). JSONL recordings are the original contract Samples, so they can be replayed with `--source replay:`. |
 | Test controls (app-side) | Pause intake / inject a 5 s dropout. These drop samples inside the app to exercise Unknown/stale handling, and are labelled as such. |
 
 ### Heading only
@@ -231,6 +231,20 @@ The headless smoke tests need no browser:
   label is a single constant.
 * Headless Chrome D8 checks: `test_d8_serial_badges_and_reported_by_device_labels` and
   `test_d8_forged_ingest_claims_show_unverified`.
+* Flaky-suite fix (2026-11-27, `test_recording_names_never_collide_across_processes`):
+  * **Root cause:** recordings were named per second (`rec-YYYYmmdd-HHMMSS`) in the shared `app/recordings/`, and the
+    calibration test used the fixed name `pytest_tmp_cal`. Two test runs overlapping in one checkout, each starting
+    a recording in the same second, got the same file. One run truncated or deleted the other's, and the download
+    returned 404 in `test_replay_of_hardware_log_is_relabelled_and_recorded` / `test_gps_in_recordings`.
+  * **Fix:** names now carry a millisecond stamp, the process id and a per-process counter
+    (`rec-YYYYmmdd-HHMMSS-mmm-p<pid>-<n>`), and the file is opened exclusively. The calibration test uses a per-process
+    unique name. The 1.1 s sleep that kept names apart is gone.
+  * **Evidence**, venv with pyserial, two app/tests loops at once in the same fresh clone:
+    * before the fix: 7 of 16 runs failed (9 failures, all HTTP 404 on a recording download);
+    * after the fix: 0 of 30 runs failed;
+    * a fresh clone alone, before the fix: 0 of 30 runs failed.
+    * after the fix, shared checkout: 83 passed / 3 skipped ×3 (system python), 86 passed (venv). One venv batch at
+      11:45–11:48 IST had unexplained failures that did not recur (see reports/contributions/ui.md).
 * `mag_raw` optional (`test_mag_raw_is_optional`), Unknown/stale (`test_ingest_unknown_until_data_then_stale_...`),
   replay + CSV export, JSONL recording, serial without hardware gives FAULT with no fabricated data, heading maths and
   wrap/deviation, stub fallback versus real-module errors.

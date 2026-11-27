@@ -3,6 +3,7 @@ import csv
 import io
 import math
 import os
+import uuid
 import tempfile
 import time
 import json
@@ -10,6 +11,9 @@ import urllib.request
 
 from ._helpers import WSClient, get_json, post_json, run_app, sample, wait_until
 
+# Unique per test process: app/calibrations is shared by every app process using this checkout, so a fixed name
+# collided when two test runs overlapped (one deleted the file the other was loading).
+CAL_NAME = f"pytest_tmp_cal_{os.getpid()}_{uuid.uuid4().hex[:8]}"
 BADGE = {"sim": "SIMULATED", "replay": "REPLAY", "hardware": "HARDWARE"}
 
 
@@ -122,16 +126,16 @@ def test_calibration_wizard_fit_apply_save_load():
         assert post_json(base + "/api/calib/apply", {})[0] == 200
         st = get_json(base + "/api/status")
         assert st["calibration"]["active"]
-        code, j = post_json(base + "/api/calib/save", {"name": "pytest_tmp_cal"})
-        assert code == 200 and j["file"] == "pytest_tmp_cal.json"
+        code, j = post_json(base + "/api/calib/save", {"name": CAL_NAME})
+        assert code == 200 and j["file"] == CAL_NAME + ".json"
         try:
             assert post_json(base + "/api/calib/clear", {})[0] == 200
             assert not get_json(base + "/api/status")["calibration"]["active"]
-            assert post_json(base + "/api/calib/load", {"name": "pytest_tmp_cal"})[0] == 200
+            assert post_json(base + "/api/calib/load", {"name": CAL_NAME})[0] == 200
             assert get_json(base + "/api/status")["calibration"]["active"]
             params = get_json(base + "/api/status")["calibration"]["params"]
             from app.hub import CALIBRATIONS_DIR as CD
-            with open(os.path.join(CD, "pytest_tmp_cal.json")) as f:
+            with open(os.path.join(CD, CAL_NAME + ".json")) as f:
                 saved = json.load(f)
             assert saved["calibration"] == params                       # JSON round-trip exact
             assert get_json(base + "/api/calib/current")["calibration"] == params
@@ -142,7 +146,7 @@ def test_calibration_wizard_fit_apply_save_load():
             assert get_json(base + "/api/status")["calibration"]["active"]   # bad file keeps previous
         finally:
             from app.hub import CALIBRATIONS_DIR
-            os.unlink(os.path.join(CALIBRATIONS_DIR, "pytest_tmp_cal.json"))
+            os.unlink(os.path.join(CALIBRATIONS_DIR, CAL_NAME + ".json"))
 
 
 def test_recording_jsonl_is_replayable_contract():
@@ -282,12 +286,12 @@ def test_gps_in_recordings():
             names.append(post_json(base + "/api/record/start", {"format": fmt})[1]["file"])
             post_json(base + "/api/sample", [dict(sample(0.1, 5), gps={"fix": "2d", "num_sat": 6, "hdop": 1.7}),
                                              sample(0.2, 6)])
-            post_json(base + "/api/record/stop", {})
-            time.sleep(1.1)                                    # recording names are per-second
+            post_json(base + "/api/record/stop", {})   # names are unique (ms + pid + counter); no sleep needed
         csv_txt = urllib.request.urlopen(f"{base}/recordings/{names[0]}").read().decode()
         jsonl = urllib.request.urlopen(f"{base}/recordings/{names[1]}").read().decode().splitlines()
         for n in names:
             os.unlink(os.path.join(RECORDINGS_DIR, n))
+    assert len(set(names)) == 2
     rows = list(csv.DictReader(io.StringIO(csv_txt)))
     assert (rows[0]["gps_status"], rows[0]["gps_fix"], rows[0]["gps_num_sat"], rows[0]["gps_hdop"]) == \
         ("available", "2d", "6", "1.7")
@@ -301,3 +305,34 @@ def test_sim_duration_end_goes_stale():
     with run_app("--source", "sim:static", "--sim-duration", "1.5", "--stale", "1",
                  wait_for=lambda st: st["source_status"].get("state") == "ended", timeout=15) as (base, port):
         wait_until(lambda: get_json(base + "/api/status")["sensor_status"] == "STALE", 5)
+
+
+def test_recording_names_never_collide_across_processes():
+    """Flaky-suite root cause (2026-11-27): recordings were named per second in the shared app/recordings, so two
+    app processes (overlapping test runs) starting a recording in the same second got the same file; one truncated or
+    deleted the other's (404 on download). Now: ms + pid + counter, opened exclusively."""
+    import concurrent.futures
+    from app.hub import RECORDINGS_DIR, Recorder
+    recs = [Recorder("csv") for _ in range(20)]                    # same process, same second
+    try:
+        assert len({r.name for r in recs}) == 20
+    finally:
+        for r in recs:
+            r.close()
+            os.unlink(r.path)
+    with run_app("--source", "ingest") as (b1, _), run_app("--source", "ingest") as (b2, _):
+        def start(base):
+            return post_json(base + "/api/record/start", {"format": "jsonl"})[1]["file"]
+        with concurrent.futures.ThreadPoolExecutor(8) as ex:
+            names = list(ex.map(start, [b1, b2] * 4))
+        for b in (b1, b2):
+            post_json(b + "/api/record/stop", {})
+    try:
+        assert len(set(names)) == len(names)                       # no name was ever reused across processes
+        assert all(os.path.isfile(os.path.join(RECORDINGS_DIR, n)) for n in names)
+    finally:
+        for n in names:
+            try:
+                os.unlink(os.path.join(RECORDINGS_DIR, n))
+            except FileNotFoundError:
+                pass

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import collections
 import functools
+import itertools
 import csv
 import datetime as dt
 import io
@@ -395,16 +396,29 @@ class Hub:
             }
 
 
+_REC_SEQ = itertools.count(1)
+
+
 class Recorder:
     def __init__(self, fmt):
         if fmt not in ("csv", "jsonl"):
             raise ValueError("format must be csv or jsonl")
         os.makedirs(RECORDINGS_DIR, exist_ok=True)
-        stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.fmt = fmt
-        self.name = f"rec-{stamp}.{fmt}"
-        self.path = os.path.join(RECORDINGS_DIR, self.name)
-        self.f = open(self.path, "w", newline="", encoding="utf-8")
+        # Unique, never-overwriting name. Several app processes can share app/recordings (parallel test runs, two
+        # dashboards), so a per-second stamp alone collided: one process truncated or deleted the other's file
+        # (flaky test root cause, 2026-11-27). Stamp to the millisecond + pid + per-process counter, opened with
+        # O_EXCL ("x"), retried on the rare clash.
+        while True:
+            now = dt.datetime.now()
+            self.name = (f"rec-{now.strftime('%Y%m%d-%H%M%S')}-{now.microsecond // 1000:03d}-p{os.getpid()}"
+                         f"-{next(_REC_SEQ)}.{fmt}")
+            self.path = os.path.join(RECORDINGS_DIR, self.name)
+            try:
+                self.f = open(self.path, "x", newline="", encoding="utf-8")
+                break
+            except FileExistsError:
+                continue
         self.n = 0
         self.started = time.time()
         if fmt == "csv":
