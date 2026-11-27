@@ -227,12 +227,12 @@ rec("A7b firmware_bridge --port missing", "python -m firmware_bridge --port /dev
 
 
 def node_badges(records):
-    """Evaluate the app's own headingmath.js badgeInfo(source, original_source, transport) in Node for each record."""
+    """Evaluate the app's own headingmath.js badgeInfo(source, original_source, transport, device_verified) in Node for each record."""
     node = shutil.which("node")
     if not node: return [None] * len(records)
     js = ("const H=require(process.argv[1]);let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{"
-          "const rs=JSON.parse(d);console.log(JSON.stringify(rs.map(r=>H.badgeInfo?H.badgeInfo(r.source,r.original_source,r.transport):{text:H.badgeLabel(r.source)})));});")
-    inp = json.dumps([{k: x.get(k) for k in ("source", "original_source", "transport")} for x in records])
+          "const rs=JSON.parse(d);console.log(JSON.stringify(rs.map(r=>H.badgeInfo?H.badgeInfo(r.source,r.original_source,r.transport,r.device_verified):{text:H.badgeLabel(r.source)})));});")
+    inp = json.dumps([{k: x.get(k) for k in ("source", "original_source", "transport", "device_verified")} for x in records])
     o = subprocess.run([node, "-e", js, os.path.join(ROOT, "app/static/headingmath.js")], input=inp, capture_output=True, text=True, timeout=30)
     return json.loads(o.stdout)
 
