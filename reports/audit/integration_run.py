@@ -264,16 +264,20 @@ def dom(url, want):
     """Headless --dump-dom with a FRESH temporary profile (--user-data-dir) per call, removed afterwards, so a clean
     machine / sandbox where the default profile dir cannot be created still works (Codex finding). --incognito is
     needed: on Chrome 156 a fresh non-incognito profile did not exit after --dump-dom (30-60 s hang, no output, T6 test)."""
+    # D11 (T6, self-reported): Chrome 156 headless leaves ~36 MB per launch in $TMPDIR (scoped_dir*,
+    # .com.google.Chrome.*) that it never removes; ~3000 launches filled the box's / (ENOSPC). Each launch now gets its
+    # own TMPDIR containing the profile, and the whole directory is removed afterwards.
     import tempfile
     d = ""
     for _ in range(5):
-        prof = tempfile.mkdtemp(prefix="t6-chrome-")
+        box = tempfile.mkdtemp(prefix="t6-chrome-")
+        prof = os.path.join(box, "profile"); os.makedirs(prof)
         try:
             d = subprocess.run([chrome, "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--incognito",
                                 f"--user-data-dir={prof}", "--virtual-time-budget=5000", "--dump-dom", url],
-                               capture_output=True, text=True, timeout=90).stdout
+                               capture_output=True, text=True, timeout=90, env={**os.environ, "TMPDIR": box}).stdout
         finally:
-            shutil.rmtree(prof, ignore_errors=True)
+            shutil.rmtree(box, ignore_errors=True)
         if want(d): break
     return d
 def text(d, id_):

@@ -90,13 +90,17 @@ class App:
 def _dom(port):
     d = ""
     for _ in range(4):
-        prof = tempfile.mkdtemp(prefix="t6-chrome-")   # fresh profile per launch, removed afterwards
+        # Fresh profile per launch, and a private TMPDIR (D11): Chrome leaves ~36 MB of scoped_dir*/.com.google.Chrome.*
+        # in $TMPDIR per launch and never removes them. Both are deleted afterwards.
+        box = tempfile.mkdtemp(prefix="t6-chrome-")
+        prof = os.path.join(box, "profile"); os.makedirs(prof)
         try:
             d = subprocess.run([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run", "--incognito",
                                 f"--user-data-dir={prof}", "--virtual-time-budget=5000",
-                                "--dump-dom", f"http://127.0.0.1:{port}/"], capture_output=True, text=True, timeout=90).stdout
+                                "--dump-dom", f"http://127.0.0.1:{port}/"], capture_output=True, text=True, timeout=90,
+                               env={**os.environ, "TMPDIR": box}).stdout
         finally:
-            shutil.rmtree(prof, ignore_errors=True)
+            shutil.rmtree(box, ignore_errors=True)
         b = _text(d, "sourceBadge")
         if b and b not in ("NO DATA",): break
     return d
