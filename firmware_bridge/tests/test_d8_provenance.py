@@ -303,3 +303,47 @@ def test_sample_jsonl_replay_keeps_recorded_provenance_but_is_replay(tmp_path):
     assert a["source"] == b["source"] == "replay"
     assert a["meta"]["provenance"] == "unverified" and b["meta"]["provenance"] == "verified"
     assert badge(a) == badge(b) == "REPLAY"
+
+
+# ---- F12 regression: UID length must be exactly 12, lookup must be exact equality ---------------------
+@pytest.mark.parametrize("uid_reply,status", [
+    (UID_BYTES + b"\x00", "bad_length"),          # allowlisted UID + 1 extra byte (Auditor's 'extended' case)
+    (UID_BYTES + OTHER_UID, "bad_length"),        # allowlisted UID + 12 extra bytes
+    (UID_BYTES[:11], "short"),                    # allowlisted UID minus its last byte
+    (UID_BYTES[:4], "short"),
+])
+@pytest.mark.parametrize("enc", [F.v1, F.v2])
+def test_uid_with_allowlisted_prefix_but_wrong_length_is_unverified(tmp_path, uid_reply, status, enc):
+    al = tmp_allowlist(tmp_path, UID_HEX)
+    for s in run(ScriptedDevice(identity_replies(uid=uid_reply), enc), al):
+        assert s["source"] == "hardware" and s["meta"]["provenance"] == "unverified", s["meta"]
+        assert s["meta"]["device_identity"]["uid"] is None
+        assert s["meta"]["device_identity"]["query"]["uid"] == status
+        assert "verified_device_label" not in s["meta"]
+
+
+def test_uid_decoder_never_truncates():
+    i = DeviceIdentity()
+    i.update(frame(160, UID_BYTES))
+    assert i.fields["uid"] == UID_HEX and i.query["uid"] == "ok"
+    i.update(frame(160, UID_BYTES + b"\x01"))        # a later bad reply clears the earlier good UID
+    assert i.fields["uid"] is None and i.query["uid"] == "bad_length"
+
+
+def test_allowlist_lookup_is_exact_equality_not_prefix(tmp_path):
+    al = tmp_allowlist(tmp_path, UID_HEX, UID_HEX + "00", UID_HEX[:22])   # only the 24-hex entry is valid
+    assert set(al) == {UID_HEX}
+    assert lookup_uid(UID_HEX, al) is not None
+    assert lookup_uid(UID_HEX + "00", al) is None and lookup_uid(UID_HEX[:22], al) is None
+    assert lookup_uid(UID_HEX[:-1] + "5", al) is None
+    assert lookup_uid(None, al) is None and lookup_uid(UID_HEX, None) is None and lookup_uid(UID_HEX, {}) is None
+
+
+def test_replay_with_overlong_uid_has_no_uid(tmp_path):
+    f = tmp_path / "long.bin"
+    f.write_bytes(b"".join(F.v1(c, p) for c, p in identity_replies(uid=UID_BYTES + b"\x00").items())
+                  + F.v1(102, F.RAW_IMU))
+    (s,) = list(replay(str(f), BK))
+    assert s["source"] == "replay" and s["meta"]["provenance"] == "unverified"
+    assert s["meta"]["device_identity"]["uid"] is None
+    assert s["meta"]["device_identity"]["query"]["uid"] == "bad_length"

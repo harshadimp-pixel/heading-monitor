@@ -16,8 +16,9 @@ src/main/fc/fc_msp.c; Betaflight master src/main/msp/msp.c; ArduPilot master AP_
                         and manufacturer pstrings and a 32-byte signature (ignored here).  AP L1447-1469: board id
                         "ARDU", u16 hw_rev, u8 aio, u8 caps, u8 len + firmware string (stored as target_name).
   MSP_UID       (160)   INAV L1191-1195 / BF L864-868: 3x u32 LE U_ID_0..2 (MCU 96-bit unique ID);
-                        AP L1484-1491: 12 raw bytes from get_system_id_unformatted.  We keep the 12 payload
-                        bytes in wire order as 24 lowercase hex chars (no byte swapping).
+                        AP L1484-1491: 12 raw bytes from get_system_id_unformatted.  Exactly 12 payload bytes are
+                        required (shorter -> 'short', longer -> 'bad_length', both = no UID); kept in wire
+                        order as 24 lowercase hex chars (no byte swapping, no truncation).
 
 Everything here is SELF-REPORTED by whatever is on the other end of the port. It can be spoofed; a UID is not
 cryptographic proof. The allowlist only narrows "unverified" to "matches a UID someone signed off".
@@ -61,7 +62,8 @@ def normalise_uid(uid) -> str | None:
 
 
 class DeviceIdentity:
-    """Accumulates identity replies. query status per request: ok | error | short | no_reply | not_queried."""
+    """Accumulates identity replies. query status per request: ok | error | short | bad_length (uid only:
+    more than 12 bytes) | no_reply | not_queried."""
 
     def __init__(self):
         self.fields: dict = {"api_version": None, "msp_protocol_version": None, "fc_variant": None,
@@ -105,9 +107,15 @@ class DeviceIdentity:
                 if len(p) >= 9 and len(p) >= 9 + p[8]:
                     self.fields["target_name"] = _ascii(p[9:9 + p[8]]) or None
             elif frame.cmd == msp.MSP_UID:
+                # exactly 12 bytes (INAV/BF 3x u32, AP 12 raw bytes). Never truncate: a longer reply that starts
+                # with an allowlisted UID must NOT verify (F12, found by the Auditor's T6 D8 tests).
                 if len(p) < 12:
                     raise ValueError
-                self.fields["uid"] = p[:12].hex()
+                if len(p) != 12:
+                    self.query["uid"] = "bad_length"
+                    self._clear("uid")
+                    return True
+                self.fields["uid"] = p.hex()
         except ValueError:
             self.query[key] = "short"
             self._clear(key)

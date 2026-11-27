@@ -22,7 +22,10 @@ Evidence: source-derived + hand-built frames + simulated. Nothing here is hardwa
  "target_name": "MATEKH743", "uid": "3a0027000d51333137363834",
  "query": {"api_version": "ok", "fc_variant": "ok", "fc_version": "ok", "board_info": "ok", "uid": "ok"}}
 ```
-Any value can be `null`. `query.*` is `ok | error | short | no_reply | not_queried`. `--passive` sends no queries, so
+Any value can be `null`. `query.*` is `ok | error | short | no_reply | not_queried`, and for `uid` also `bad_length`.
+`MSP_UID` must be **exactly 12 bytes**: fewer → `short`, more → `bad_length`; in both cases `uid` is `null` (never
+truncated) and the sample is `unverified`. Allowlist matching is exact equality of the normalised 24-hex UID (no
+prefix matching). `--passive` sends no queries, so
 everything stays `not_queried` (unverified). Older bridge output and other producers have no `meta.provenance`.
 
 ## Badge rule (what the app should render)
@@ -45,7 +48,7 @@ shipped allowlist is empty, so **today nothing can display HARDWARE** (D8 item 4
    allowlist is **never consulted on replay**. Sample JSONL keeps the recorded `meta.provenance` as written (it is
    never upgraded; a file can claim anything, and the source is `replay`, so it never shows HARDWARE).
 4. Live serial + `MSP_UID` reply whose 24-hex UID is in the allowlist → `hardware` / `verified`.
-5. Everything else live (unknown device, UID not listed, UID query error/short/no reply, no identity at all, passive
+5. Everything else live (unknown device, UID not listed, UID query error/short/bad_length/no reply, no identity at all, passive
    mode) → `hardware` / `unverified`.
 
 ## Allowlist `config/verified_devices.json`

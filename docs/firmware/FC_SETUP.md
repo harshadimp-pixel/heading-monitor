@@ -256,7 +256,7 @@ At connect the bridge reads the device's self-reported identity with read-only `
 ([fc_msp.c L478-530, L1191-1195 @ fce6c94](https://github.com/iNavFlight/inav/blob/fce6c94/src/main/fc/fc_msp.c#L478-L530)):
 API = u8 protocol, u8 major, u8 minor; variant = 4 ASCII; FC version = u8 major/minor/patch; board info = 4 ASCII board
 id, u16 hw revision, u8 OSD flag, u8 capabilities, u8 length + target name; UID = 3 × u32 (STM32 96-bit unique ID),
-kept as 24 hex chars in wire order. **Betaflight differences** (msp.c L715-868): FC version bytes are year−2000 /
+kept as 24 hex chars in wire order (exactly 12 bytes required; no truncation). **Betaflight differences** (msp.c L715-868): FC version bytes are year−2000 /
 month / patch followed by a length-prefixed version string; board info appends board-name and manufacturer strings
 and a 32-byte signature (ignored). ArduPilot (AP_MSP) answers variant and board id `ARDU`, a firmware string where the
 target name would be, and a 12-byte system ID. Rules, fields and the badge mapping:
@@ -296,3 +296,6 @@ target name would be, and a 12-byte system ID. Rules, fields and the badge mappi
   variant, board or UID. A UID is not cryptographic proof; the allowlist only records "this UID passed the HV
   checklist". Identity is read once at connect (a device swapped mid-session is not detected). `--passive` sends no
   queries, so it is always unverified. Betaflight/ArduPilot identity layouts are source-read only.
+  *Fixed (F12):* an `MSP_UID` reply that is not exactly 12 bytes used to be truncated, so an allowlisted UID plus
+  extra bytes verified; now any other length is a failed UID query (`short` / `bad_length`) → unverified, and the
+  allowlist match is exact equality.
