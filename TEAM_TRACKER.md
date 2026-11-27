@@ -57,7 +57,7 @@ Status: TODO / IN-PROGRESS / BLOCKED / REVIEW / DONE
 - Dashboard verified via ingest API + UI display maths in Node; rendered pixels not inspected by T6; usability not assessed.
 - App ingest trusts client-declared source (contract-compliant; feed only from the bridge).
 - L-D3: quantised-mode frozen mag undetectable when stationary, below the 1 deg/s gyro deadband, or in a level yaw turn with no gyro (PM decision (a), HEADING_MATH 14a); MSP bridge always supplies gyro.
-- F11 (confirmed by T6, unresolved): D8 device identity incl. MSP_UID is self-reported; a T6 emulator on a pty reporting an allowlisted UID is classed verified/HARDWARE (tests/test_t6_d8_bridge.py::test_F11_...). The allowlist is not cryptographic proof. With the shipped EMPTY allowlist nothing can be verified.
+- F11 (confirmed by T6, unresolved): D8 device identity incl. MSP_UID is self-reported; a T6 emulator on a pty reporting an allowlisted UID is classed provenance verified and would display "ALLOWLISTED DEVICE (identity not authenticated)" (formerly HARDWARE) (tests/test_t6_d8_bridge.py::test_F11_...). The allowlist is not cryptographic proof. With the shipped EMPTY allowlist nothing can be verified.
 - L-SER: WITHDRAWN 2026-11-27 (superseded by defect D8, ARCHITECTURE D8 1bef73e). It said the serial transport cannot tell a virtual pty from a real FC and such data shows as live HARDWARE; that is now a CRITICAL defect, not an accepted limitation. App trusts meta.original_source in replay files, but only as a non-live label (PM c831574).
 - pyserial not in requirements.txt (optional, INSTALL.md); Python 3.10 untested (3.13.5 only); demo video/screenshots not inspected frame by frame.
 
