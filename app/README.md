@@ -249,6 +249,27 @@ The headless smoke tests need no browser:
   replay + CSV export, JSONL recording, serial without hardware gives FAULT with no fabricated data, heading maths and
   wrap/deviation, stub fallback versus real-module errors.
 
+**D10, Chrome temp files (2026-11-27, 12:18–12:30 IST):** Chrome 156 headless writes `.com.google.Chrome.*`,
+`com.google.Chrome.*` and `scoped_dir*` into `$TMPDIR` on every launch and never deletes them. With `TMPDIR=/tmp`,
+that leak helped fill the shared box's `/` earlier on 27 Nov.
+* **Fix** (same approach as the Auditor's 03fc993): `HeadlessPage` in `app/tests/_cdp.py` gives each launch ONE private
+  directory (`tempfile.mkdtemp(prefix="hm-cdp-")`) holding the profile (`--user-data-dir`) and Chrome's `TMPDIR`.
+  Chrome is started in its own process group. `close()` stops that group (SIGTERM, wait, SIGKILL if needed) and then
+  removes the directory. An `atexit` hook repeats the cleanup for any page that was never closed. The demo script
+  (`reports/demo/make_demo.py`) and the screenshot scripts use the same helper.
+* **Tests:** `test_app_d10_chrome_tmp.py` has 4 tests:
+  * Chrome's temp files land in the private TMPDIR, and the directory and process group are gone after close;
+  * the same cleanup happens when the test body raises;
+  * the atexit hook cleans up a page that was never closed;
+  * a real interpreter exit leaves nothing behind.
+
+  The headless module also runs under a private root that must be empty at teardown.
+* **Measured** with the old helper and `TMPDIR` pointed at a private directory: 3 launches left 12 entries (1.2 MB),
+  0 with the new helper. app/tests, ×3 with system python (87 passed, 3 skipped) and ×3 in a venv with pyserial
+  (90 passed): the Chrome temp entries in `/tmp` stayed at 4448 before and after every run, and 0 `hm-cdp-*` dirs
+  were left.
+* **Remaining gap:** a test process killed with SIGKILL cannot clean up.
+
 The headless-Chrome DOM tests are deterministic:
 * Chrome is driven over the DevTools protocol (stdlib only, `app/tests/_cdp.py`) on the **real clock**. There is no
   `--virtual-time-budget` fast-forward. That fast-forward had made data look stale and caused an occasional

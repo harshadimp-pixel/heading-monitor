@@ -3,14 +3,32 @@
 Deterministic by construction: each test runs its own app on an OS-assigned port (--port 0), drives headless
 Chrome over the DevTools protocol on the real clock (no virtual-time fast-forward), waits (bounded) until the
 page has rendered a specific sample seq via window.__hmProbe(), then reads the DOM once and asserts."""
+import os
 import re
+import shutil
+import tempfile
 
 import pytest
 
+from . import _cdp
 from ._cdp import CHROME, HeadlessPage
 from ._helpers import get_json, post_json, run_app, sample
 
 pytestmark = pytest.mark.skipif(CHROME is None, reason="no headless Chrome/Chromium available")
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _private_chrome_root():
+    """D10: every Chrome launch in this module goes under one private root; after the module it must be empty."""
+    root = tempfile.mkdtemp(prefix="hm-cdp-root-")
+    prev, _cdp.DEFAULT_PARENT = _cdp.DEFAULT_PARENT, root
+    try:
+        yield root
+    finally:
+        _cdp.DEFAULT_PARENT = prev
+        left = os.listdir(root)
+        shutil.rmtree(root, ignore_errors=True)
+        assert left == [], f"D10: Chrome launch dirs left behind: {left}"
 REMOVED = ("latValue", "lonValue", "cogValue", "speedValue")
 
 

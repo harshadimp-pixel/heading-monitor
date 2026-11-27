@@ -189,6 +189,34 @@ These are my runs, not the Auditor's sign-off.
   failed / 34 errors in `tests/`. The next venv run, at about 11:52, gave 86 passed. I captured only the summary
   lines, and per the PM I did not investigate further. `/tmp/hm-venv` is also used by other agents' processes.
 
+### D10: Chrome temp-dir leak in the headless tests (2026-11-27, 12:18–12:30 IST)
+- **Cause:** Chrome 156 headless leaves `.com.google.Chrome.*`, `com.google.Chrome.*` and `scoped_dir*` in `$TMPDIR`
+  on every launch. My CDP helper launched it with `TMPDIR=/tmp`.
+- **Fix:** each `HeadlessPage` launch gets one private `hm-cdp-*` dir (profile + Chrome's TMPDIR) and its own process
+  group. On close the group is stopped and the dir removed, with an `atexit` backup. The approach follows the
+  Auditor's 03fc993. `make_demo.py` and my screenshot scripts use the same helper.
+- **New tests:** `app/tests/test_app_d10_chrome_tmp.py` (4 tests). The headless module also asserts that its private
+  root is empty at teardown.
+- **Evidence:**
+
+| Check | Result |
+|---|---|
+| Old helper, 3 launches, private TMPDIR | 12 entries left (1.2 MB) |
+| New helper, 3 launches, private TMPDIR | 0 entries left |
+| app/tests, system python | 87 passed, 3 skipped, ×3 |
+| app/tests, venv with pyserial | 90 passed, ×3 |
+| Chrome entries in /tmp, before vs after each of the 6 runs | 4448 before and after every run |
+| `hm-cdp-*` dirs left after the runs | 0 |
+
+  Logs are in `/tmp/d10-logs/`.
+- **Cleanup in /tmp** (list in `/tmp/d10_cleanup_list.txt`; the attribution script is kept outside the repo):
+  - deleted 1222 entries, 8.60 GiB: 240 `hm-chrome-*` dirs (my helper's naming) plus 982 Chrome temp entries born
+    during my isolated verification run (11:51:46–12:02:47 IST);
+  - nothing held by a live process was touched;
+  - `df -h /` went from 44G used (34%) to 35G used (27%);
+  - 3225 older Chrome entries that I can't attribute to my runs were left in place.
+- **Not covered:** a SIGKILLed test process cannot clean up.
+
 ## 3. Open limitations
 Full text in `app/README.md` → LIMITATIONS (mirrored in the T5 row):
 - U0. Heading only by PM decision: no position, coordinate, map, speed, course or distance features. The GPS indicator reads the optional `sample.gps` {fix, num_sat, hdop}; no current source (sim) emits it, so it normally reads Unknown. firmware_bridge's MSP_RAW_GPS path is untested with the app.

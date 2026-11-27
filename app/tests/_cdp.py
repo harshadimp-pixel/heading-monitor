@@ -3,10 +3,20 @@
 Real wall clock (no --virtual-time-budget), so the page's staleness logic sees true time.
 Readiness is polled explicitly via window.__hmProbe() with a bounded timeout; assertions run once
 afterwards on a single DOM read.
+
+D10 (Chrome temp leak): Chrome 156 headless writes ~36 MB per launch into $TMPDIR (scoped_dir*,
+.com.google.Chrome.*, com.google.Chrome.*) and never removes it; with TMPDIR=/tmp that filled the box's / on
+27 Nov. Same approach as the Auditor's 03fc993: every launch gets ONE private directory from tempfile.mkdtemp
+(prefix "hm-cdp-") holding both the profile (--user-data-dir) and Chrome's TMPDIR. close() stops the whole Chrome
+process group it started (terminate, wait, kill if needed) and then removes that directory; an atexit hook
+repeats the cleanup for any page that was never closed. A SIGKILLed test process cannot run either, which is
+the remaining (documented) gap.
 """
+import atexit
 import base64
 import json
 import os
+import signal
 import shutil
 import socket
 import struct
@@ -17,6 +27,22 @@ import urllib.parse
 import urllib.request
 
 CHROME = next((shutil.which(c) for c in ("google-chrome", "chromium", "chromium-browser") if shutil.which(c)), None)
+LAUNCH_PREFIX = "hm-cdp-"          # one private dir per Chrome launch: <dir>/profile + <dir>/tmp (Chrome's TMPDIR)
+_LIVE = set()                      # pages not yet closed; cleaned by the atexit backup
+DEFAULT_PARENT = None              # where launch dirs go when parent=None (None -> tempfile.gettempdir()); tests set it
+
+
+def chrome_env(tmpdir):
+    """Environment for a Chrome launch whose temp files must land in tmpdir (not the system /tmp)."""
+    return {**os.environ, "TMPDIR": tmpdir, "TMP": tmpdir, "TEMP": tmpdir}
+
+
+def _cleanup_live():
+    for page in list(_LIVE):
+        page.close()
+
+
+atexit.register(_cleanup_live)
 
 
 class _WS:
@@ -76,17 +102,31 @@ class _WS:
 
 
 class HeadlessPage:
-    def __init__(self, url, width=1400, height=1800, timeout=15):
-        self.tmp = tempfile.mkdtemp(prefix="hm-chrome-")
-        self.proc = subprocess.Popen([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run",
-                                      f"--user-data-dir={self.tmp}", "--remote-debugging-port=0",
-                                      f"--window-size={width},{height}", url],
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    def __init__(self, url, width=1400, height=1800, timeout=15, parent=None):
+        self.box = tempfile.mkdtemp(prefix=LAUNCH_PREFIX, dir=parent or DEFAULT_PARENT)
+        self.tmp = os.path.join(self.box, "profile")                    # --user-data-dir
+        self.chrome_tmp = os.path.join(self.box, "tmp")                 # Chrome's TMPDIR
+        os.makedirs(self.tmp)
+        os.makedirs(self.chrome_tmp)
+        self.proc = None
+        self.ws = None
+        _LIVE.add(self)
+        try:
+            self.proc = subprocess.Popen([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run",
+                                          f"--user-data-dir={self.tmp}", "--remote-debugging-port=0",
+                                          f"--window-size={width},{height}", url],
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                         env=chrome_env(self.chrome_tmp), start_new_session=True)
+            self._connect(timeout)
+        except BaseException:
+            self.close()
+            raise
+
+    def _connect(self, timeout):
         port_file = os.path.join(self.tmp, "DevToolsActivePort")
         t0 = time.time()
         while not (os.path.exists(port_file) and open(port_file).read().strip()):
             if time.time() - t0 > timeout or self.proc.poll() is not None:
-                self.close()
                 raise RuntimeError("headless Chrome did not start DevTools")
             time.sleep(0.1)
         port = int(open(port_file).read().split()[0])
@@ -96,6 +136,8 @@ class HeadlessPage:
             page = next((t for t in targets if t.get("type") == "page"), None)
             if page is None:
                 time.sleep(0.1)
+        if page is None:
+            raise RuntimeError("headless Chrome exposed no page target")
         self.ws = _WS(page["webSocketDebuggerUrl"])
 
     def eval(self, expr):
@@ -125,12 +167,35 @@ class HeadlessPage:
             f.write(base64.b64decode(data))
 
     def close(self):
-        try:
-            self.proc.terminate()
-            self.proc.wait(5)
-        except Exception:
-            self.proc.kill()
-        shutil.rmtree(self.tmp, ignore_errors=True)
+        """Stop the Chrome process group this page started, then delete its private dir. Idempotent."""
+        _LIVE.discard(self)
+        if self.ws is not None:
+            try:
+                self.ws.s.close()
+            except OSError:
+                pass
+            self.ws = None
+        if self.proc is not None and self.proc.poll() is None:
+            for sig, wait in ((signal.SIGTERM, 5), (signal.SIGKILL, 5)):
+                try:
+                    os.killpg(self.proc.pid, sig)        # own session (start_new_session): only Chrome we started
+                except ProcessLookupError:
+                    break
+                try:
+                    self.proc.wait(wait)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+        if self.proc is not None:
+            try:
+                os.killpg(self.proc.pid, signal.SIGKILL)   # stragglers (renderer/zygote) still in the group
+            except (ProcessLookupError, PermissionError):
+                pass
+        for _ in range(20):                               # a dying child may still write for a moment
+            shutil.rmtree(self.box, ignore_errors=True)
+            if not os.path.exists(self.box):
+                break
+            time.sleep(0.1)
 
     def __enter__(self):
         return self

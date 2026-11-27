@@ -12,6 +12,7 @@ reports/demo/demo_metrics.json (numbers quoted in captions, all [SIMULATED]).
 import base64
 import json
 import math
+import atexit
 import os
 import shutil
 import subprocess
@@ -29,6 +30,7 @@ from app.tests._helpers import run_app, get_json, post_json  # noqa: E402  (star
 W, H = 1440, 900
 DISCLAIMER = "Simulated data — not hardware-verified. Compass heading only; no position or navigation."
 FRAMES = tempfile.mkdtemp(prefix="hm-demo-frames-")
+atexit.register(shutil.rmtree, FRAMES, True)   # D10: frames dir removed even if the run fails (Chrome dirs: see _cdp)
 frames = []   # (path, output_duration_s)
 metrics = {}
 
