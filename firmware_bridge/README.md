@@ -41,6 +41,7 @@ into `meta.device_identity` (`self_reported: true`) and sets `meta.provenance`:
 * Replay always writes `source:"replay"` and is never verified. A replayed Sample JSONL keeps its label in
   `meta.original_source` and its recorded `meta.provenance`.
 The identity can only *downgrade* the transport label to sim; nothing in the data can upgrade it.
+**What `verified` means:** `provenance: "verified"` means only that the device's self-reported UID matches an administratively trusted list (`config/verified_devices.json`). It is NOT hardware authentication or proof of device identity, and NOT validation of current measurements or sensor correctness. The production allowlist stays empty. Whether the UI label for this case becomes ALLOWLISTED DEVICE is pending the Auditor's decision (no code or label change yet).
 
 ## Safety
 Live mode only sends read-only requests: `MSP_API_VERSION`, `MSP_FC_VARIANT`, `MSP_FC_VERSION`, `MSP_BOARD_INFO`, `MSP_UID` (once, at connect), `MSP_CALIBRATION_DATA` (INAV only, at start and every 10 s), `MSP_RAW_GPS` (INAV only, once per second, off with `--no-gps`), `MSP_ATTITUDE` and `MSP_RAW_IMU`. Any other command
