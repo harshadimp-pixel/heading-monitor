@@ -1,14 +1,16 @@
 # Final report — Virtual Heading Monitor (RM3100 + Matek FC)
 
-**Status of this document:** consolidated final report for the Project Manager / CTO, written after the Auditor's official v3.0 re-test. Individual module suites being green was never treated as sufficient for completion.
+**Acceptance boundary (virtual only):** Acceptance in this report covers **simulated and replayed data only**. No physical flight hardware was operated. The application does not provide autonomous navigation (it reports compass heading only). No paid services were used.
 
-**Repository:** https://github.com/harshadimp-pixel/heading-monitor (private; visibility confirmed PRIVATE via `gh repo view` by the PM).
-**Auditor-executed results** are those recorded at commits `0c25062` (suites and claims audit) and `f058c9a` (integration 30/30), as written in `reports/verification_report.md` (FINAL v3.0) and `TEST_RESULTS.md`. The Auditor's verification commit is `a88e8d1` (this draft's starting HEAD).
-**PM smoke test and PM full-suite run** were executed on 2026-11-27 at 01:29–01:31 IST (Asia/Calcutta) on the working tree based on `a88e8d1` (documentation and this report only; no product-code edits).
+**Status of this document:** **CONDITIONAL PASS: corrections in progress, pending independent Codex re-verification.** An independent Codex audit of commit `f1a0e3e` issued a CONDITIONAL PASS for the virtual scope. This revision records the Priority-2 documentation corrections (R8/D7/D8 wording, skipped-test inventory, install prerequisites, and this boundary). Priority-1 serial provenance (D8) is being applied by firmware and UI and has not yet been independently re-verified. Individual module suites being green was never treated as sufficient for completion, and completion is not declared unconditional until Codex re-verifies the corrections.
+
+**Repository:** https://github.com/harshadimp-pixel/heading-monitor (visibility last confirmed PRIVATE by the PM via `gh repo view`; an unauthenticated request returns 404, which is consistent with private. Do not change visibility).
+**Auditor-executed results** quoted below remain those recorded at commits `0c25062` (suites and claims audit) and `f058c9a` (integration 30/30), as written in `reports/verification_report.md` (FINAL v3.0) and `TEST_RESULTS.md`, with the D7 close addendum in `02c0ec0`. Those figures are the last completed official QA, not a post-D8 result.
+**PM documentation update** (this revision): 2026-11-27, after the Codex review of `f1a0e3e` and the D8 decision in `1bef73e`. The PM also re-ran `python3 -m pytest -q -rs` on the tree at `1bef73e` and obtained **513 passed, 44 skipped** in 139.51 s, matching `reports/audit/skipped_tests.md`.
 
 **Evidence labels used here:** `[SIMULATED]`, `[REPLAYED]`, `[DATASHEET]`. No result in this project carries a hardware-verified evidence label: `reports/hardware_logs/` does not exist (`reports/verification_report.md`).
 
-**Official Auditor verdict (virtual scope only):** PASS. Project completion is APPROVED for the virtual (simulated and replayed) scope. Hardware performance is not verified. The exact text is quoted in §9.
+**Last completed Auditor verdict (virtual scope only, v3.0 / v3.1):** PASS, with project completion then approved for the virtual (simulated and replayed) scope. Hardware performance is not verified. That wording is quoted in §9. It is **superseded as the current project status** by the Codex CONDITIONAL PASS and the D8 corrections still in progress.
 
 ---
 
@@ -16,17 +18,17 @@
 
 The application is a **virtual magnetic-heading monitor** for a PNI RM3100 magnetometer on a Matek CAN-L4-3100 (AP_Periph) module, intended to attach later to a Matek flight controller. It runs end to end on the T3 simulator and on recorded-log replay. The live MSP serial path has been exercised against a missing port, a fake flight controller, and (as a documented limitation) a virtual pty; it has **not** been run against a real flight controller.
 
-The Testing & Technical Auditor's official final verification (v3.0, about 01:30 IST on 2026-11-27) is **PASS for the virtual scope only**, and **project completion is APPROVED for that scope** (`reports/verification_report.md`). Per-deliverable verdicts: T1–T5 **PASS**; PM docs **PASS**. Nothing is physically confirmed on hardware.
+The Testing & Technical Auditor's last completed official verification (v3.0, about 01:30 IST on 2026-11-27, D7 closed in v3.1 / `02c0ec0`) was **PASS for the virtual scope only**, with project completion then approved for that scope (`reports/verification_report.md`). Per-deliverable verdicts at that time: T1–T5 **PASS**; PM docs **PASS** (D7 subsequently CLOSED). Nothing is physically confirmed on hardware. After the Codex audit of `f1a0e3e`, the current status is **CONDITIONAL PASS: corrections in progress, pending independent Codex re-verification**.
 
 Of the agreed requirements (`REQUIREMENTS.md` R1–R8, N1–N6), the Auditor traces **13 as delivered** in the virtual scope, **1 as partial** (R6: live MSP to a real Matek FC was never run), and **0 as not delivered** (`reports/audit/traceability.md`).
 
 The latest independent whole-repo run, at `0c25062`, is **513 passed, 44 skipped, 0 failed** (`python -m pytest -q -rs`; `TEST_RESULTS.md`). Integrated end-to-end testing at `f058c9a` is **30/30 PASS**, including tightened A8/A8b and new edge cases A10a–c (`reports/audit/integration_results.md`). Defect **D6 (CRITICAL) is CLOSED**: a replay of recorded hardware now shows **REPLAY (recorded hardware)** and a banner that the data is not live.
 
-**D7 (MINOR, documentation)** is **CLOSED**: `REQUIREMENTS.md` R8, README rule 2 and `CHANGELOG.md` were updated in 2564266 and re-checked by the Auditor (02c0ec0).
+**D7 (MINOR, documentation)** is **CLOSED**: `REQUIREMENTS.md` R8, README rule 2 and `CHANGELOG.md` were updated in `2564266` and re-checked by the Auditor (`02c0ec0`). **D8** (Priority 1, Codex audit of `f1a0e3e`) then changed R8 again: the badge is derived from `sample.source` plus provenance, and HARDWARE requires an allowlisted verified device. D8 is **in progress** (decision `1bef73e`; firmware/UI implementation and the Auditor's A10c rewrite are outstanding). It supersedes limitation L-SER.
 
 A PM smoke test on ephemeral ports (8080 was not used) confirmed a live `sim:tilted_spin` session with `latest_sample_source="sim"` and a numeric heading, and a replay of a simulated example log that kept `source="sim"` (badge SIMULATED) with transport `replay` and a numeric heading. The PM re-ran `python3 -m pytest -q` and obtained **513 passed, 44 skipped** in 133.01 s, matching the Auditor's official count.
 
-Open limitations that remain in force include **L-D3** (a frozen quantised magnetometer can go undetected when still, slower than 1°/s, or in a level turn with no gyro) and **L-SER** (a virtual serial port fed by the fake FC is shown as HARDWARE, by design). Hardware validation items HV1–HV9 are all **NOT RUN**. Development spend reported by every contribution file is **none**, with **no paid tools or services**. Platform subscription costs are outside this project's scope and were not tracked.
+Open limitations that remain in force include **L-D3** (a frozen quantised magnetometer can go undetected when still, slower than 1°/s, or in a level turn with no gyro). **L-SER** (a virtual serial port fed by the fake FC shown as HARDWARE) is **superseded by D8**, which is in progress: a serial connection is not proof of hardware; a fake FC must show SIMULATED; an unknown serial device must show UNVERIFIED SOURCE; HARDWARE requires a UID in `config/verified_devices.json` (ships empty). Until D8 lands and is re-tested, the pre-D8 committed code can still exhibit the L-SER behaviour. Hardware validation items HV1–HV9 are all **NOT RUN**. Development spend reported by every contribution file is **none**, with **no paid tools or services**. Platform subscription costs are outside this project's scope and were not tracked.
 
 This application monitors **compass heading only**. It does not measure movement, geographic position or navigation (see the section immediately below).
 
@@ -53,7 +55,7 @@ The GPS indicator, when present, shows **only fix status, satellite count and HD
 
 ## 1. Original requirements versus delivered functionality
 
-Source of the requirements: `REQUIREMENTS.md` (agreed v1.0, 2026-11-26; R8 wording clarified 2026-11-27, see `CHANGELOG.md` and D7). Traceability is the Auditor’s independent check at `0c25062`: `reports/audit/traceability.md`. Every “Delivered” status below is **for the virtual scope only** ([SIMULATED] / [REPLAYED]). Nothing in the traceability table is physically confirmed on hardware.
+Source of the requirements: `REQUIREMENTS.md` (agreed v1.0, 2026-11-26; R8 wording first clarified for D7 on 2026-11-27, then updated again for D8 — see `CHANGELOG.md` and the R8 / D7 / D8 note below). Traceability in the table is the Auditor’s independent check at `0c25062`: `reports/audit/traceability.md`, which still describes the pre-D8 / D7-pending text. Every “Delivered” status below is **for the virtual scope only** ([SIMULATED] / [REPLAYED]). Nothing in the traceability table is physically confirmed on hardware. R8 behaviour is being tightened by D8 and is not re-verified yet.
 
 | Req | Requirement (short, from `REQUIREMENTS.md` as audited) | Auditor status | Evidence cited by the Auditor |
 |---|---|---|---|
@@ -64,17 +66,17 @@ Source of the requirements: `REQUIREMENTS.md` (agreed v1.0, 2026-11-26; R8 wordi
 | R5 | Field magnitude, 3-axis field, heading-quality indicator and warnings | **Delivered** [SIMULATED] | E2; U4; A9b; A1b (76/76 samples with > 5° error carried a warning); A6; D3 re-test E3b–E3g |
 | R6 | Interchangeable sources via one Sample contract: simulator, recorded-log replay, live Matek FC over MSP (USB serial) | **Partial** | sim: A1 8/8. replay: A2 7/7, A3b. MSP path: A3a/A4 against `--fake-fc` and M1–M4. **Live MSP over USB to a real Matek FC was never run** (BLOCKERS B1). A7: a missing port gives FAULT and no fabricated data |
 | R7 | Record sessions to JSONL/CSV | **Delivered** [SIMULATED] | U5; covered by the owner's app tests (52 at `0c25062`), re-run by T6. T6 did not drive the record buttons itself |
-| R8 | Persistent DATA SOURCE badge derived from the sample's `source` field (see wording update below) | **Delivered** (behaviour); requirement **text** was pending **D7 (MINOR)** at the time of the audit | D6 CLOSED. A8/A8b: replayed hardware → source=replay, `meta.original_source=hardware`, badge 'REPLAY (recorded hardware)', not-live banner. A10a: the relabel cannot be bypassed. A10b: ingest hardware → UNVERIFIED SOURCE, never live. HARDWARE appears only via the serial transport (A10c / L-SER). This PM commit updates R8, README rule 2 and CHANGELOG to that accepted rule (D7 → REVIEW) |
+| R8 | Persistent DATA SOURCE badge derived from the sample's `source` field plus provenance; HARDWARE requires an allowlisted verified device (current wording — see the D7/D8 note below) | **Delivered** for the D6/D7 behaviour [SIMULATED]; **D8 wording is now in REQUIREMENTS.md, implementation and re-test pending** | D7 CLOSED in `02c0ec0`. D6 CLOSED: A8/A8b replayed hardware → source=replay, `meta.original_source=hardware`, badge 'REPLAY (recorded hardware)', not-live banner; A10a cannot be bypassed; A10b ingest hardware → UNVERIFIED SOURCE, never live. The v3.0 A10c observation (virtual pty shown as HARDWARE, L-SER) is **not** the D8 rule. D8: a serial connection is not proof of hardware; SIML/SIMF → SIMULATED; unknown serial → UNVERIFIED SOURCE; HARDWARE only if the UID is in `config/verified_devices.json` (ships empty). |
 | N1 | Runs locally on Linux with Python 3.10+, free/open-source dependencies only | **Delivered** | Linux, Python 3.13.5, clean venv from `requirements.txt`. Python 3.10 itself was not tested |
 | N2 | All experiments virtual; no hardware purchases or paid services without owner approval | **Delivered** (as far as verifiable) | `reports/audit/team_rules_compliance.md` rules 8–10; all contribution reports state spend: none |
 | N3 | Every module executed and tested; independent tests by the Auditor | **Delivered** | Owner suites re-run at `0c25062`: heading_core 76, sensor-spec 23, sim 152 (+44 N/A skips), firmware_bridge 95, app 52, T6 111; repo root 513 passed, 44 skipped, 0 failed; integration 30/30 |
-| N4 | Evidence labelling; no simulated result presented as hardware performance | **Delivered** | Claims audit at `0c25062`: 0 applied hardware tags, 0 hardware-performance claims. After the D6 fix, replayed hardware is labelled recorded and not live; ingest hardware is UNVERIFIED; fake-FC is SIMULATED. Residual: L-SER |
-| N5 | All unresolved limitations documented | **Delivered** | LIMITATIONS sections in docs/hardware, docs/math, sim, docs/firmware, firmware_bridge, app; `BLOCKERS.md`; HEADING_MATH 14a; L-D3 and L-SER in the verification report |
+| N4 | Evidence labelling; no simulated result presented as hardware performance | **Delivered** (D6/D7); D8 tightens the residual | Claims audit at `0c25062`: 0 applied hardware tags, 0 hardware-performance claims. After the D6 fix, replayed hardware is labelled recorded and not live; ingest hardware is UNVERIFIED; fake-FC via `--fake-fc` is SIMULATED. Residual L-SER (virtual pty shown as HARDWARE) is superseded by D8, which is in progress. |
+| N5 | All unresolved limitations documented | **Delivered** | LIMITATIONS sections in docs/hardware, docs/math, sim, docs/firmware, firmware_bridge, app; `BLOCKERS.md`; HEADING_MATH 14a; L-D3 remains. L-SER is superseded by D8 (in progress). Install/browser-test prerequisites are in `docs/INSTALL_PREREQS.md`. Skipped tests are in `reports/audit/skipped_tests.md`. |
 | N6 | Work kept in this private repository; each bot commits its completed work | **Delivered** (partly verifiable) | Role-prefixed commits present. An unauthenticated request for the GitHub URL returns 404, consistent with a private repo (T6 cannot see repo settings) |
 
-**Traceability totals** (`reports/audit/traceability.md`, also `reports/verification_report.md` §7): **Delivered 13** (R1–R5, R7, R8, N1–N6; R8 behaviour delivered, its wording pending D7 at audit time); **Partial 1** (R6); **Not delivered 0**.
+**Traceability totals** (`reports/audit/traceability.md`, also `reports/verification_report.md` §7, at the v3.0 audit): **Delivered 13** (R1–R5, R7, R8, N1–N6; R8 behaviour delivered, its then-current wording pending D7 at that audit); **Partial 1** (R6); **Not delivered 0**. D7 was closed in `02c0ec0`. D8 reopens the R8 *implementation* against the tightened wording; the Auditor's traceability file has not yet been re-run.
 
-Auditor verdicts per deliverable (`reports/verification_report.md` §1): T1 **PASS**, T2 **PASS**, T3 **PASS**, T4 **PASS**, T5 **PASS** (D6 closed), PM docs **PASS with D7 (MINOR) open** at audit time. D7 is now at REVIEW after the wording update in the commit that adds this report.
+Auditor verdicts per deliverable (`reports/verification_report.md` §1, v3.0): T1 **PASS**, T2 **PASS**, T3 **PASS**, T4 **PASS**, T5 **PASS** (D6 closed), PM docs **PASS with D7 (MINOR) open** at that audit. D7 is **CLOSED** (`02c0ec0`). Current PM-docs status: updated for D8, awaiting Codex / Auditor re-verification.
 
 ---
 
@@ -172,7 +174,7 @@ Source: `reports/audit/integration_results.md`. Run by T6 on 2026-11-27 at about
 | A8b | headless Chrome, hardware-labelled replay | **PASS** (badge REPLAY (recorded hardware); banner says recorded, not live) |
 | A10a | replayed file cannot defeat the D6 relabel | **PASS** |
 | A10b | ingest of source=hardware (including injected transport=serial) | **PASS** (UNVERIFIED SOURCE, never live) |
-| A10c | serial transport over a virtual pty (fake FC) | **PASS** as an observation: shows HARDWARE only via serial → limitation **L-SER** |
+| A10c | serial transport over a virtual pty (fake FC) | **v3.0: PASS as an observation** (showed HARDWARE via serial → then logged as L-SER). **Not the D8 acceptance criterion.** D8 requires this path to show SIMULATED when the device reports `SIML`/`SIMF`, and UNVERIFIED SOURCE for any other unverified serial origin — never a misleading HARDWARE badge. The Auditor is rewriting A10c; re-test pending. |
 
 A1 RMSE values are for the **uncalibrated** app after the first second. Calibrated end-to-end figures are in §2 (A1/R2 and A5).
 
@@ -293,9 +295,9 @@ Refreshed in `ed3961c` to the current heading labels (`reports/contributions/ui.
 
 This section collects limitations as they are written in the cited files. It does not add new technical claims.
 
-### 5.1 Defects D1–D7
+### 5.1 Defects D1–D8
 
-Status is taken from `reports/verification_report.md` §4, except D7, which this commit moves to **REVIEW** after updating the three named documents.
+Status for D1–D6 is taken from `reports/verification_report.md` §4. D7 was moved to REVIEW in the first edition of this report and is now **CLOSED** (`02c0ec0`). D8 was opened from the Codex audit of `f1a0e3e`.
 
 | ID | Severity | Owner | Status | Summary |
 |---|---|---|---|---|
@@ -305,7 +307,8 @@ Status is taken from `reports/verification_report.md` §4, except D7, which this
 | D4 | MAJOR | T4 | **CLOSED** | Bridge replay forwarded schema-invalid lines; fixed in `403976b` |
 | D5 | MINOR | T6 (self-reported) | **CLOSED** | Accidental HEAD detach; repaired (`84fc231`) |
 | D6 | CRITICAL | T5 + PM | **CLOSED** (fix `0ca6b0f`; decisions `eacf8a2`, `c831574`; T6 re-test at `f058c9a` / `0c25062`) | Replayed hardware-labelled log had been shown as HARDWARE + “Live hardware samples.” It now shows 'REPLAY (recorded hardware)' with a not-live banner; the relabel cannot be bypassed (A10a) |
-| D7 | MINOR | PM | **REVIEW** (was OPEN, non-blocking, at audit time) | REQUIREMENTS R8 / README rule 2 / CHANGELOG did not describe the accepted five-label badge rules. Wording has been updated in this commit to: badge derived from sample.source; HARDWARE only for a live serial transport; replayed hardware → 'REPLAY (recorded hardware)'; hardware via ingest → 'UNVERIFIED SOURCE'. Awaiting Auditor re-check |
+| D7 | MINOR | PM | **CLOSED** (`02c0ec0`; wording landed in `2564266`) | REQUIREMENTS R8 / README rule 2 / CHANGELOG had not described the accepted five-label badge rules. The D7 wording (badge derived from sample.source; HARDWARE only for a live serial transport; replayed hardware → 'REPLAY (recorded hardware)'; hardware via ingest → 'UNVERIFIED SOURCE') was accepted and closed. **D8 then replaced that HARDWARE rule** — see the next row. |
+| D8 | Priority 1 (Codex, `f1a0e3e`) | T4 + T5 + PM | **IN PROGRESS** (decision `1bef73e`) | A serial connection is not proof of hardware. `firmware_bridge` must read the device's self-reported identity (MSP_API_VERSION, MSP_FC_VARIANT, MSP_FC_VERSION, MSP_BOARD_INFO, MSP_UID) into `meta.device_identity` as values reported by the device, not verified. A fake FC / simulator that reports variant `SIML` or board id `SIMF` is mapped to `source: "sim"` (badge SIMULATED). Any other serial origin, including unknown, unidentified or failed identity, is UNVERIFIED SOURCE. HARDWARE appears only when the device UID is in `config/verified_devices.json` (ships empty; an entry requires HV checklist pass, Auditor sign-off, and a committed hardware log). Today, nothing should be able to display HARDWARE. This supersedes L-SER. Re-test of A10c and the full suites is outstanding. |
 
 ### 5.2 Blockers B1–B4 (`BLOCKERS.md`)
 
@@ -316,12 +319,12 @@ Status is taken from `reports/verification_report.md` §4, except D7, which this
 | B3 | `firmware_bridge` cannot undo INAV’s mag-calibration normalisation: after INAV mag calibration, MSP_RAW_IMU mag is dimensionless, not mGauss. `mag_uT` is only correct while `magzero=0` and `maggain=1024` | **OPEN** (non-blocking). Workaround: leave INAV mag calibration unset and let `heading_core` calibrate |
 | B4 | INAV 10 is still a release candidate (10.0.0-rc2, 2026-09-29; stable planned December 2026); setup steps are pinned to `maintenance-10.x` @ `fce6c94` | **OPEN** (non-blocking) |
 
-### 5.3 L-D3 and L-SER (Auditor, still open)
+### 5.3 L-D3 (still open) and L-SER (superseded by D8, in progress)
 
-These two limitations are called out in `reports/verification_report.md` (overall verdict and LIMITATIONS items 4 and 6) and remain unresolved.
+These items were called out in `reports/verification_report.md` (overall verdict and LIMITATIONS items 4 and 6) at the v3.0 audit.
 
-- **L-D3.** In quantised mode a frozen magnetometer is undetectable on a stationary vehicle, below 1°/s, or during a level yaw turn when no gyro is supplied (PM D3 decision (a), `quant_nogyro_time_rule=False`). The opt-in `quant_nogyro_time_rule=True` catches long freezes but brought back about 4/20 false alarms in T6's stress test. Same residual as `docs/math/HEADING_MATH.md` §13 item 14a.
-- **L-SER.** The serial transport cannot tell a virtual pty (for example one fed by the fake FC) from a real flight controller; such data is shown as live HARDWARE (integration A10c). This is by design and is contract-conformant (“hardware only from a live port”), but it is not a hardware result. The app also trusts `meta.original_source` written in a replay file (accepted, `c831574`), but only ever as a non-live label.
+- **L-D3 (still open).** In quantised mode a frozen magnetometer is undetectable on a stationary vehicle, below 1°/s, or during a level yaw turn when no gyro is supplied (PM D3 decision (a), `quant_nogyro_time_rule=False`). The opt-in `quant_nogyro_time_rule=True` catches long freezes but brought back about 4/20 false alarms in T6's stress test. Same residual as `docs/math/HEADING_MATH.md` §13 item 14a.
+- **L-SER, superseded by D8 (in progress).** At the v3.0 audit, the serial transport could not tell a virtual pty (for example one fed by the fake FC) from a real flight controller, and such data was shown as live HARDWARE (integration A10c). That was recorded as limitation L-SER in `reports/verification_report.md`. The Codex audit of `f1a0e3e` rejected that behaviour. The D8 decision (`ARCHITECTURE.md`, `1bef73e`) replaces it: a serial connection is not proof of hardware; a device reporting `SIML`/`SIMF` is SIMULATED; any other unverified serial origin is UNVERIFIED SOURCE; HARDWARE requires an allowlisted UID. Until D8 is merged and A10c is re-run, committed pre-D8 code can still exhibit the old L-SER behaviour. The app still trusts `meta.original_source` written in a replay file (accepted, `c831574`), but only ever as a non-live label.
 
 ### 5.4 App limitations (`app/README.md` § LIMITATIONS)
 
@@ -330,7 +333,7 @@ There is no separate `app/LIMITATIONS` file; the list lives in `app/README.md`. 
 0. Heading only (PM decision). Position, coordinates, map, speed, course-over-ground and distance features were removed. Only a read-only GPS availability indicator remains (`sample.gps` = fix, num_sat, hdop). The contract has no coordinates and the app shows none. The current simulator does not emit `gps`, so the indicator normally reads Unknown.
 1. `mag_raw` is optional (the CAN-L4-3100 stream is a scaled field, not raw counts).
 2. Accuracy shown is quality, short-term noise and calibration residual, not absolute accuracy. Error versus truth exists only for simulated data. Nothing here is hardware-verified.
-3. The serial path has never been run against a real flight controller or the CAN-L4-3100; only a non-existent port (FAULT, no data) in owner tests. (Separately, the Auditor’s L-SER finding in `reports/verification_report.md`, not app README item 3: a virtual pty fed by the fake FC shows HARDWARE.)
+3. The serial path has never been run against a real flight controller or the CAN-L4-3100; only a non-existent port (FAULT, no data) in owner tests. (Separately, the Auditor’s then-current L-SER finding in `reports/verification_report.md`, not app README item 3, was that a virtual pty fed by the fake FC showed HARDWARE. That finding is superseded by D8, in progress.)
 4. Replay of simulated logs keeps `source:"sim"` (badge SIMULATED; transport shown separately). Replayed hardware is relabelled `source:"replay"` with `meta.original_source="hardware"` and shown as REPLAY (recorded hardware), not live. The file’s written `original_source` is trusted only for that non-live label.
 5. Local stubs exist but are inactive in the current repo (heading_core and sim are real). firmware_bridge is never stubbed.
 6. The calibration wizard shows coverage but does not guide the user to a missing orientation.
@@ -386,11 +389,11 @@ The fact sheet lists these as unresolved as of 2026-11-27 IST. Numbering in the 
 
 ### 5.7 Other Auditor limitations
 
-From `reports/verification_report.md` “LIMITATIONS (T6, unresolved)”, in addition to L-D3 and L-SER:
+From `reports/verification_report.md` “LIMITATIONS (T6, unresolved)”, in addition to L-D3 (still open) and L-SER (now superseded by D8, in progress):
 
 1. All results are [SIMULATED] or [REPLAYED] against an idealised uniform-field model. None transfer to the physical RM3100 or Matek FC.
 2. Exact Matek FC model and firmware are unknown (T1 L1). INAV axis convention, mag scaling and pitch sign are [SOURCE-CODE] only.
-3. MSP tests use hand-built frames and the fake FC; real USB timing, rate limits and partial reads are untested. Live `serial:` was only tested against a missing port (plus the virtual-pty observation in L-SER).
+3. MSP tests use hand-built frames and the fake FC; real USB timing, rate limits and partial reads are untested. Live `serial:` was only tested against a missing port (plus the v3.0 virtual-pty observation then logged as L-SER, which D8 is replacing).
 5. App ingest trusts the client-declared `source`.
 7. UI checks use DOM text from headless Chrome; pixels and human readability were not assessed by T6.
 8. Default `--sim-duration 86400` stretches the motor_interference profile over 24 h.
@@ -513,9 +516,37 @@ Key compatibility findings, all [SOURCE-CODE] or [SIMULATED]:
 
 ---
 
+## 8a. Skipped tests
+
+The official skip inventory is `reports/audit/skipped_tests.md` (Auditor, generated from a clean export of `1bef73e` by `python -m pytest -q -rs`). That file lists every skipped test, the exact skip reason, a category, and whether the skip hides a required check.
+
+The PM independently ran `/workspace/venvs/hm/bin/python -m pytest -q -rs` on 2026-11-27 (Asia/Calcutta) on the tree at `1bef73e`, with pyserial, `google-chrome` and Node present, and obtained the same totals: **513 passed, 44 skipped**, 0 failed, in 139.51 s. All 44 skips were in `sim/tests/test_spec_cases.py` (the simulator's N/A cross-checks against the T2 sensor-spec keys). The reasons and grouping match the Auditor's file.
+
+Summary, from `reports/audit/skipped_tests.md`:
+
+| Category | Count |
+|---|---|
+| Out of scope: navigation / position / distance (heading-only rule; these quantities are not modelled) | 29 |
+| Analysis formula, not a simulator quantity | 9 |
+| Interference source model not in sim (motor field is k*I, [ASSUMED]) | 4 |
+| Declination error model not in sim (uniform field) | 1 |
+| Non-RM3100 parameter (generic 0.15 µT LSB part) | 1 |
+
+Uncategorised: 0. Skips that may hide a required check: **0**. The corresponding analytic keys are asserted by `docs/math/sensor-spec/test_reference.py`, which passed in the same official run.
+
+These 44 are the official skip set when pyserial, Chrome/Chromium and Node are present. Additional *environment* skips exist in the code but did not fire in that run; they are documented in `docs/INSTALL_PREREQS.md`:
+
+- the five tests in `app/tests/test_app_ui_headless.py` if no `google-chrome`, `chromium` or `chromium-browser` is on `PATH`;
+- Node-based badge/maths tests if `node` is not on `PATH`;
+- the firmware_bridge pty serial test if pyserial is missing or the OS has no POSIX pty.
+
+If the Auditor later refreshes `reports/audit/skipped_tests.md` after D8 lands, this section should be reconciled with that update. Installation and browser-test prerequisites are recorded in `docs/INSTALL_PREREQS.md` (the step-by-step walkthrough in `INSTALL.md` remains UI-owned).
+
+---
+
 ## 9. Auditor’s independent PASS/FAIL verdict
 
-The official written verdict is in `reports/verification_report.md` (T6 Verification Report — FINAL v3.0, after the D6 re-test), at Auditor-tested commits `0c25062` / `f058c9a`. It is quoted below exactly from that file, section 0.
+The last completed official written verdict is in `reports/verification_report.md` (T6 Verification Report — FINAL v3.0, after the D6 re-test), at Auditor-tested commits `0c25062` / `f058c9a`. It is quoted below exactly from that file, section 0. **It is the historical v3.0 result.** The current project status is **CONDITIONAL PASS: corrections in progress, pending independent Codex re-verification** (Codex audit of `f1a0e3e`; D8 in progress).
 
 > ## 0. OVERALL VERDICT: **PASS (virtual scope only)**. Project completion **APPROVED for the virtual (simulated/replayed) scope**; hardware performance is NOT verified.
 > Reasons:
@@ -544,7 +575,7 @@ The official written verdict is in `reports/verification_report.md` (T6 Verifica
 
 Per-deliverable verdicts from the same report (§1): T1 **PASS**, T2 **PASS**, T3 **PASS**, T4 **PASS**, T5 **PASS**, PM docs **PASS with D7 (MINOR) open**.
 
-The quoted D7 item describes the documentation gap **at the time of the audit**. The wording was then fixed in 2564266, and the Auditor re-checked it and closed D7 in 02c0ec0; the official verdict is unchanged.
+The quoted D7 item describes the documentation gap **at the time of the v3.0 audit**. The D7 wording was then fixed in `2564266`, and the Auditor re-checked it and closed D7 in `02c0ec0`; the v3.1 addendum left the official PASS (virtual scope only) unchanged. The quoted L-SER item is **superseded by D8** (in progress). The current status is no longer an unconditional PASS: see the acceptance boundary at the top of this report.
 
 ---
 
@@ -572,9 +603,10 @@ Platform subscription costs (the environment in which this team works) are **out
 
 ## Notes for the PM (remaining file differences, not new tests)
 
-1. Official executed results are at `0c25062` (suites) and `f058c9a` (integration). The Auditor packaged them in `a88e8d1`. This report’s PM suite was run on the working tree based on `a88e8d1` and reproduced 513 passed, 44 skipped.
+1. Official executed results remain those at `0c25062` (suites) and `f058c9a` (integration), packaged in `a88e8d1`, with D7 closed in `02c0ec0`. A later PM `pytest -q -rs` on the tree at `1bef73e` reproduced 513 passed, 44 skipped (see §8a and `reports/audit/skipped_tests.md`). D8 has not yet been re-tested officially.
 2. Some earlier owner contribution files (`reports/contributions/maths.md`, `sim.md`, `firmware.md`) were written before D3 and/or D6 were closed and should be read together with the v3.0 verification report.
 3. FACTSHEET §8 list order is L1–L13, then L16, L17, L15, L14. All seventeen labels exist.
 4. `docs/firmware/FC_SETUP.md` §0 notes that `RM3100_COMPATIBILITY.md` labels INAV `fce6c94` as master, whereas that commit is the head of `maintenance-10.x`.
+5. After D8 lands and the Auditor re-runs the suites and the 30 integration checks (with the rewritten A10c), this report still needs a follow-up pass: refresh the suite/integration counts, close or re-state D8, and replace any residual pre-D8 L-SER / “HARDWARE only via serial” citations that live in Auditor-owned files (`reports/verification_report.md`, `reports/audit/traceability.md`, `reports/audit/integration_results.md`, `TEST_RESULTS.md`) and in UI/firmware READMEs. Those files were not edited in this documentation commit.
 
 No number in the body of this report was invented. Where a figure could not be taken from a file or from the PM commands recorded in §2.3 and §3.2, it is omitted.

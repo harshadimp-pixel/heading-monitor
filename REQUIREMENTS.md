@@ -10,7 +10,7 @@ Source: owner (Harshad Vora) instructions to PM & CTO; refined by PM. Changes re
 - R5. Show field magnitude, 3-axis field, a heading-quality indicator and warnings (interference, excessive tilt, uncalibrated).
 - R6. Data sources interchangeable through one Sample contract: simulator, recorded-log replay, live Matek FC over MSP (USB serial).
 - R7. Record sessions to JSONL/CSV.
-- R8. Persistent DATA SOURCE badge derived from the sample's `source` field: HARDWARE only for a live serial transport; replayed hardware → 'REPLAY (recorded hardware)'; hardware via ingest → 'UNVERIFIED SOURCE'; otherwise SIMULATED or REPLAY.
+- R8. Persistent DATA SOURCE badge derived from the sample's `source` field plus provenance (transport, self-reported device identity, allowlist match, and `meta.original_source` where present). A serial connection is not proof of hardware. HARDWARE is shown only when a live serial sample is labelled `source: "hardware"` and the device UID matches an entry in `config/verified_devices.json` (that file ships empty; an entry may be added only after the hardware-validation checklist passes with the Auditor's sign-off and a committed hardware log). A device that reports FC variant `SIML` or board id `SIMF` is shown as SIMULATED. Any other live serial origin, including an unknown, unidentified or failed identity query, is shown as UNVERIFIED SOURCE, with the reported board and variant labelled as reported by the device. Replayed hardware → 'REPLAY (recorded hardware)' (not live). Hardware via ingest → 'UNVERIFIED SOURCE'. Replayed sim stays SIMULATED. Otherwise SIMULATED, REPLAY, or NO DATA when nothing current exists.
 
 ## Non-functional
 - N1. Runs locally on Linux with Python 3.10+, free/open-source dependencies only.
