@@ -1,0 +1,3 @@
+TMPDIR length threshold (test_dashboard_renders_in_headless_chrome, d4f0d75):
+len 20 pass; 22 pass; 24 pass; 26 FAIL
+TMPDIR=/tmp/t6d10s/t.5qU8 (18): 7 passed; /workspace/audit/d10/tmp_long_path_x/t.GYwQ (43): 7 failed

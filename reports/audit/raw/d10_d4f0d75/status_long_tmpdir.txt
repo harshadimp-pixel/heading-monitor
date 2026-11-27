@@ -1,0 +1,12 @@
+clone /workspace/audit/d10/clone_old at 4bcba22 dirty=0
+clone /workspace/audit/d10/clone_new at d4f0d75 dirty=0
+old_headless_1 12:31:26: 7 passed in 7.03s | private TMPDIR chrome/hm-cdp entries left: 39 (size 302M); /tmp new chrome-ish names during run: 0
+new_headless_1 12:31:29: 7 failed in 3.20s | private TMPDIR chrome/hm-cdp entries left: 0 (size 152K); /tmp new chrome-ish names during run: 0
+new_headless_2 12:31:33: 7 failed in 3.60s | private TMPDIR chrome/hm-cdp entries left: 0 (size 152K); /tmp new chrome-ish names during run: 0
+new_headless_3 12:31:36: 7 failed in 3.16s | private TMPDIR chrome/hm-cdp entries left: 0 (size 152K); /tmp new chrome-ish names during run: 0
+new_apptests_1 12:32:01: 11 failed, 79 passed in 24.77s | private TMPDIR chrome/hm-cdp entries left: 0 (size 504K); /tmp new chrome-ish names during run: 0
+new_apptests_2 12:32:27: 11 failed, 79 passed in 25.56s | private TMPDIR chrome/hm-cdp entries left: 0 (size 504K); /tmp new chrome-ish names during run: 0
+kill_INT 12:32:32: hm-cdp/chrome entries during=1, after signal+3s=0 (size 72K); chrome procs with this TMPDIR still alive: 0; log tail: 3 failed in 1.77s
+kill_TERM 12:32:38: hm-cdp/chrome entries during=1, after signal+3s=1 (size 80K); chrome procs with this TMPDIR still alive: 1; log tail: FFF
+FULL 12:35:41: 11 failed, 645 passed, 44 skipped in 181.79s (0:03:01) | leftover chrome entries: 0
+ALLDONE

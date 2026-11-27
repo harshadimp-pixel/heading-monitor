@@ -1,0 +1,236 @@
+FFFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+__________________ test_dashboard_renders_in_headless_chrome ___________________
+
+    def test_dashboard_renders_in_headless_chrome():
+        with run_app("--source", "sim", wait_for=lambda st: st["counts"]["accepted"] > 10) as (base, port):
+>           with HeadlessPage(base + "/") as page:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+
+app/tests/test_app_ui_headless.py:41: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/tests/_cdp.py:120: in __init__
+    self._connect(timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.tests._cdp.HeadlessPage object at 0x7f5b8340a270>, timeout = 15
+
+    def _connect(self, timeout):
+        port_file = os.path.join(self.tmp, "DevToolsActivePort")
+        t0 = time.time()
+        while not (os.path.exists(port_file) and open(port_file).read().strip()):
+            if time.time() - t0 > timeout or self.proc.poll() is not None:
+>               raise RuntimeError("headless Chrome did not start DevTools")
+E               RuntimeError: headless Chrome did not start DevTools
+
+app/tests/_cdp.py:130: RuntimeError
+___________________ test_gps_indicator_renders_fix_sats_hdop ___________________
+
+    def test_gps_indicator_renders_fix_sats_hdop():
+        ids = ["sourceBadge", "gpsStatus", "gpsFix", "gpsSats", "gpsHdop"]
+        # source "hardware" via ingest is not a live serial source -> UNVERIFIED SOURCE (D6), never HARDWARE
+        with run_app("--source", "ingest", "--stale", "30") as (base, port):
+>           with HeadlessPage(base + "/") as page:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+
+app/tests/test_app_ui_headless.py:57: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/tests/_cdp.py:120: in __init__
+    self._connect(timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.tests._cdp.HeadlessPage object at 0x7f5b8339c2d0>, timeout = 15
+
+    def _connect(self, timeout):
+        port_file = os.path.join(self.tmp, "DevToolsActivePort")
+        t0 = time.time()
+        while not (os.path.exists(port_file) and open(port_file).read().strip()):
+            if time.time() - t0 > timeout or self.proc.poll() is not None:
+>               raise RuntimeError("headless Chrome did not start DevTools")
+E               RuntimeError: headless Chrome did not start DevTools
+
+app/tests/_cdp.py:130: RuntimeError
+________________ test_stale_data_renders_unknown_not_last_value ________________
+
+    def test_stale_data_renders_unknown_not_last_value():
+        """After the stale timeout the UI must show Unknown + NO DATA badge, never the last value as current."""
+        with run_app("--source", "ingest", "--stale", "1") as (base, port):
+>           with HeadlessPage(base + "/") as page:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+
+app/tests/test_app_ui_headless.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/tests/_cdp.py:120: in __init__
+    self._connect(timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.tests._cdp.HeadlessPage object at 0x7f5b8339c190>, timeout = 15
+
+    def _connect(self, timeout):
+        port_file = os.path.join(self.tmp, "DevToolsActivePort")
+        t0 = time.time()
+        while not (os.path.exists(port_file) and open(port_file).read().strip()):
+            if time.time() - t0 > timeout or self.proc.poll() is not None:
+>               raise RuntimeError("headless Chrome did not start DevTools")
+E               RuntimeError: headless Chrome did not start DevTools
+
+app/tests/_cdp.py:130: RuntimeError
+__________ test_d6_replayed_hardware_log_shows_replay_badge_not_live ___________
+
+tmp_path = PosixPath('/workspace/audit/d10/tmp.Xg5J/pytest-of-box/pytest-0/test_d6_replayed_hardware_log_0')
+
+    def test_d6_replayed_hardware_log_shows_replay_badge_not_live(tmp_path):
+>       t = _replay_page(str(tmp_path), "hardware", ["sourceBadge", "evidenceBanner", "sourceSub"])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+app/tests/test_app_ui_headless.py:103: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/tests/test_app_ui_headless.py:97: in _replay_page
+    with HeadlessPage(base + "/") as page:
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+app/tests/_cdp.py:120: in __init__
+    self._connect(timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.tests._cdp.HeadlessPage object at 0x7f5b834af950>, timeout = 15
+
+    def _connect(self, timeout):
+        port_file = os.path.join(self.tmp, "DevToolsActivePort")
+        t0 = time.time()
+        while not (os.path.exists(port_file) and open(port_file).read().strip()):
+            if time.time() - t0 > timeout or self.proc.poll() is not None:
+>               raise RuntimeError("headless Chrome did not start DevTools")
+E               RuntimeError: headless Chrome did not start DevTools
+
+app/tests/_cdp.py:130: RuntimeError
+___________________ test_d6_replayed_sim_log_still_simulated ___________________
+
+tmp_path = PosixPath('/workspace/audit/d10/tmp.Xg5J/pytest-of-box/pytest-0/test_d6_replayed_sim_log_still0')
+
+    def test_d6_replayed_sim_log_still_simulated(tmp_path):
+>       t = _replay_page(str(tmp_path), "sim", ["sourceBadge", "evidenceBanner"])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+app/tests/test_app_ui_headless.py:111: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/tests/test_app_ui_headless.py:97: in _replay_page
+    with HeadlessPage(base + "/") as page:
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+app/tests/_cdp.py:120: in __init__
+    self._connect(timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.tests._cdp.HeadlessPage object at 0x7f5b833b8180>, timeout = 15
+
+    def _connect(self, timeout):
+        port_file = os.path.join(self.tmp, "DevToolsActivePort")
+        t0 = time.time()
+        while not (os.path.exists(port_file) and open(port_file).read().strip()):
+            if time.time() - t0 > timeout or self.proc.poll() is not None:
+>               raise RuntimeError("headless Chrome did not start DevTools")
+E               RuntimeError: headless Chrome did not start DevTools
+
+app/tests/_cdp.py:130: RuntimeError
+_____________ test_d8_serial_badges_and_reported_by_device_labels ______________
+
+tmp_path = PosixPath('/workspace/audit/d10/tmp.Xg5J/pytest-of-box/pytest-0/test_d8_serial_badges_and_repo0')
+
+    def test_d8_serial_badges_and_reported_by_device_labels(tmp_path):
+        """D8 in the browser: serial + allowlisted uid -> HARDWARE; uid not listed / no identity -> UNVERIFIED SOURCE;
+        SIML/SIMF -> SIMULATED; board/variant/uid always labelled 'reported by device'. Virtual serial: an in-process hub
+        whose transport is serial, on an OS-assigned port; samples injected as the serial source emits them."""
+        import json
+        import threading
+        from app.hub import Hub
+        from app.server import serve
+        uid = "0123456789abcdef01234567"
+        allow = tmp_path / "verified_devices.json"
+        allow.write_text(json.dumps({"devices": [{"uid": uid, "label": "pytest"}]}))
+        hub = Hub("serial:/dev/virtual-ui-test", stale_after_s=30, verified_devices_path=str(allow))
+        httpd = serve(hub, "127.0.0.1", 0)
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    
+        def hw(t, ident, provenance=None):
+            s = sample(t, 150.0, source="hardware")
+            if ident is not None:
+                s["meta"] = {"device_identity": ident}
+            if provenance:
+                s.setdefault("meta", {})["provenance"] = provenance
+            return s
+        cases = [
+            ("verified", hw(0.0, {"fc_variant": "INAV", "board_id": "MKF4", "target_name": "MATEKF405", "uid": uid},
+                            "verified")),
+            ("not_listed", hw(0.1, {"fc_variant": "INAV", "board_id": "MKF4", "uid": "ffffffffffffffffffffffff"})),
+            ("no_identity", hw(0.2, None)),
+            ("simulator", hw(0.3, {"fc_variant": "SIML", "board_id": "SIMF", "uid": uid})),
+        ]
+        ids = ["sourceBadge", "evidenceBanner", "deviceBoard", "deviceVariant", "deviceTarget", "deviceUid", "deviceVerify"]
+        out = {}
+        try:
+>           with HeadlessPage(base + "/") as page:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+
+app/tests/test_app_ui_headless.py:148: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/tests/_cdp.py:120: in __init__
+    self._connect(timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.tests._cdp.HeadlessPage object at 0x7f5b803cac30>, timeout = 15
+
+    def _connect(self, timeout):
+        port_file = os.path.join(self.tmp, "DevToolsActivePort")
+        t0 = time.time()
+        while not (os.path.exists(port_file) and open(port_file).read().strip()):
+            if time.time() - t0 > timeout or self.proc.poll() is not None:
+>               raise RuntimeError("headless Chrome did not start DevTools")
+E               RuntimeError: headless Chrome did not start DevTools
+
+app/tests/_cdp.py:130: RuntimeError
+_________________ test_d8_forged_ingest_claims_show_unverified _________________
+
+tmp_path = PosixPath('/workspace/audit/d10/tmp.Xg5J/pytest-of-box/pytest-0/test_d8_forged_ingest_claims_s0')
+
+    def test_d8_forged_ingest_claims_show_unverified(tmp_path):
+        """D8 hardening in the browser: an ingested 'hardware' sample that claims meta.provenance 'verified',
+        live_hardware true and an allowlisted UID (in the app's own --verified-devices file) still shows
+        UNVERIFIED SOURCE, never HARDWARE or a 'Live' banner, and no device-identity box (not a serial sample)."""
+        import json
+        uid = "0123456789abcdef01234567"
+        allow = tmp_path / "verified_devices.json"
+        allow.write_text(json.dumps({"devices": [{"uid": uid, "label": "pytest"}]}))
+        s = sample(0.0, 200.0, source="hardware")
+        s["meta"] = {"provenance": "verified", "live_hardware": True, "device_verified": True,
+                     "device_identity": {"uid": uid, "fc_variant": "INAV", "board_id": "MKF4"}}
+        s.update(live_hardware=True, device_verified=True, transport="serial")
+        with run_app("--source", "ingest", "--stale", "30", "--verified-devices", str(allow)) as (base, _):
+>           with HeadlessPage(base + "/") as page:
+                 ^^^^^^^^^^^^^^^^^^^^^^^^
+
+app/tests/test_app_ui_headless.py:192: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/tests/_cdp.py:120: in __init__
+    self._connect(timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.tests._cdp.HeadlessPage object at 0x7f5b803afac0>, timeout = 15
+
+    def _connect(self, timeout):
+        port_file = os.path.join(self.tmp, "DevToolsActivePort")
+        t0 = time.time()
+        while not (os.path.exists(port_file) and open(port_file).read().strip()):
+            if time.time() - t0 > timeout or self.proc.poll() is not None:
+>               raise RuntimeError("headless Chrome did not start DevTools")
+E               RuntimeError: headless Chrome did not start DevTools
+
+app/tests/_cdp.py:130: RuntimeError
+=========================== short test summary info ============================
+FAILED app/tests/test_app_ui_headless.py::test_dashboard_renders_in_headless_chrome
+FAILED app/tests/test_app_ui_headless.py::test_gps_indicator_renders_fix_sats_hdop
+FAILED app/tests/test_app_ui_headless.py::test_stale_data_renders_unknown_not_last_value
+FAILED app/tests/test_app_ui_headless.py::test_d6_replayed_hardware_log_shows_replay_badge_not_live
+FAILED app/tests/test_app_ui_headless.py::test_d6_replayed_sim_log_still_simulated
+FAILED app/tests/test_app_ui_headless.py::test_d8_serial_badges_and_reported_by_device_labels
+FAILED app/tests/test_app_ui_headless.py::test_d8_forged_ingest_claims_show_unverified
+7 failed in 3.20s

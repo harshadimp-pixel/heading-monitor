@@ -1,0 +1,2 @@
+SIGINT: launch dirs during=1; rc=2; after 3 s: top-level entries=0, files+dirs total=0, size=4.0K, chrome procs alive=0; log tail=1 passed in 1.58s
+SIGTERM: launch dirs during=1; rc=-15; after 3 s: top-level entries=1, files+dirs total=1742, size=59M, chrome procs alive=15; log tail=.

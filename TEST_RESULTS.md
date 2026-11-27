@@ -6,6 +6,22 @@ Every result carries an evidence label. Maintained by the Testing & Technical Au
 Environment: Linux box. Private venvs (under /workspace/audit, never /tmp/hm-venv) built from `requirements.txt` plus pyserial 3.5: Python 3.13.5 (numpy 2.5.5), 3.12.16 (numpy 2.5.5) and 3.10.22 (numpy 2.2.6), all with pytest 9.2.0 and jsonschema 4.26.0. Google Chrome 156.0.8078.47 headless with a fresh temporary profile and private per-launch TMPDIR; Node.
 Code: fresh `git clone`s or clean `git archive <sha>` exports (never the shared working tree), plus T6 `tests/` as committed with this file. Latest run by T6 on 2026-11-27, 11:54–12:17 IST (v5 final, fresh clones of 03fc993 and b1a2153).
 
+## D10 re-verification (UI fix d4f0d75): 2026-11-27, 12:31–12:42 IST
+Code: fresh `git clone` of d4f0d75 (= origin/main, test/docs only) and a baseline clone of 4bcba22 (old `_cdp.py`). Private venv (Python 3.13.5), private `TMPDIR=/tmp/t6d10.XXXX` per run. Raw: `reports/audit/raw/d10_d4f0d75/`.
+
+| Date (IST) | Test / suite | Commit | Result | Chrome temp entries left |
+|---|---|---|---|---|
+| 12:36 | app/tests/test_app_ui_headless.py | 4bcba22 (old driver) | 7 passed | **37 (251 MB)** |
+| 12:36–12:37 | app/tests/test_app_ui_headless.py ×3 | d4f0d75 | 7 passed ×3 | **0** each |
+| 12:37–12:38 | app/tests ×2 | d4f0d75 | **90 passed** ×2 | **0** each |
+| 12:42 | app/tests with default TMPDIR (/tmp) | d4f0d75 | 90 passed | **0 new in /tmp** |
+| 12:38 | headless module, SIGINT mid-run | d4f0d75 | interrupted | **0**, no Chrome left |
+| 12:38 | headless module, SIGTERM mid-run | d4f0d75 | killed | **1 dir (59 MB) + 15 orphaned Chrome processes** → D14b |
+| 12:41 | **Whole repo** `pytest -q -rs --junitxml` | d4f0d75 | **656 passed, 44 skipped, 0 failed** (652 + 4 new D10 tests) | 0 |
+| 12:31–12:35 | Same, with TMPDIR under /workspace/audit (29 characters) | d4f0d75 | headless 7 failed ×3; app/tests 11 failed / 79 passed ×2; whole repo 645 passed / 11 failed / 44 skipped → **D14a** (TMPDIR > 24 characters breaks Chrome's AF_UNIX socket path) | 0 |
+
+Result: **D10 CLOSED**; **D14 (MINOR, T5) OPEN**; verdict unchanged.
+
 ## v5 FINAL run (flake fix 3cf0d1f): 2026-11-27, 11:54–12:17 IST
 Code: **fresh `git clone` (porcelain-clean) at 03fc993** = UI's 3cf0d1f (flake fix, on 479a72c) + T6's D11 helper fix (tests only), and confirmation at **b1a2153** (+ PM docs-only 1f3883e/83f38b7 and T6's D13 helper fix, tests only; no product-code change). No later UI commit was pending (origin checked). Private venvs; private HOME/TMPDIR under /workspace/audit; every app on an ephemeral PID-verified port, never 8080.
 
