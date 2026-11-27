@@ -21,6 +21,7 @@ Useful options:
   zeroed) with timestamps, so you can replay them later. Frame-exact, not byte-exact: garbage and bad-checksum
   bytes are not kept. Use this for any
   future `reports/hardware_logs/` recording.
+* `--verified-devices FILE`: D8 UID allowlist (default `config/verified_devices.json`, empty).
 * `--no-gps`: do not request `MSP_RAW_GPS`; `gps` is then always absent.
 * `--count N`, `--duration S`, `--out FILE`, `--realtime` (pace replay output).
 
@@ -28,13 +29,21 @@ Useful options:
 with code 2 and a clear message. Replay, fake-FC and the tests run on the standard library alone; `jsonschema` is
 used by the tests if it is installed.
 
-## Source labelling (hard rule)
-The `source` value comes from the transport **class**, never from a flag or from data in a file.
-`SerialTransport.kind == "hardware"`, `FakeFCTransport.kind == "sim"`, and replay always writes `"replay"`. A
-replayed Sample JSONL keeps the label it was recorded with in `meta.original_source`.
+## Source labelling (hard rule) and D8 provenance
+A serial connection is **not** proof of hardware (ARCHITECTURE.md D8; full contract in
+[docs/firmware/D8_PROVENANCE.md](../docs/firmware/D8_PROVENANCE.md)). At connect the bridge reads the device's
+self-reported identity (`MSP_API_VERSION` 1, `MSP_FC_VARIANT` 2, `MSP_FC_VERSION` 3, `MSP_BOARD_INFO` 4, `MSP_UID` 160)
+into `meta.device_identity` (`self_reported: true`) and sets `meta.provenance`:
+* `FakeFCTransport` (`--fake-fc`), or any device reporting variant `SIML` / board `SIMF` → `source:"sim"`,
+  `provenance:"simulated"` (SIML/SIMF always wins, even over an allowlisted UID).
+* Any other live device → `source:"hardware"`, `provenance:"unverified"`, unless its UID is in
+  `config/verified_devices.json` (ships empty; `--verified-devices FILE`) → `provenance:"verified"`.
+* Replay always writes `source:"replay"` and is never verified. A replayed Sample JSONL keeps its label in
+  `meta.original_source` and its recorded `meta.provenance`.
+The identity can only *downgrade* the transport label to sim; nothing in the data can upgrade it.
 
 ## Safety
-Live mode only sends read-only requests: `MSP_FC_VARIANT`, `MSP_CALIBRATION_DATA` (INAV only, at start and every 10 s), `MSP_RAW_GPS` (INAV only, once per second, off with `--no-gps`), `MSP_ATTITUDE` and `MSP_RAW_IMU`. Any other command
+Live mode only sends read-only requests: `MSP_API_VERSION`, `MSP_FC_VARIANT`, `MSP_FC_VERSION`, `MSP_BOARD_INFO`, `MSP_UID` (once, at connect), `MSP_CALIBRATION_DATA` (INAV only, at start and every 10 s), `MSP_RAW_GPS` (INAV only, once per second, off with `--no-gps`), `MSP_ATTITUDE` and `MSP_RAW_IMU`. Any other command
 raises an error before anything is written (`bridge.ALLOWED_REQUESTS`). There is no `MSP_SET_*`, no reboot and
 no flashing.
 
@@ -87,5 +96,6 @@ See [FC_SETUP.md § LIMITATIONS](../docs/firmware/FC_SETUP.md#limitations). In s
 * INAV mag is in µT only while INAV's mag calibration is unset.
 * There is no MAVLink, so no ArduPilot mag.
 * Betaflight scaling is unknown.
-* The fake FC is a protocol loopback, not a sensor model (that's `sim/`, T3).
+* The fake FC is a protocol loopback, not a sensor model (that's `sim/`, T3). It reports `SIML`/`SIMF` and imitates INAV's MSP layouts.
+* Device identity is self-reported and spoofable; a UID is not cryptographic proof (FC_SETUP L11).
 * `gps` is INAV-only; "GPS disabled" and "no fix" both read as `fix: none` (FC_SETUP L10).

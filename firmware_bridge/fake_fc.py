@@ -15,11 +15,16 @@ from . import msp
 
 
 class FakeFC:
-    def __init__(self, variant: str = "INAV", yaw_rate_dps: float = 30.0, field_uT: float = 50.0,
+    def __init__(self, variant: str = "SIML", board_id: str = "SIMF", uid: bytes | None = None, yaw_rate_dps: float = 30.0, field_uT: float = 50.0,
                  inclination_deg: float = 60.0, support_raw_imu: bool = True, clock=None,
                  mag_zero=(0, 0, 0), mag_gain=(1024, 1024, 1024), support_calibration_data: bool = True,
                  gps_fix_type: int | None = 2, gps_num_sat: int = 12):
+        # D8: the fake FC identifies itself as variant SIML / board SIMF (ARCHITECTURE.md D8 item 2).
+        # It imitates INAV's MSP layouts. The variant/board/uid can be overridden ONLY so tests can play an
+        # "unknown device"; such tests must use their own non-sim transport class.
         self.variant = variant.encode()[:4].ljust(4, b" ")
+        self.board_id = board_id.encode()[:4].ljust(4, b" ")
+        self.uid = uid if uid is not None else bytes(range(0xA0, 0xAC))
         self.yaw_rate = yaw_rate_dps
         self.field = field_uT
         self.incl = math.radians(inclination_deg)
@@ -55,6 +60,16 @@ class FakeFC:
         version = frame.version
         if frame.cmd == msp.MSP_FC_VARIANT:
             return msp.encode(frame.cmd, self.variant, version, ">")
+        if frame.cmd == msp.MSP_API_VERSION:
+            return msp.encode(frame.cmd, bytes([0, 2, 5]), version, ">")
+        if frame.cmd == msp.MSP_FC_VERSION:
+            return msp.encode(frame.cmd, bytes([0, 0, 0]), version, ">")
+        if frame.cmd == msp.MSP_BOARD_INFO:
+            name = b"FIRMWARE_BRIDGE_FAKE_FC"
+            p = self.board_id + struct.pack("<HBB", 0, 0, 0) + bytes([len(name)]) + name
+            return msp.encode(frame.cmd, p, version, ">")
+        if frame.cmd == msp.MSP_UID and self.uid:
+            return msp.encode(frame.cmd, self.uid, version, ">")
         if frame.cmd == msp.MSP_CALIBRATION_DATA and self.support_calibration_data:
             # INAV layout (scaling.decode_calibration_data); acc values arbitrary
             p = struct.pack("<B3h3h3hH3h", 0, 0, 0, 0, 4096, 4096, 4096, *self.mag_zero, 0, *self.mag_gain)

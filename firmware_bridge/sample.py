@@ -4,7 +4,8 @@ from __future__ import annotations
 import math
 from numbers import Real
 
-from .scaling import MAG_PROFILES, fc_mag_calibration_state, PITCH_SIGN_BY_VARIANT, UT_PER_MGAUSS, MagProfile, to_body_frd
+from .identity import PROVENANCE_SIMULATED, PROVENANCE_UNVERIFIED, DeviceIdentity, classify
+from .scaling import MAG_PROFILES, inav_layout, fc_mag_calibration_state, PITCH_SIGN_BY_VARIANT, UT_PER_MGAUSS, MagProfile, to_body_frd
 
 SOURCES = ("sim", "replay", "hardware")
 
@@ -18,6 +19,13 @@ class SampleBuilder:
         if profile not in MAG_PROFILES:
             raise ValueError(f"unknown mag profile {profile!r}; choose from {sorted(MAG_PROFILES)}")
         self.source = source
+        self.base_source = source                # transport class label: sim | hardware | replay
+        self.identity: DeviceIdentity | None = None
+        self.allowlist: dict | None = None       # None in replay -> never verified
+        self.provenance = PROVENANCE_SIMULATED if source == "sim" else PROVENANCE_UNVERIFIED
+        self.provenance_reason = ("simulated transport (fake FC)" if source == "sim" else
+                                  "device identity not read" if source == "hardware" else "replay")
+        self.verified_entry: dict | None = None
         self.profile: MagProfile = MAG_PROFILES[profile]
         self.mag_scale = mag_ut_per_lsb if mag_ut_per_lsb is not None else self.profile.ut_per_lsb
         self.accel_scale = accel_lsb_per_g if accel_lsb_per_g is not None else self.profile.accel_lsb_per_g
@@ -33,6 +41,16 @@ class SampleBuilder:
         self.fc_cal_source: str | None = None
         to_body_frd([0, 0, 0], self.body_frame)  # validate
 
+    def set_identity(self, identity: DeviceIdentity | None, allowlist: dict | None = None) -> None:
+        """D8: classify source/provenance from the self-reported identity (identity.classify)."""
+        self.identity = identity
+        if allowlist is not None:
+            self.allowlist = allowlist
+        if identity is not None and identity.fields["fc_variant"]:
+            self.fc_variant = identity.fields["fc_variant"]
+        self.source, self.provenance, self.provenance_reason, self.verified_entry = classify(
+            self.base_source, identity, self.allowlist)
+
     def set_fc_calibration(self, cal: dict | None, source: str = "MSP_CALIBRATION_DATA") -> None:
         self.fc_cal = cal
         self.fc_cal_source = source if cal is not None else None
@@ -43,7 +61,7 @@ class SampleBuilder:
         self.gps_t = t
 
     def _gps_for(self, t: float) -> dict | None:
-        if self.gps is None or self.fc_variant != "INAV":
+        if self.gps is None or not inav_layout(self.fc_variant):
             return None
         if self.gps_t is not None and t - self.gps_t > self.gps_max_age_s:
             return None   # stale -> absent ("Unknown")
@@ -70,6 +88,13 @@ class SampleBuilder:
             "fc_mag_calibrated": self.fc_mag_calibrated,
             "scaling_uncertain": list(self.profile.uncertain),
         }
+        # D8 provenance (docs/firmware/D8_PROVENANCE.md)
+        m["provenance"] = self.provenance
+        m["provenance_reason"] = self.provenance_reason
+        if self.verified_entry is not None:
+            m["verified_device_label"] = str(self.verified_entry.get("label") or "")
+        if self.identity is not None:
+            m["device_identity"] = self.identity.as_meta()
         if self.fc_cal is not None:
             m["fc_mag_cal"] = {"source": self.fc_cal_source, "mag_zero": self.fc_cal["mag_zero"],
                                "mag_gain": self.fc_cal["mag_gain"]}

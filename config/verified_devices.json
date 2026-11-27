@@ -1,0 +1,4 @@
+{
+  "_comment": "D8 (ARCHITECTURE.md 2026-11-27): the ONLY path to provenance 'verified' / the HARDWARE badge. Ships EMPTY. Add an entry only after reports/HARDWARE_VALIDATION_CHECKLIST.md passes with the Auditor's sign-off and a committed hardware log. uid = 24 hex chars = the 12 MSP_UID (160) payload bytes in wire order. A device reporting fc_variant SIML or board SIMF is never verified, even if listed. A UID is self-reported and not cryptographic proof.",
+  "devices": []
+}

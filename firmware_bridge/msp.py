@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 MSP_API_VERSION = 1
 MSP_FC_VARIANT = 2
 MSP_FC_VERSION = 3
+MSP_BOARD_INFO = 4     # read-only identity (D8)
+MSP_UID = 160          # read-only identity (D8): 12-byte MCU unique ID
 MSP_CALIBRATION_DATA = 14   # read-only 'out' message (INAV fc_msp.c mspFcProcessOutCommand); 15 = SET, never sent
 MSP_RAW_IMU = 102
 MSP_RAW_GPS = 106   # read-only; only fixType/numSat are ever decoded, coordinates are dropped

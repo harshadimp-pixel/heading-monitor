@@ -15,8 +15,9 @@ from datetime import datetime, timezone
 from typing import Iterator
 
 from . import msp
+from .identity import IDENTITY_REQUESTS, DeviceIdentity, load_allowlist
 from .sample import SampleBuilder, validate_sample
-from .scaling import (FC_VARIANT_DEFAULT_PROFILE, decode_attitude, decode_calibration_data, decode_raw_imu,
+from .scaling import (FC_VARIANT_DEFAULT_PROFILE, inav_layout, decode_attitude, decode_calibration_data, decode_raw_imu,
                       decode_raw_gps_availability, decode_sensor_compass, redact_raw_gps_payload)
 
 
@@ -97,6 +98,7 @@ def encode_frame(frame: msp.MSPFrame, payload: bytes) -> bytes:
 # MSP_CALIBRATION_DATA (14) is an "out" (read) message in INAV mspFcProcessOutCommand; the write
 # counterpart MSP_SET_CALIBRATION_DATA (15) and MSP_MAG_CALIBRATION (206) are deliberately NOT allowed.
 ALLOWED_REQUESTS = frozenset({msp.MSP_API_VERSION, msp.MSP_FC_VARIANT, msp.MSP_FC_VERSION,
+                              msp.MSP_BOARD_INFO, msp.MSP_UID,
                               msp.MSP_RAW_IMU, msp.MSP_ATTITUDE, msp.MSP_CALIBRATION_DATA,
                               msp.MSP_RAW_GPS})
 
@@ -106,7 +108,7 @@ class Poller:
                  response_timeout: float = 0.25, capture: CaptureWriter | None = None,
                  passive: bool = False, auto_profile: bool = False, clock=time.monotonic,
                  sleep=time.sleep, cal_refresh_s: float = 10.0, gps_period_s: float = 1.0,
-                 gps: bool = True):
+                 gps: bool = True, allowlist: dict | None = None):
         self.tr = transport
         self.version = msp_version
         self.period = 1.0 / rate_hz if rate_hz > 0 else 0.0
@@ -118,7 +120,13 @@ class Poller:
         self.t0 = clock()
         self.builder_kwargs = dict(builder_kwargs)
         self.auto_profile = auto_profile
+        # D8: the allowlist is only consulted for live transports; default = shipped config file
+        self.allowlist = allowlist if allowlist is not None else load_allowlist()
+        self.identity = DeviceIdentity()
         self.builder = SampleBuilder(source=transport.kind, msp_version=msp_version, **self.builder_kwargs)
+        self.builder.set_identity(self.identity, self.allowlist)
+        if passive:
+            self.builder.provenance_reason = "passive mode: device identity not queried"
         self.attitude: dict | None = None
         self.raw_imu_errors = 0
         self.cal_refresh_s = cal_refresh_s
@@ -153,28 +161,36 @@ class Poller:
                 return got
 
     def identify(self) -> str | None:
-        self.send(msp.MSP_FC_VARIANT)
-        for f in self._pump({msp.MSP_FC_VARIANT}, self.clock() + max(self.timeout, 0.5)):
-            if f.cmd == msp.MSP_FC_VARIANT and not f.is_error and len(f.payload) >= 4:
-                v = f.payload[:4].decode("ascii", "replace")
-                self.builder.fc_variant = v
-                _log(f"FC variant: {v}")
-                if self.auto_profile and v in FC_VARIANT_DEFAULT_PROFILE:
-                    self.builder_kwargs["profile"] = FC_VARIANT_DEFAULT_PROFILE[v]
-                    self.builder = SampleBuilder(source=self.tr.kind, msp_version=self.version,
-                                                 **self.builder_kwargs)
-                    self.builder.fc_variant = v
-                self.request_calibration()
-                if v == "ARDU":
-                    _log("WARNING: ArduPilot's AP_MSP does not implement MSP_RAW_IMU; no mag over MSP. "
-                         "Use MAVLink (see docs/firmware/FC_SETUP.md).")
-                return v
-        _log("no MSP_FC_VARIANT reply (continuing)")
-        return None
+        """D8: read the self-reported identity (read-only 1, 2, 3, 4, 160), then classify source/provenance."""
+        for c in IDENTITY_REQUESTS:
+            self.send(c)
+        frames = self._pump(set(IDENTITY_REQUESTS), self.clock() + max(self.timeout, 0.5))
+        for f in frames:
+            self.identity.update(f)
+        self.identity.mark_no_reply(IDENTITY_REQUESTS)
+        v = self.identity.fields["fc_variant"]
+        if self.auto_profile and v in FC_VARIANT_DEFAULT_PROFILE:
+            self.builder_kwargs["profile"] = FC_VARIANT_DEFAULT_PROFILE[v]
+            self.builder = SampleBuilder(source=self.tr.kind, msp_version=self.version, **self.builder_kwargs)
+        self.builder.set_identity(self.identity, self.allowlist)
+        # any non-identity frames that arrived (unlikely) are processed normally
+        self.frames_to_samples([f for f in frames if f.cmd not in IDENTITY_REQUESTS], self.now())
+        b = self.builder
+        _log(f"device identity (self-reported): variant={v!r} board={self.identity.fields['board_id']!r} "
+             f"uid={self.identity.fields['uid']!r} -> source={b.source} provenance={b.provenance} "
+             f"({b.provenance_reason})")
+        if v is None:
+            _log("no MSP_FC_VARIANT reply (continuing; provenance unverified)")
+            return None
+        self.request_calibration()
+        if v == "ARDU":
+            _log("WARNING: ArduPilot's AP_MSP does not implement MSP_RAW_IMU; no mag over MSP. "
+                 "Use MAVLink (see docs/firmware/FC_SETUP.md).")
+        return v
 
     def request_calibration(self) -> None:
         """Read-only MSP_CALIBRATION_DATA for meta.fc_mag_calibrated (INAV only)."""
-        if self.builder.fc_variant != "INAV":
+        if not inav_layout(self.builder.fc_variant):
             return
         self._last_cal_req = self.clock()
         self.send(msp.MSP_CALIBRATION_DATA)
@@ -195,12 +211,12 @@ class Poller:
             if self.passive:
                 frames = self._pump(set(), cycle_start + max(self.period, 0.01))
             else:
-                if (self.builder.fc_variant == "INAV" and self._last_cal_req is not None
+                if (inav_layout(self.builder.fc_variant) and self._last_cal_req is not None
                         and cycle_start - self._last_cal_req >= self.cal_refresh_s):
                     self._last_cal_req = cycle_start
                     self.send(msp.MSP_CALIBRATION_DATA)   # reply handled in frames_to_samples
                 want = {msp.MSP_ATTITUDE, msp.MSP_RAW_IMU}
-                gps_asked = (self.gps_enabled and self.builder.fc_variant == "INAV"
+                gps_asked = (self.gps_enabled and inav_layout(self.builder.fc_variant)
                              and (self._last_gps_req is None
                                   or cycle_start - self._last_gps_req >= self.gps_period_s))
                 if gps_asked:
@@ -254,8 +270,13 @@ def frames_to_samples(frames, t: float, builder: SampleBuilder, state) -> list[d
                 builder.set_gps(decode_raw_gps_availability(f.payload), t)
             elif f.cmd == msp.MSP_RAW_GPS and f.is_error:
                 builder.set_gps(None)
-            elif f.cmd == msp.MSP_FC_VARIANT and f.direction == ">" and len(f.payload) >= 4:
-                builder.fc_variant = f.payload[:4].decode("ascii", "replace")
+            elif f.cmd in IDENTITY_REQUESTS and f.direction != "<":
+                # identity frames (live late replies, or recorded in a capture/raw replay): never upgrades a
+                # replay to verified (classify() ignores the allowlist for base 'replay')
+                if builder.identity is None:
+                    builder.identity = DeviceIdentity()
+                builder.identity.update(f)
+                builder.set_identity(builder.identity)
             elif f.cmd == msp.MSP2_SENSOR_COMPASS and not f.is_error:
                 out.append(builder.from_sensor_compass(t, decode_sensor_compass(f.payload), state.attitude))
         except ValueError as e:  # short payload etc. - skip frame, keep going
@@ -326,6 +347,7 @@ def _pace(realtime, sleep, t, wall0, t0):
 
 def _replay_jsonl(path, builder_kwargs, realtime, sleep):
     builder = None
+    cap_source = None
     parser = msp.MSPParser()
     st = _ReplayState()
     wall0, t0 = time.monotonic(), None
@@ -347,6 +369,7 @@ def _replay_jsonl(path, builder_kwargs, realtime, sleep):
                     kw.pop("_profile_explicit", None)
                 builder = SampleBuilder(source="replay", msp_version=rec.get("msp_version"), **kw)
                 builder.fc_variant = rec.get("fc_variant")
+                cap_source = rec.get("source") if rec.get("source") in ("sim", "hardware") else None
                 continue
             if "mag_uT" in rec:  # format 1: Sample JSONL
                 s = dict(rec)
@@ -372,6 +395,9 @@ def _replay_jsonl(path, builder_kwargs, realtime, sleep):
                 t0 = t if t0 is None else t0
                 for s in frames_to_samples(parser.feed(bytes.fromhex(rec["rx"])), t, builder, st):
                     s["meta"]["replayed_from"] = path
+                    orig = "sim" if builder.provenance == "simulated" else cap_source
+                    if orig:
+                        s["meta"]["original_source"] = orig
                     _pace(realtime, sleep, t, wall0, t0)
                     yield s
     if parser.stats.bad_checksum:
@@ -391,6 +417,8 @@ def _replay_binary(path, builder_kwargs, rate_hz, realtime, sleep):
                 t = n / rate_hz
                 for s in frames_to_samples([f], t, builder, st):
                     s["meta"]["replayed_from"] = path
+                    if builder.provenance == "simulated":
+                        s["meta"]["original_source"] = "sim"
                     s["meta"]["t_synthesised_hz"] = rate_hz
                     _pace(realtime, sleep, t, wall0, 0.0)
                     yield s

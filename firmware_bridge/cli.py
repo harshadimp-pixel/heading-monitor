@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 
+from .identity import load_allowlist
 from .bridge import BridgeError, CaptureWriter, Poller, SerialTransport, replay
 from .fake_fc import FakeFC, FakeFCTransport
 from .scaling import MAG_PROFILES
@@ -41,6 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--accel-lsb-per-g", type=float, help="override accel scale (LSB per g)")
     ap.add_argument("--passive", action="store_true",
                     help="live: do not poll, only listen (e.g. AP_Periph UART pushing MSP2_SENSOR_COMPASS)")
+    ap.add_argument("--verified-devices", metavar="FILE",
+                    help="D8 allowlist (default: config/verified_devices.json, ships empty)")
     ap.add_argument("--no-gps", action="store_true",
                     help="do not request MSP_RAW_GPS (gps availability object will be absent)")
     ap.add_argument("--capture", metavar="FILE", help="live/fake: also log raw tx/rx bytes as replayable JSONL")
@@ -79,10 +82,12 @@ def main(argv=None) -> int:
                     clock_state["t"] += s
                 tr.fc._clock = lambda: clock_state["t"]
                 poller = Poller(tr, bk, args.msp_version, args.rate, capture=capture,
-                                auto_profile=args.auto_profile, clock=clock, sleep=sleep, gps=not args.no_gps)
+                                auto_profile=args.auto_profile, clock=clock, sleep=sleep, gps=not args.no_gps,
+                                allowlist=load_allowlist(args.verified_devices))
             else:
                 poller = Poller(tr, bk, args.msp_version, args.rate, capture=capture,
-                                passive=args.passive, auto_profile=args.auto_profile, gps=not args.no_gps)
+                                passive=args.passive, auto_profile=args.auto_profile, gps=not args.no_gps,
+                                allowlist=load_allowlist(args.verified_devices))
             it = poller.run(max_samples=args.count, duration=args.duration)
         for s in it:
             out.write(json.dumps(s, separators=(",", ":")) + "\n")

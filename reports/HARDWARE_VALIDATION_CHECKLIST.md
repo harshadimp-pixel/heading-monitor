@@ -11,7 +11,7 @@ Non-blocking caveats: [`BLOCKERS.md`](../BLOCKERS.md) B3, B4.
 
 ## Safety and setup (applies to every item)
 * Bench only. **Remove the propellers**, disconnect the motor battery or keep the FC disarmed, and power it from USB.
-* The bridge sends only read-only MSP requests (`MSP_FC_VARIANT`, `MSP_CALIBRATION_DATA`, `MSP_RAW_GPS`, `MSP_ATTITUDE`, `MSP_RAW_IMU`). It never writes
+* The bridge sends only read-only MSP requests (`MSP_API_VERSION`, `MSP_FC_VARIANT`, `MSP_FC_VERSION`, `MSP_BOARD_INFO`, `MSP_UID`, `MSP_CALIBRATION_DATA`, `MSP_RAW_GPS`, `MSP_ATTITUDE`, `MSP_RAW_IMU`). It never writes
   settings, reboots or flashes. Any FC configuration (FC_SETUP.md §2) is done by the owner in INAV Configurator.
 * Expected configuration: INAV on the Matek FC with `mag_hardware = MSP` and `align_mag = CW90`. CAN-L4-3100 TX2
   wired to a spare FC UART RX with MSP enabled. **INAV mag calibration left unset** (`magzero_x/y/z = 0`,
@@ -238,4 +238,6 @@ position data found (then do not commit the logs).
 | FC board + INAV version (`version` in CLI) | |
 | CAN-L4-3100 firmware (MatekL431-GPS / -Periph, version) | |
 | Logs committed (paths) | |
+| Device UID reported by the bridge (`meta.device_identity.uid`, 24 hex; samples show `provenance: "unverified"` until listed) | |
+| UID added to `config/verified_devices.json` (only after Auditor sign-off, D8) | |
 | Auditor sign-off | |

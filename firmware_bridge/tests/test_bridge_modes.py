@@ -34,7 +34,7 @@ def test_fake_fc_poll_is_sim(ver):
     assert len(samples) == 5
     for s in samples:
         assert s["source"] == "sim" and validate_sample(s) == []
-        assert s["meta"]["msp_version"] == ver and s["meta"]["fc_variant"] == "INAV"
+        assert s["meta"]["msp_version"] == ver and s["meta"]["fc_variant"] == "SIML"  # D8: fake FC identifies as SIML
     assert samples[-1]["t"] > samples[0]["t"]
 
 
@@ -124,17 +124,21 @@ def test_cli_modes_mutually_exclusive():
 
 
 @pytest.mark.skipif(not hasattr(os, "openpty"), reason="needs a POSIX pty")
-def test_serial_transport_over_virtual_pty():
+@pytest.mark.parametrize("fc_kw,source,prov", [
+    ({}, "sim", "simulated"),                          # D8: fake FC (SIML/SIMF) behind a serial port -> SIMULATED
+    ({"variant": "INAV", "board_id": "MKH7"}, "hardware", "unverified"),   # unknown device -> UNVERIFIED
+])
+def test_serial_transport_over_virtual_pty(fc_kw, source, prov):
     """Exercises the pyserial path end-to-end against a *virtual* pty driven by FakeFC.
-    No physical device. The 'hardware' label here only proves the label follows the
-    transport class; nothing from this test is a hardware result."""
+    No physical device. D8: a serial connection is not proof of hardware; the 'hardware' label here
+    is never 'verified' (shipped allowlist is empty). Nothing from this test is a hardware result."""
     pytest.importorskip("serial")
     import threading
     from firmware_bridge.bridge import SerialTransport
     master, slave = os.openpty()
     import tty
     tty.setraw(slave)
-    fc = FakeFC()
+    fc = FakeFC(**fc_kw)
     stop = threading.Event()
 
     def serve():
@@ -152,7 +156,8 @@ def test_serial_transport_over_virtual_pty():
         out = list(Poller(tr, BK, 1, 50).run(max_samples=3))
     finally:
         stop.set(); tr.close(); os.close(slave); os.close(master)
-    assert len(out) == 3 and all(s["source"] == "hardware" and validate_sample(s) == [] for s in out)
+    assert len(out) == 3 and all(s["source"] == source and s["meta"]["provenance"] == prov
+                                 and validate_sample(s) == [] for s in out)
 
 
 def test_fake_fc_output_frame_convention():

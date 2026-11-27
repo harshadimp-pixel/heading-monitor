@@ -250,6 +250,19 @@ FC variants (Betaflight's byte 0 is a boolean `STATE(GPS_FIX)`, ArduPilot's layo
 < 18 bytes, no reply (stops asking after 3 silent tries), or a last reply older than 5 s. Nothing needs configuring
 on the FC; a GPS receiver is optional and INAV's `feature GPS` only affects whether a fix can appear.
 
+### 6.7 Device identity and provenance (D8)
+At connect the bridge reads the device's self-reported identity with read-only `MSP_API_VERSION` (1),
+`MSP_FC_VARIANT` (2), `MSP_FC_VERSION` (3), `MSP_BOARD_INFO` (4) and `MSP_UID` (160). Layouts at the INAV pin
+([fc_msp.c L478-530, L1191-1195 @ fce6c94](https://github.com/iNavFlight/inav/blob/fce6c94/src/main/fc/fc_msp.c#L478-L530)):
+API = u8 protocol, u8 major, u8 minor; variant = 4 ASCII; FC version = u8 major/minor/patch; board info = 4 ASCII board
+id, u16 hw revision, u8 OSD flag, u8 capabilities, u8 length + target name; UID = 3 × u32 (STM32 96-bit unique ID),
+kept as 24 hex chars in wire order. **Betaflight differences** (msp.c L715-868): FC version bytes are year−2000 /
+month / patch followed by a length-prefixed version string; board info appends board-name and manufacturer strings
+and a 32-byte signature (ignored). ArduPilot (AP_MSP) answers variant and board id `ARDU`, a firmware string where the
+target name would be, and a 12-byte system ID. Rules, fields and the badge mapping:
+[D8_PROVENANCE.md](D8_PROVENANCE.md). To make a board show HARDWARE, its `meta.device_identity.uid` must be added to
+`config/verified_devices.json` after the HV checklist passes with the Auditor's sign-off; nothing on the FC changes.
+
 ## LIMITATIONS
 * **L1** No hardware: framing, scaling, axis and sign conventions are verified against source and hand-built bytes
   only. Every item in §7 / [HARDWARE_VALIDATION_CHECKLIST.md](../../reports/HARDWARE_VALIDATION_CHECKLIST.md) is open.
@@ -279,3 +292,7 @@ on the FC; a GPS receiver is optional and INAV's `feature GPS` only affects whet
   `USE_GPS` answer an error frame (→ `gps` omitted), inferred from the default case of `mspFcProcessOutCommand`.
   Betaflight/ArduPilot 106 payloads are not interpreted. `--capture` rx is re-encoded per frame (for GPS redaction)
   and is no longer byte-exact.
+* **L11** D8 identity is **self-reported** over the same wire and can be spoofed: any device or script can claim any
+  variant, board or UID. A UID is not cryptographic proof; the allowlist only records "this UID passed the HV
+  checklist". Identity is read once at connect (a device swapped mid-session is not detected). `--passive` sends no
+  queries, so it is always unverified. Betaflight/ArduPilot identity layouts are source-read only.

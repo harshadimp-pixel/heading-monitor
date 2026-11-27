@@ -101,7 +101,7 @@ def fc_mag_calibration_state(cal: dict | None, fc_variant: str | None):
     'unknown' when: no reply / error reply / short payload (cal is None), FC is not INAV (layout not
     verified), or magZero and magGain are all 0 (INAV build without USE_MAG writes zeros).
     """
-    if cal is None or fc_variant != "INAV":
+    if cal is None or fc_variant not in ("INAV", "SIML"):
         return "unknown"
     zero, gain = tuple(cal["mag_zero"]), tuple(cal["mag_gain"])
     if zero == (0, 0, 0) and gain == (0, 0, 0):
@@ -149,7 +149,7 @@ def to_body_frd(v, body_frame: str):
 # INAV MAVLink sends -pitch, mavlink_streams.c L725); ArduPilot AP_MSP sends degrees(pitch_rad)*10,
 # i.e. aerospace +pitch = nose UP. The bridge outputs aerospace convention (roll + right side down,
 # pitch + nose up, yaw clockwise from north, 0..360).
-PITCH_SIGN_BY_VARIANT = {"INAV": -1.0, "BTFL": -1.0, "ARDU": 1.0}
+PITCH_SIGN_BY_VARIANT = {"INAV": -1.0, "SIML": -1.0, "BTFL": -1.0, "ARDU": 1.0}
 
 
 MAG_PROFILES: dict[str, MagProfile] = {
@@ -186,4 +186,12 @@ MAG_PROFILES: dict[str, MagProfile] = {
                          ("User-supplied scaling; no axis conversion.",), body_frame="frd"),
 }
 
-FC_VARIANT_DEFAULT_PROFILE = {"INAV": "inav-msp-mag", "BTFL": "betaflight"}
+FC_VARIANT_DEFAULT_PROFILE = {"INAV": "inav-msp-mag", "SIML": "inav-msp-mag", "BTFL": "betaflight"}
+
+# Variants whose MSP payloads follow INAV's layouts (calibration 14, raw GPS 106, raw IMU 102).
+# "SIML" is our fake FC / simulators (D8): it imitates INAV's encodings but is ALWAYS labelled sim.
+INAV_LAYOUT_VARIANTS = frozenset({"INAV", "SIML"})
+
+
+def inav_layout(fc_variant) -> bool:
+    return fc_variant in INAV_LAYOUT_VARIANTS
