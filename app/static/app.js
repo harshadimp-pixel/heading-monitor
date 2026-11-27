@@ -13,7 +13,7 @@ window.__hmProbe = () => ({ connected: S.connected, messages: S.messages, record
   latestSeq: S.records.length ? S.records[S.records.length - 1].seq : 0, renderedSeq: S.renderedSeq, renders: S.renders });
 
 // ---------------------------------------------------------------- math helpers (mirrored in tests)
-const { wrap360, angleDiff, roundHeading, cardinal, isNum, badgeLabel, badgeInfo } = window.HeadingMath;
+const { wrap360, angleDiff, roundHeading, cardinal, isNum, badgeLabel, badgeInfo, ALLOWLISTED_BANNER } = window.HeadingMath;
 function fmtHeading(h) { return isNum(h) ? roundHeading(h).toFixed(1) + "°" : UNKNOWN; }
 function fmtSigned(d, nd = 1) { return isNum(d) ? (d > 0 ? "+" : d < 0 ? "−" : "±") + Math.abs(d).toFixed(nd) + "°" : UNKNOWN; }
 function fmtNum(v, nd = 2, unit = "") { return isNum(v) ? v.toFixed(nd) + unit : UNKNOWN; }
@@ -214,7 +214,7 @@ function render() {
     else if (r.source === "replay" && r.original_source === "hardware")
       evidText = "[REPLAYED] Recorded hardware log played back from a file. This is recorded data, not a live sensor stream. Nothing here is hardware-verified.";
     else if (r.source === "replay") evidText = "[REPLAYED] Values come from a recorded log, not a live sensor stream.";
-    else if (bi.live) evidText = "Live hardware samples from a verified device (serial; uid listed in config/verified_devices.json). Accuracy is not hardware-verified until the auditor signs off a committed log.";
+    else if (bi.live) evidText = ALLOWLISTED_BANNER;
     else if (r.transport === "serial")
       evidText = "[UNVERIFIED] Samples arrived over a serial link, but the device is not in config/verified_devices.json (" +
                  ({ no_identity: "no device identity reported", no_uid: "no device UID reported", uid_not_listed: "UID not in the verified list", bridge_unverified: "the bridge did not report provenance verified", untrusted_channel: "the sample did not come from the app's own serial source" }[r.device_status] || "not verified") +
@@ -232,7 +232,7 @@ function render() {
     $("deviceVariant").textContent = rb(r.device_variant);
     $("deviceTarget").textContent = rb(r.device_target);
     $("deviceUid").textContent = rb(r.device_uid);
-    $("deviceVerify").textContent = r.device_verified ? "UID listed in config/verified_devices.json"
+    $("deviceVerify").textContent = r.device_verified ? "UID on the local allowlist (config/verified_devices.json); not authenticated"
       : r.device_status === "simulator" ? "device reports a simulator (SIML/SIMF)"
       : "not verified (" + ({ no_identity: "no identity", no_uid: "no UID", uid_not_listed: "UID not in verified list", bridge_unverified: "bridge provenance not verified", untrusted_channel: "not from the app's own serial source" }[r.device_status] || "unknown") + ")";
   } else {

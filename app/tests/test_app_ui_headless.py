@@ -134,11 +134,17 @@ def test_d8_serial_badges_and_reported_by_device_labels(tmp_path):
                 page.wait_for(_rendered(get_json(base + "/api/history")["records"][-1]["seq"]))
                 out[name] = page.texts(ids)
                 out[name]["hidden"] = page.eval("document.getElementById('deviceIdentity').hidden")
+                out[name]["badgeFits"] = page.eval(
+                    "(() => { const b = document.getElementById('sourceBadge'); const r = b.getBoundingClientRect();"
+                    " return b.scrollWidth <= b.clientWidth + 1 && r.right <= window.innerWidth + 1 && r.left >= -1; })()")
     finally:
         httpd.shutdown()
         httpd.server_close()
     v, n, x, sm = out["verified"], out["not_listed"], out["no_identity"], out["simulator"]
-    assert v["sourceBadge"] == "HARDWARE" and v["hidden"] is False
+    assert v["sourceBadge"] == "ALLOWLISTED DEVICE (identity not authenticated)" and v["hidden"] is False
+    assert v["evidenceBanner"] == ("Live serial device whose self-reported UID is on the local allowlist. "
+                                   "The UID is not cryptographic proof; this is not hardware verification.")
+    assert v["badgeFits"] is True, "allowlisted badge must not overflow its row"
     assert v["deviceBoard"] == "MKF4 (reported by device)" and v["deviceVariant"] == "INAV (reported by device)"
     assert v["deviceTarget"] == "MATEKF405 (reported by device)" and x["deviceTarget"] == "Unknown (reported by device)"
     assert v["deviceUid"] == f"{uid} (reported by device)" and "verified_devices.json" in v["deviceVerify"]
@@ -173,5 +179,5 @@ def test_d8_forged_ingest_claims_show_unverified(tmp_path):
             t = page.texts(["sourceBadge", "evidenceBanner"])
             hidden = page.eval("document.getElementById('deviceIdentity').hidden")
     assert t["sourceBadge"] == "UNVERIFIED SOURCE"
-    assert "HARDWARE" not in t["sourceBadge"].replace("UNVERIFIED SOURCE", "") and "Live" not in t["evidenceBanner"]
+    assert "ALLOWLISTED" not in t["sourceBadge"] and "Live" not in t["evidenceBanner"]
     assert "not treated as live" in t["evidenceBanner"] and hidden is True

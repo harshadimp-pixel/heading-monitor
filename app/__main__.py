@@ -33,7 +33,7 @@ def main(argv=None):
     ap.add_argument("--verified-devices", default=None,
                     help="allowlist of verified device UIDs (D8; default config/verified_devices.json, ships empty; "
                          "missing or malformed = empty). Only serial samples whose meta.device_identity.uid is listed "
-                         "show HARDWARE")
+                         "show the badge ALLOWLISTED DEVICE (identity not authenticated)")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
     if a.verified_devices is None:

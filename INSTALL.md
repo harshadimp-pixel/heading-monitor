@@ -9,10 +9,10 @@ the "Verification log" at the end.
 |---|---|---|
 | Python | 3.10+ (verified with 3.13.5) | everything |
 | git | any | cloning |
-| Google Chrome or Chromium | any recent (verified with google-chrome) | *optional*: the 5 headless-UI tests in `app/tests/test_app_ui_headless.py` (skipped when absent) and the demo video |
+| Google Chrome or Chromium | any recent (verified with google-chrome) | *optional*: the 7 headless-UI tests in `app/tests/test_app_ui_headless.py` (skipped when absent) and the demo video |
 | Node.js | any recent (verified with 24) | *optional*: 2 app tests that run the front-end JS maths and badge mapping (skipped when absent) |
 | ffmpeg (with libx264) | verified with 7.1 | *optional*: only `reports/demo/make_demo.py` |
-| pyserial | — | *optional*: only `--source serial:<port>` against a real FC (`pip install pyserial`) |
+| pyserial | verified with 3.5 | *optional*. Listed in `requirements.txt`, but nothing else depends on it. It is needed only for `--source serial:<port>` (`firmware_bridge --port`) and for the end-to-end tests over a virtual serial port (pty): 3 in `app/tests`, the bridge's pty tests, and the Auditor's pty/D8 checks. Without it those tests are skipped, not failed |
 
 Playwright is **not** needed. The UI tests drive Chrome over the DevTools protocol with the Python standard library.
 
@@ -23,8 +23,8 @@ cd heading-monitor
 python3 -m venv .venv
 . .venv/bin/activate                              # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
-pip install -r requirements.txt                   # numpy, pytest, jsonschema
-# optional, live hardware only:  pip install pyserial
+pip install -r requirements.txt                   # numpy, pytest, jsonschema, pyserial (pyserial optional)
+# minimal install without pyserial: pip install numpy pytest jsonschema  (serial source + pty tests then skip)
 ```
 The app itself (`app/`) uses only the standard library. numpy is needed by `heading_core` and `sim`.
 
@@ -36,11 +36,11 @@ All commands run from the repo root and open **http://localhost:8080** (`--port 
 | Simulator (default scenario) | `python -m app --source sim` | T3 simulator in real time; badge SIMULATED |
 | Simulator scenario | `python -m app --source sim:<scenario>` | scenarios: `static`, `yaw_spin`, `tilted_spin`, `calibration_dance`, `hard_iron`, `soft_iron`, `motor_interference`, `high_noise` (list: `python -m sim --list-scenarios`) |
 | Replay a recording | `python -m app --source replay:reports/demo/demo_tilted_spin_recording.jsonl [--speed 2] [--loop]` | any Sample JSONL; the badge follows each sample's own `source` |
-| Live FC (untested on hardware) | `python -m app --source serial:/dev/ttyACM0 --baud 115200` | via `python -m firmware_bridge`; needs pyserial and a real FC. Without one it shows FAULT / NO DATA |
+| Serial FC (untested on hardware) | `python -m app --source serial:/dev/ttyACM0 --baud 115200 [--verified-devices FILE]` | via `python -m firmware_bridge`; needs pyserial. A serial link is not proof of hardware (D8): the badge shows UNVERIFIED SOURCE unless the device's self-reported UID is on the allowlist (`config/verified_devices.json`, ships empty), and then reads "ALLOWLISTED DEVICE (identity not authenticated)". Without a device it shows FAULT / NO DATA |
 | External ingest | `python -m app --source ingest` | POST Samples to `/api/sample` (see `app/README.md`) |
 
 Useful options: `--port`, `--rate 20`, `--seed N`, `--sim-duration S`, `--declination DEG`, `--stale 2`,
-`--calibration file.json`. Stop with Ctrl-C.
+`--calibration file.json`, `--verified-devices FILE`. Stop with Ctrl-C.
 
 ## 4. Run the tests
 Run from the repo root with the venv active. Every suite is independent.
@@ -55,8 +55,8 @@ Run from the repo root with the venv active. Every suite is independent.
 | Firmware bridge (T4) | `python -m pytest firmware_bridge/tests -q` | Firmware Specialist |
 | FW quantization research (T4) | `python -m pytest docs/firmware/research -q` | Firmware Specialist |
 
-All suites can also run together. `python -m pytest -q` from the repo root (or listing all seven paths) gave the
-same totals as the per-suite runs on 2026-11-26: 499 passed, 45 skipped. There was no module-name clash.
+All suites can also run together with `python -m pytest -q` from the repo root. The totals equal the sum of the
+per-suite runs (see the verification log). There is no module-name clash.
 The app tests start their own app instances on OS-assigned ports. They never touch port 8080, so they can run
 while the dashboard is open.
 
@@ -65,23 +65,50 @@ while the dashboard is open.
 See `reports/demo/README.md`.
 
 ## Verification log
+### Current counts (2026-11-27, 10:45–11:03 IST, real runs)
+These runs used the shared working tree at HEAD d5374a1, plus the T5 label/D9 change committed right after (see
+TEAM_TRACKER changelog). The Auditor's in-progress `tests/` edits were present in the tree. Two environments, both
+Python 3.13.5, numpy 2.5.5, pytest 9.2.0, jsonschema 4.26.0, google-chrome and Node v24.22.1:
+- **A:** system python without pyserial.
+- **B:** the venv `/tmp/hm-venv`, made with `pip install -r requirements.txt`, so it has pyserial 3.5.
+
+| Suite | A: without pyserial | B: with pyserial |
+|---|---|---|
+| `app/tests` | 82 passed, 3 skipped (the 3 pty end-to-end tests), ×3 | 85 passed in 2 of 3 runs; the other run: 2 failed, 83 passed (see below); 5 reruns: 85 passed each |
+| `tests` (Auditor) | 111 passed, 2 skipped | 173 passed |
+| `heading_core/tests` | 76 passed | 76 passed |
+| `docs/math/sensor-spec` | 23 passed | 23 passed |
+| `sim/tests` | 152 passed, 44 skipped (deliberate; see sim's skip reasons) | 152 passed, 44 skipped |
+| `firmware_bridge/tests` | 136 passed, 2 skipped (pyserial) | 138 passed |
+| `docs/firmware/research` | 4 passed | 4 passed |
+| bare `python -m pytest -q` | 584 passed, 51 skipped (2 min 23 s) | 651 passed, 44 skipped (3 min 27 s) |
+
+In B, one of the first three `app/tests` runs reported 2 failed / 83 passed after 101 s. Its failure details were not
+captured, and it did not recur: 5 further runs in B each gave 85 passed, and so did the other 2 runs. The other 44
+skips in B are sim's deliberate skips.
+
+`reports/audit/integration_run.py <repo> /tmp/...` gave 37/37 in B and 31/37 in A. In A, the 6 checks A10c–A10g and
+A10i report NOT RUN, which counts as FAIL, because pyserial is missing.
+
+### First verification (2026-11-26, fresh clone)
 Real run on 2026-11-26 (IST), following this file on a fresh clone in a fresh venv:
 `git clone /workspace/heading-monitor /tmp/hm-clone` (HEAD 41bb756), then `python3 -m venv /tmp/hm-venv` and
-`pip install -r requirements.txt`. Environment: Python 3.13.5, numpy 2.5.5, pytest 9.2.0, jsonschema 4.26.0,
-google-chrome present, Node v24.22.1, pyserial NOT installed.
+`pip install -r requirements.txt` (no pyserial in requirements at that time). The counts below are historical; the
+current counts are in the table above.
 
-| Suite | Result |
+| Suite | Result (2026-11-26) |
 |---|---|
-| `app/tests` | 45 passed (20.6 s) |
-| `tests` | 105 passed (54.9 s) |
-| `heading_core/tests` | 76 passed (52.2 s) |
+| `app/tests` | 45 passed |
+| `tests` | 105 passed |
+| `heading_core/tests` | 76 passed |
 | `docs/math/sensor-spec` | 23 passed |
-| `sim/tests` | 152 passed, 44 skipped. The skips are deliberate (in sim's own skip reasons: spec cases that are analysis maths or source models the sim does not implement) |
-| `firmware_bridge/tests` | 94 passed, 1 skipped (pyserial absent). With `pip install pyserial`: 95 passed |
+| `sim/tests` | 152 passed, 44 skipped |
+| `firmware_bridge/tests` | 94 passed, 1 skipped (pyserial absent) |
 | `docs/firmware/research` | 4 passed |
-| all seven paths in one run, and bare `python -m pytest -q` | 499 passed, 45 skipped |
+| all seven paths in one run | 499 passed, 45 skipped |
 
-Each source was started with `python -m app --source ... --port 0` and `/api/status` was read after about 5 s:
+Each source was started with `python -m app --source ... --port 0` and `/api/status` was read after about 5 s
+(2026-11-26):
 
 | Source | Result |
 |---|---|
@@ -91,6 +118,4 @@ Each source was started with `python -m app --source ... --port 0` and `/api/sta
 | `serial:/dev/ttyNONE` without pyserial | FAULT: "firmware_bridge exited rc=2 … pyserial …" |
 | `serial:/dev/ttyNONE` with pyserial | FAULT: "could not open port /dev/ttyNONE" |
 
-There were no failures. Fixed in the doc after this run: the old advice to avoid one combined pytest run was wrong,
-because the combined run works. Not verified: `serial:` against a real flight controller (none available; see
-app/README LIMITATIONS 3).
+Not verified: `serial:` against a real flight controller (none available; see app/README LIMITATIONS 3 and 11).

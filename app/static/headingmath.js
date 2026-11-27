@@ -2,10 +2,15 @@
 (function (root) {
   "use strict";
   const CARD16 = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
-  /** Text of the one badge that means "allowlisted device on the app's own serial link" (D8). Single constant so the
-   *  pending Auditor decision (HARDWARE vs e.g. "ALLOWLISTED DEVICE") is a one-line change. */
-  const HARDWARE_LABEL = "HARDWARE";
-  const SOURCE_LABEL = { sim: "SIMULATED", replay: "REPLAY", hardware: HARDWARE_LABEL };
+  /** Displayed badge for a live serial device whose self-reported UID is on the local allowlist (D8). Auditor
+   *  decision accepted by the PM in d5374a1 (replaces "HARDWARE"). Internally the data stays source "hardware" /
+   *  provenance "verified". This constant is the ONLY place the badge text is defined. */
+  const HARDWARE_LABEL = "ALLOWLISTED DEVICE (identity not authenticated)";
+  /** Evidence banner shown with HARDWARE_LABEL (exact text from d5374a1). */
+  const ALLOWLISTED_BANNER = "Live serial device whose self-reported UID is on the local allowlist. " +
+    "The UID is not cryptographic proof; this is not hardware verification.";
+  /** Contract source-name mapping (sample.source -> its name). NOT the displayed badge: the badge is badgeInfo(). */
+  const SOURCE_LABEL = { sim: "SIMULATED", replay: "REPLAY", hardware: "HARDWARE" };
   /** DATA SOURCE badge text: a pure mapping of sample.source; anything else -> null (UI shows NO DATA) */
   function badgeLabel(source) { return Object.prototype.hasOwnProperty.call(SOURCE_LABEL, source) ? SOURCE_LABEL[source] : null; }
   const ORIGIN_WORD = { hardware: "hardware", sim: "simulator" };
@@ -13,8 +18,9 @@
    *  - sim                      -> SIMULATED
    *  - replay + original_source -> "REPLAY (recorded hardware)" / "REPLAY (recorded simulator)"; else "REPLAY"
    *  Inputs must be SERVER-computed record fields (record.transport, record.device_verified); never sample/meta claims.
-   *  - hardware via serial AND deviceVerified === true (uid in config/verified_devices.json, D8) -> HARDWARE
-   *    (the ONLY path that shows HARDWARE / live; a serial link alone is not proof of hardware)
+   *  - hardware via serial AND deviceVerified === true (uid in config/verified_devices.json, D8) -> HARDWARE_LABEL
+   *    (allowlisted device, identity not authenticated; the ONLY live path; a serial link alone is not proof of
+   *    hardware, and a UID match is not hardware authentication)
    *  - hardware any other way (serial unverified, replay, ingest, unknown) -> "UNVERIFIED SOURCE"
    *  - anything else            -> null (UI shows NO DATA)
    *  Returns {text, cls, live} or null. */
@@ -41,6 +47,6 @@
   /** level heading (NED body: x fwd, y right, z down) = atan2(-By, Bx) */
   function levelHeading(bx, by) { return wrap360(Math.atan2(-by, bx) * 180 / Math.PI); }
   function cardinal(h) { return isNum(h) ? CARD16[Math.round(roundHeading(h) / 22.5) % 16] : ""; }
-  const api = { HARDWARE_LABEL, SOURCE_LABEL, badgeLabel, badgeInfo, wrap360, angleDiff, roundHeading, levelHeading, cardinal, isNum };
+  const api = { HARDWARE_LABEL, ALLOWLISTED_BANNER, SOURCE_LABEL, badgeLabel, badgeInfo, wrap360, angleDiff, roundHeading, levelHeading, cardinal, isNum };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.HeadingMath = api;
 })(this);

@@ -103,7 +103,7 @@ def test_serial_allowlisted_uid_on_own_source_is_hardware(allowlist):
     hub.source_emit(forged("hardware"))
     r = hub.latest
     assert (r["device_status"], *_flags(r)) == ("verified", True, True)
-    assert _badge(r) == {"text": "HARDWARE", "cls": "hardware", "live": True}
+    assert _badge(r) == {"text": "ALLOWLISTED DEVICE (identity not authenticated)", "cls": "hardware", "live": True}
 
 
 def test_serial_sim_claiming_verified_is_simulated(allowlist):
@@ -143,7 +143,14 @@ def test_frontend_uses_only_server_fields():
                          or c.replace(" ", "").endswith(".transport,x.device_verified") for c in calls)
 
 
-def test_hardware_label_is_a_single_constant():
+def test_allowlisted_label_is_a_single_constant():
+    """Label decision d5374a1: 'ALLOWLISTED DEVICE (identity not authenticated)', defined once (HARDWARE_LABEL).
+    The plain word HARDWARE is never a displayed badge any more (SOURCE_LABEL is only the contract source-name map)."""
     js = open(os.path.join(ROOT, "app", "static", "headingmath.js")).read()
-    assert js.count('"HARDWARE"') == 1 and 'const HARDWARE_LABEL = "HARDWARE";' in js
-    assert _node_badge_info([["hardware", None, "serial", True]])[0]["text"] == "HARDWARE"
+    assert js.count("ALLOWLISTED DEVICE (identity not authenticated)") == 1 and 'const HARDWARE_LABEL = "ALLOWLISTED DEVICE (identity not authenticated)";' in js
+    for f in ("app.js", "index.html"):
+        assert "ALLOWLISTED DEVICE (identity not authenticated)" not in open(os.path.join(ROOT, "app", "static", f)).read()
+    texts = [b and b["text"] for b in _node_badge_info(
+        [[s, o, t, v] for s in ("hardware", "sim", "replay") for o in (None, "hardware") for t in ("serial", "ingest", "replay", "sim")
+         for v in (True, False)])]
+    assert "HARDWARE" not in texts and texts.count("ALLOWLISTED DEVICE (identity not authenticated)") == 2

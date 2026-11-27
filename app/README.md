@@ -69,7 +69,7 @@ python -m pytest app/tests -q
 
 | Panel | Contents |
 |---|---|
-| Header | **DATA SOURCE badge**, derived from the latest sample's `source` field (plus `meta.original_source`; see D6 below): SIMULATED (`sim`), REPLAY (recorded hardware) (`replay` + original_source `hardware`), REPLAY (recorded simulator), REPLAY, and HARDWARE only for `hardware` samples from the app's serial source whose device is verified (D8: bridge `meta.provenance == "verified"` AND the reported UID is in the allowlist). Every other `hardware` sample (serial unverified, ingest) shows UNVERIFIED SOURCE and is never presented as live. Over serial, the device's board, variant, target and UID are shown under the badge, each labelled "reported by device". NO DATA when nothing current exists. The transport (CLI `--source`) is shown in small text. An evidence banner follows the badge; for replayed data it says the data is recorded, not a live sensor stream. |
+| Header | **DATA SOURCE badge**, derived from the latest sample's `source` field (plus `meta.original_source`; see D6 below): SIMULATED (`sim`), REPLAY (recorded hardware) (`replay` + original_source `hardware`), REPLAY (recorded simulator), REPLAY, and **ALLOWLISTED DEVICE (identity not authenticated)** (formerly HARDWARE; label decision d5374a1) only for `hardware` samples from the app's own serial source whose device is verified (D8: bridge `meta.provenance == "verified"` AND the reported UID is in the app's allowlist), with the banner "Live serial device whose self-reported UID is on the local allowlist. The UID is not cryptographic proof; this is not hardware verification." Internally such samples stay `source: "hardware"`, `device_status: "verified"`. Every other `hardware` sample (serial unverified, ingest) shows UNVERIFIED SOURCE and is never presented as live. Over serial, the device's board, variant, target and UID are shown under the badge, each labelled "reported by device". NO DATA when nothing current exists. The transport (CLI `--source`) is shown in small text. An evidence banner follows the badge; for replayed data it says the data is recorded, not a live sensor stream. |
 | Heading | SVG compass rose: ticks every 10°, numbers every 30°, N/E/S/W. It has three distinct indicators: measured heading needle in cyan (heading_core `heading_deg`: filtered estimate, using the calibration when one is applied), unfiltered needle in grey (heading_core `heading_raw_deg`: instantaneous, before smoothing), and the reference marker as an amber dashed line with a rim triangle. Below it: the numeric measured and unfiltered heading with a 16-point cardinal; calibration state is shown in the status panel and \|B\| raw vs calibrated in the field panel; a reference heading input with slider, "use current", clear, or click on the rose; and the signed deviation (measured − reference) wrapped to (−180, 180]. |
 | Sensor status & accuracy | Status: OK / DEGRADED / FAULT / STALE / NO DATA, with the reason. Also: last-sample age, rate, accepted/invalid counts, heading_core quality (0–1) with quality bar, short-term noise 1σ, calibration state and residual, error versus sim truth (simulated data only), and warnings. |
 | Roll / pitch | Artificial-horizon canvas plus numbers, taken from the HeadingEstimate. |
@@ -143,11 +143,12 @@ Applied by the hub to every sample on the serial transport (`app/provenance.py`)
 4. UID not in the allowlist → UNVERIFIED (`uid_not_listed`)
 5. UID listed but the bridge did not set `meta.provenance: "verified"` (or set nothing, e.g. an older bridge) →
    UNVERIFIED (`bridge_unverified`)
-6. otherwise → HARDWARE (`verified`, `live_hardware: true`).
+6. otherwise → **ALLOWLISTED DEVICE (identity not authenticated)** (`device_status: verified`, `live_hardware: true`). "Verified" here means only that the
+   self-reported UID is on an administratively trusted list (F11): not hardware authentication.
 
 **Trust boundary (D8 hardening).** The sample's own claims are never trusted. `meta.provenance: "verified"`,
 `meta.live_hardware`, or top-level `live_hardware` / `device_verified` / `transport` / `device_status` in a sample
-cannot make it HARDWARE. The server builds each record from a fixed whitelist and computes `transport`,
+cannot make it allowlisted. The server builds each record from a fixed whitelist and computes `transport`,
 `device_status`, `device_verified` and `live_hardware` itself.
 
 Verification needs both of these:
@@ -156,18 +157,21 @@ Verification needs both of these:
 2. The app re-checks the reported UID against its own allowlist (`--verified-devices`).
 
 A serial-hub sample that reaches `hub.emit` any other way gets `device_status: untrusted_channel` and is not verified.
-The bridge's `provenance: "verified"` is an extra necessary condition (rule 5). It can only remove HARDWARE, never
-grant it.
+The bridge's `provenance: "verified"` is an extra necessary condition (rule 5). It can only remove the allowlisted
+badge, never grant it.
 
 The frontend's `badgeInfo` takes only the server-computed `record.transport` and `record.device_verified`. It never
 reads `meta`, `provenance` or `live_hardware`.
 
-The badge text is a single constant, `HARDWARE_LABEL` in `static/headingmath.js`. The Auditor is still deciding
-between HARDWARE and e.g. ALLOWLISTED DEVICE, so the label is unchanged for now.
+**Label (Auditor decision, accepted by the PM in d5374a1).** The badge reads "ALLOWLISTED DEVICE (identity not authenticated)". It is defined once, as
+`HARDWARE_LABEL` in `static/headingmath.js`; the banner text is `ALLOWLISTED_BANNER` in the same file. The plain word
+HARDWARE is no longer ever displayed. `badgeLabel`/`SOURCE_LABEL` remain only as the contract source-name map
+(`hardware` → "HARDWARE"), which the Auditor's `tests/test_t6_app.py` checks; the page never shows it. The badge
+uses smaller type for this label and may wrap to two lines; it was checked at 1440 px and 700 px wide (no overflow).
 The allowlist is read with `firmware_bridge.identity.load_allowlist` (fail closed: missing/malformed = empty); a
 fail-closed mirror is used only if that module is not importable. `/api/status` shows `verified_devices` (path, count,
 loader) and `source_status.command` (the bridge command line, including `--verified-devices`). Replay (D6) and ingest
-never consult the allowlist and never show HARDWARE. Records and CSV carry `device_status`, `device_verified` and the
+never consult the allowlist and are never allowlisted. Records and CSV carry `device_status`, `device_verified` and the
 reported `device_board/variant/uid` (CSV `*_reported`).
 
 CSV columns: `recv_time_iso, t, source, heading_deg, heading_raw_deg, reference_deg, deviation_deg, roll_deg,
@@ -208,10 +212,13 @@ The headless smoke tests need no browser:
   * allowlist loader fails closed; the shipped allowlist is empty;
   * every serial rule: verified, `uid_not_listed`, `no_uid`, `no_identity`, `bridge_unverified`, and SIML/SIMF → sim;
   * records and CSV;
-  * the default allowlist never gives HARDWARE;
+  * the default allowlist never gives the allowlisted badge;
   * replay and ingest are unchanged;
   * the bridge command line carries `--verified-devices <same file>`;
-  * end-to-end over a pty with the bridge's FakeFC (3 cases; these skip without pyserial).
+  * `test_e2e_virtual_pty_allowlist_mechanism_and_F11_spoof_limitation_not_hardware_validation` (D9; 3 cases):
+    the real bridge on a virtual pty driven by the bridge's FakeFC script. It demonstrates the allowlist mechanism
+    and the spoofable-UID limitation F11 (a script reporting an allowlisted UID gets the allowlisted badge). It is
+    NOT hardware validation. These cases skip without pyserial.
 * D8 hardening (`test_app_d8_forged_claims.py`): samples claiming `provenance:"verified"` and `live_hardware:true`,
   with an allowlisted UID:
   * ingested → UNVERIFIED SOURCE;
@@ -219,7 +226,7 @@ The headless smoke tests need no browser:
   * simulated (ingest, replay or serial) → SIMULATED;
   * serial with a UID not in the app's allowlist → UNVERIFIED;
   * serial outside the app's own source → `untrusted_channel`;
-  * serial with an allowlisted UID → HARDWARE.
+  * serial with an allowlisted UID → ALLOWLISTED DEVICE (identity not authenticated).
   It also checks that the record never copies sample claims, that `app.js` reads no sample-claim fields, and that the
   label is a single constant.
 * Headless Chrome D8 checks: `test_d8_serial_badges_and_reported_by_device_labels` and
@@ -259,7 +266,7 @@ The headless-Chrome DOM tests are deterministic:
    `source:"sim"` and shows SIMULATED, with the transport shown as replay. The relabel mirrors the three fields of
    `firmware_bridge --replay` rather than importing it, because the bridge's Python helper is not an ARCHITECTURE
    interface (CLI only) and it relabels sim too. The app trusts `meta.original_source` as written in the file; a file
-   could claim anything. HARDWARE is shown only for a verified serial device (D8, item 11).
+   could claim anything. ALLOWLISTED DEVICE (identity not authenticated) is shown only for a verified serial device (D8, item 11).
 5. **Stubs.** `_stubs.py` (min/max hard-iron + diagonal scale calibration, no smoothing, simple quality, simple
    simulator) is used only when the real module is missing or raises `NotImplementedError`. In the current repo state,
    heading_core (T2) and sim (T3) are real and the stubs are **inactive** (the UI shows which backend is in use).
@@ -274,8 +281,9 @@ The headless-Chrome DOM tests are deterministic:
 10. **UI verification** is automated (HTTP/WebSocket tests plus a headless-Chrome DOM check plus screenshots).
     Human usability has not been assessed. The layout was checked at 1600 px width only.
 11. **D8 device identity is self-reported.** Board, variant, target and UID come from the device (MSP) and can be
-    spoofed; a UID is not cryptographic proof. HARDWARE needs the bridge's `provenance: "verified"` AND the UID in
-    `config/verified_devices.json`, which ships empty, so today nothing displays HARDWARE.
+    spoofed; a UID is not cryptographic proof. The allowlisted badge ("ALLOWLISTED DEVICE (identity not authenticated)", formerly HARDWARE) needs the bridge's
+    `provenance: "verified"` AND the UID in `config/verified_devices.json`, which ships empty, so today nothing
+    displays it.
     "Verified" means only that a self-reported UID is on an administratively trusted list. It is not
     authentication and not a check that the measurements are valid. Forged claims in the sample itself
     (`provenance`, `live_hardware`) are ignored (tests: `test_app_d8_forged_claims.py`). A process that controls the

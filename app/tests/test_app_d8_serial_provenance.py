@@ -1,11 +1,12 @@
 """D8 (Codex audit via PM, ARCHITECTURE.md 2026-11-27): a serial connection is not proof of hardware.
 
 Paths covered:
-  serial + uid in a (temp) allowlist      -> HARDWARE (live_hardware true)
+  serial + uid in a (temp) allowlist      -> ALLOWLISTED DEVICE (identity not authenticated), live_hardware true;
+                                             an administrative trust decision, not hardware authentication (F11)
   serial + uid not in the allowlist       -> UNVERIFIED SOURCE
   serial + no device identity / no uid    -> UNVERIFIED SOURCE (board/variant 'reported by device')
   serial + variant SIML or board SIMF     -> SIMULATED (source mapped to "sim")
-  shipped/missing/malformed allowlist     -> empty -> never HARDWARE
+  shipped/missing/malformed allowlist     -> empty -> never allowlisted
   replay (hardware + sim) and ingest      -> unchanged (D6)
 "Virtual serial": an in-process Hub whose transport is serial (samples injected exactly as the serial source
 would emit them), plus an end-to-end run through the real firmware_bridge on a pty driven by its FakeFC
@@ -225,13 +226,27 @@ def _fake_fc_kwargs(variant, board, uid_hex):
     return kw, d8
 
 
-@pytest.mark.parametrize("variant,board,uid_hex", [("INAV", "MKF4", UID_OK),
-                                                   ("INAV", "MKF4", "ffffffffffffffffffffffff"),
-                                                   ("SIML", "SIMF", UID_OK)])
-def test_e2e_bridge_over_pty(variant, board, uid_hex, allowlist):
-    """Real firmware_bridge --port on a pty driven by FakeFC (virtual serial, no hardware); the app passes its temp
-    allowlist to the bridge. Expected with the D8 bridge: listed uid -> HARDWARE; unlisted -> UNVERIFIED;
-    SIML/SIMF -> SIMULATED even though its uid is listed. With a pre-D8 bridge (no identity): never HARDWARE."""
+@pytest.mark.parametrize("variant,board,uid_hex", [
+    pytest.param("INAV", "MKF4", UID_OK, id="spoofed_allowlisted_uid_passes_LIMITATION_F11"),
+    pytest.param("INAV", "MKF4", "ffffffffffffffffffffffff", id="unlisted_uid_unverified"),
+    pytest.param("SIML", "SIMF", UID_OK, id="fake_fc_simulated_even_if_uid_listed"),
+])
+def test_e2e_virtual_pty_allowlist_mechanism_and_F11_spoof_limitation_not_hardware_validation(
+        variant, board, uid_hex, allowlist):
+    """LIMITATION DEMONSTRATION (F11), NOT hardware validation (D9).
+
+    There is NO hardware here. The real firmware_bridge --port reads a virtual pty driven by the bridge's own FakeFC
+    script, and the app passes its temporary allowlist to the bridge with --verified-devices.
+    - The first case shows the allowlist MECHANISM and the spoofable-UID LIMITATION F11. A script claims INAV/MKF4
+      and reports a UID that is on the allowlist, and the app shows the allowlisted live badge.
+      "ALLOWLISTED DEVICE (identity not authenticated)" means only that a self-reported UID is on an administratively
+      trusted list. It is not hardware authentication and does not validate any measurement. Any device or script
+      can report any UID.
+    - An unlisted UID gives UNVERIFIED SOURCE.
+    - SIML/SIMF gives SIMULATED even if its UID is listed.
+    With a pre-D8 bridge (no identity reported), nothing is ever allowlisted.
+    Expectations match the Auditor's tests/test_t6_d8_provenance.py::
+    test_d8_F11_spoof_virtual_pty_inav_mkf4_with_allowlisted_uid_passes_allowlist (8343656)."""
     pytest.importorskip("serial", reason="pyserial not installed (optional; needed for the bridge's --port mode)")
     kw, d8 = _fake_fc_kwargs(variant, board, uid_hex)
     stop = threading.Event()
@@ -245,17 +260,21 @@ def test_e2e_bridge_over_pty(variant, board, uid_hex, allowlist):
         th.join(2)
         os.close(master)
         os.close(slave)
-    assert recs and all(r["transport"] == "serial" for r in recs)
+    assert recs and all(r["transport"] == "serial" for r in recs), "virtual pty run produced no serial records"
     r = recs[-1]
+    got = (r["source"], r["device_status"], r["live_hardware"])
     if variant == "SIML":
-        assert (r["source"], r["device_status"], r["live_hardware"]) == ("sim", "simulator", False)
+        assert got == ("sim", "simulator", False), f"fake FC (SIML/SIMF) must be SIMULATED even with a listed UID: {got}"
     elif not d8:
-        assert (r["source"], r["device_status"], r["live_hardware"]) == ("hardware", "no_identity", False)
+        assert got == ("hardware", "no_identity", False), f"pre-D8 bridge: no identity, never allowlisted: {got}"
     elif uid_hex == UID_OK:
-        assert (r["source"], r["device_status"], r["live_hardware"]) == ("hardware", "verified", True)
-        assert (r["device_board"], r["device_variant"], r["device_uid"]) == ("MKF4", "INAV", UID_OK)
+        assert got == ("hardware", "verified", True) and r["device_verified"] is True, (
+            f"F11 spoof NOT reproduced: a script reporting an allowlisted UID over a virtual pty should pass the "
+            f"allowlist (this demonstrates the limitation; it is not hardware validation): {got}")
+        assert (r["device_board"], r["device_variant"], r["device_uid"]) == ("MKF4", "INAV", UID_OK), \
+            "identity shown must be exactly what the script self-reported"
     else:
-        assert (r["source"], r["device_status"], r["live_hardware"]) == ("hardware", "uid_not_listed", False)
+        assert got == ("hardware", "uid_not_listed", False), f"UID not on the allowlist must be UNVERIFIED: {got}"
 
 
 # ---------------------------------------------------------------- app and bridge use the SAME allowlist file

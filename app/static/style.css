@@ -12,6 +12,9 @@ code{background:#0f1720;padding:1px 4px;border-radius:4px;font-size:12px}
 .source-badge.sim{color:#1a1203;background:var(--sim);border-color:#fcd34d}
 .source-badge.replay{color:#fff;background:var(--replay);border-color:#93c5fd}
 .source-badge.hardware{color:#03140e;background:var(--hw);border-color:#6ee7b7}
+/* D8 label 'ALLOWLISTED DEVICE (identity not authenticated)' is long: smaller type, may wrap, never overflows */
+.source-badge{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere}
+.source-badge.hardware{font-size:18px;letter-spacing:1px;line-height:1.25;white-space:normal;max-width:460px}
 .source-badge.unverified{color:#fff;background:#7f1d1d;border-color:#fca5a5}
 .source-badge.none{color:var(--muted);background:#1b2430;border-color:#334155}
 .source-badge.stale{opacity:.45;filter:grayscale(.6)}

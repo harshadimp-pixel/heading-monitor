@@ -5,12 +5,14 @@ App-side adapter, applied by the hub to every sample that arrives over the seria
   * meta.device_identity.uid is in config/verified_devices.json                 -> stays "hardware", verified
   * anything else (no identity, no uid, uid not listed, allowlist missing/bad)  -> stays "hardware", NOT verified;
     the UI shows UNVERIFIED SOURCE with board/variant labelled "reported by device".
-HARDWARE is displayed only for verified samples. config/verified_devices.json ships empty, so today nothing shows HARDWARE.
+Only verified samples get the allowlisted badge "ALLOWLISTED DEVICE (identity not authenticated)" (formerly HARDWARE,
+d5374a1). "verified" means only that a self-reported UID is on an administratively trusted list: not hardware
+authentication, not measurement validation (F11). config/verified_devices.json ships empty, so today nothing shows it.
 
 Ownership: firmware_bridge (T4) owns the identity query, the field names and the allowlist loader/file
 (config/verified_devices.json). This module uses firmware_bridge.identity.load_allowlist/normalise_uid when they are
-importable and otherwise falls back to a fail-closed mirror of the same format. Points not fixed by ARCHITECTURE.md
-are listed in OPEN_QUESTIONS.
+importable and otherwise falls back to a fail-closed mirror of the same format. The interface is ARCHITECTURE.md D8 item 6; the
+remaining points are listed in OPEN_QUESTIONS.
 """
 from __future__ import annotations
 
@@ -31,18 +33,15 @@ try:  # pragma: no cover - depends on what T4 has landed
 except Exception:  # pragma: no cover
     _fw = None
 
-# Field names as used by firmware_bridge/identity.py (DeviceIdentity.as_meta), e37430b.
-# ARCHITECTURE.md D8 itself names only meta.device_identity and the UID; see OPEN_QUESTIONS.
+# Interface fixed by ARCHITECTURE.md D8 item 6 (53f8bf7, completed in 03ceee3): meta.device_identity keys (fc_variant,
+# board_id, target_name, uid, ...); uid exactly 24 hex chars (12-byte MSP_UID), normalised then exact match; allowlist
+# = top-level object with a "devices" list, loaded by firmware_bridge.identity.load_allowlist (app falls back to its own
+# fail-closed copy); bridge flag --verified-devices FILE, given the same file by the app.
 VARIANT_KEY, BOARD_KEY, UID_KEY = "fc_variant", "board_id", "uid"
+# Remaining app-side choice not written in ARCHITECTURE.md:
 OPEN_QUESTIONS = (
-    "ARCHITECTURE.md D8 does not name the device_identity keys; the app uses fc_variant / board_id / uid / "
-    "target_name and meta.provenance as in docs/firmware/D8_PROVENANCE.md (committed by Firmware in e37430b), "
-    "with meta.fc_variant as a fallback for the variant",
-    "uid format: 24 lowercase hex chars (12 MSP_UID bytes, wire order), normalised as in identity.normalise_uid",
-    "allowlist schema: {\"devices\": [{\"uid\": ..., \"label\": ...}]} (as in config/verified_devices.json)",
-    "the Python loader (firmware_bridge.identity.load_allowlist) is not listed as an ARCHITECTURE interface",
-    "app always passes its allowlist file to firmware_bridge --verified-devices (when the D8 bridge is importable); "
-    "the flag is not in the ARCHITECTURE CLI line yet",
+    "meta.fc_variant (pre-D8 bridge field) is used as a fallback for the reported variant when device_identity is absent; "
+    "it is display-only and never contributes to verification",
 )
 
 
@@ -82,7 +81,7 @@ def load_verified_devices(path: str | None = None):
     uids = set(entries)
     info["count"] = len(uids)
     if not info["exists"]:
-        info["error"] = "file not found; treated as empty (nothing can show HARDWARE)"
+        info["error"] = "file not found; treated as empty (no device can be allowlisted)"
     elif not uids:
         try:
             with open(path, encoding="utf-8") as f:
@@ -110,7 +109,7 @@ def reported_identity(sample: dict) -> dict:
 
 def apply_serial_provenance(sample: dict, allowlist: set):
     """Return (sample_out, device) for a sample received over the serial transport. Input is not mutated.
-    HARDWARE needs BOTH: the bridge classified the sample meta.provenance == "verified" (docs/firmware/D8_PROVENANCE.md
+    The allowlisted badge (formerly HARDWARE) needs BOTH: the bridge classified the sample meta.provenance == "verified" (docs/firmware/D8_PROVENANCE.md
     badge rule 3) AND the reported uid is in the app's own allowlist (defence in depth). Missing provenance (older
     bridge, other producers) is never verified. SIML/SIMF always wins (anti-spoof)."""
     rep = reported_identity(sample)

@@ -61,6 +61,27 @@ Demo metrics `[SIMULATED]` (from `reports/demo/demo_metrics.json`): mean |headin
 - Tests: `app/tests/test_app_d8_forged_claims.py` (12), plus the headless test
   `test_d8_forged_ingest_claims_show_unverified`.
 
+### D8 label decision + D9 (2026-11-27; label from the Auditor, accepted by the PM in `d5374a1`)
+- **Badge and banner:**
+  - The allowlisted badge now reads **"ALLOWLISTED DEVICE (identity not authenticated)"**, defined once as
+    `HARDWARE_LABEL` in `app/static/headingmath.js`.
+  - Banner, exactly: "Live serial device whose self-reported UID is on the local allowlist. The UID is not
+    cryptographic proof; this is not hardware verification." It is defined once as `ALLOWLISTED_BANNER`.
+  - Internally nothing changed: `source: "hardware"`, `device_status: "verified"`, `live_hardware: true`.
+  - The bare word HARDWARE is never displayed. `badgeLabel`/`SOURCE_LABEL` stay as the contract source-name map that
+    the Auditor's `tests/test_t6_app.py` uses.
+  - The badge uses smaller type and may wrap. I checked it in screenshots at 1440 px and 700 px: two lines, no
+    overflow. A headless test asserts there is no overflow.
+- **D9:** the pty end-to-end test is renamed
+  `test_e2e_virtual_pty_allowlist_mechanism_and_F11_spoof_limitation_not_hardware_validation`.
+  - Its case ids include `spoofed_allowlisted_uid_passes_LIMITATION_F11`.
+  - Its docstring and assert messages say it demonstrates the allowlist mechanism and the spoofable-UID limitation
+    F11, not hardware validation.
+  - Its expectations match the Auditor's F11 test (8343656).
+  - No Auditor test or script references the old name; only TEAM_TRACKER and an old junit artifact mention it.
+- **OPEN_QUESTIONS** in `app/provenance.py` is trimmed to the one point ARCHITECTURE D8 item 6
+  (53f8bf7, 03ceee3) does not cover: the display-only `meta.fc_variant` fallback.
+
 ## 2. Tests actually executed
 All from the repo root. Environment: Python 3.13.5, pytest 9.2.0, numpy 2.5.5, jsonschema 4.26.0, google-chrome (headless), Node v24.22.1. Results copied from the console output.
 
@@ -131,6 +152,17 @@ Screenshots in this commit were produced by `/workspace/heading-monitor-runlogs/
   - pyserial venv: 35/35. A10a–A10h all passed, including A10f, the allowlisted-UID spoof demonstration.
   - System python: 29/30. A10c did not run because pyserial is missing.
 - This is my own run of the Auditor's script, not the Auditor's sign-off.
+
+### Label + D9 runs (2026-11-27, 10:45–11:08 IST, real output)
+| Run | System python, no pyserial | Venv with pyserial |
+|---|---|---|
+| `app/tests` | 82 passed, 3 skipped, ×3 | 85 passed in 2 of the first 3 runs; the other run: 2 failed, 83 passed in 101 s (details not captured); 5 reruns: 85 passed each |
+| Headless browser file | 7 passed, ×3 | — |
+| `tests/` | 111 passed, 2 skipped | 173 passed |
+| Whole repo | 584 passed, 51 skipped | 651 passed, 44 skipped |
+| `integration_run.py`, output to /tmp | 31/37 (A10c–g and A10i NOT RUN, no pyserial) | 37/37 |
+
+These are my runs, not the Auditor's sign-off.
 
 ## 3. Open limitations
 Full text in `app/README.md` → LIMITATIONS (mirrored in the T5 row):

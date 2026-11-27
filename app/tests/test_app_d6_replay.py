@@ -112,7 +112,8 @@ def _node_badge_info(cases):
 
 
 def test_frontend_badge_info_mapping():
-    """D6 + D8: HARDWARE only for source hardware via serial with a verified device (uid in the allowlist)."""
+    """D6 + D8: the allowlisted-device badge (formerly HARDWARE) only for source hardware via serial with a verified
+    device (uid on the allowlist)."""
     cases = [["sim", None, "sim", False], ["sim", None, "replay", False], ["replay", "hardware", "replay", False],
              ["replay", "sim", "replay", False], ["replay", None, "ingest", False], ["hardware", None, "serial", True],
              ["hardware", None, "ingest", True], ["hardware", None, "replay", True], ["hardware", None, None, True],
@@ -123,7 +124,7 @@ def test_frontend_badge_info_mapping():
     text = [g and g["text"] for g in got]
     live = [g and g["live"] for g in got]
     assert text == ["SIMULATED", "SIMULATED", "REPLAY (recorded hardware)", "REPLAY (recorded simulator)", "REPLAY",
-                    "HARDWARE", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", None, None, None,
+                    "ALLOWLISTED DEVICE (identity not authenticated)", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", None, None, None,
                     "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", "SIMULATED"]
     assert [i for i, v in enumerate(live) if v] == [5]          # live hardware only: serial + verified device
-    assert all("HARDWARE" != t for i, t in enumerate(text) if i != 5)
+    assert all(t is None or ("HARDWARE" not in t and "ALLOWLISTED" not in t) for i, t in enumerate(text) if i != 5)
