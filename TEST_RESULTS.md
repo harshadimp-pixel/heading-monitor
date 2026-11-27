@@ -7,7 +7,7 @@ Environment: Linux box. Private venvs (under /workspace/audit, never /tmp/hm-ven
 Code: fresh `git clone`s or clean `git archive <sha>` exports (never the shared working tree), plus T6 `tests/` as committed with this file. Latest run by T6 on 2026-11-27, 11:54–12:17 IST (v5 final, fresh clones of 03fc993 and b1a2153).
 
 ## v5 FINAL run (flake fix 3cf0d1f): 2026-11-27, 11:54–12:17 IST
-Code: **fresh `git clone` (porcelain-clean) at 03fc993** = UI's 3cf0d1f (flake fix, on 479a72c) + T6's D11 helper fix (tests only), and confirmation at **b1a2153** (+ T6's D13 helper fix, tests only). No later UI commit was pending (origin checked). Private venvs; private HOME/TMPDIR under /workspace/audit; every app on an ephemeral PID-verified port, never 8080.
+Code: **fresh `git clone` (porcelain-clean) at 03fc993** = UI's 3cf0d1f (flake fix, on 479a72c) + T6's D11 helper fix (tests only), and confirmation at **b1a2153** (+ PM docs-only 1f3883e/83f38b7 and T6's D13 helper fix, tests only; no product-code change). No later UI commit was pending (origin checked). Private venvs; private HOME/TMPDIR under /workspace/audit; every app on an ephemeral PID-verified port, never 8080.
 
 | Date (IST) | Test / suite | Command | Commit | Result | Evidence |
 |---|---|---|---|---|---|

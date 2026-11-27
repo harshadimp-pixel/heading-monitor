@@ -3,7 +3,7 @@
 Auditor: Testing & Technical Auditor (T6). Updated 2026-11-27 ~12:20 IST.
 **Code under test:** fresh `git clone`s (porcelain-clean) or clean `git archive` exports only, never the shared working tree. Private venvs under /workspace/audit (never /tmp/hm-venv), private TMPDIR/HOME per run.
 - **Final code HEAD `03fc993`** = UI's flake fix `3cf0d1f` (on 479a72c: label + D9) + T6's D11 helper fix (tests only). Fresh clone: full suite on Python 3.13.5, 3.12.16 and 3.10.22, integration with and without pyserial, concurrent-run stress before/after the fix (§2i). No UI/firmware commit after 3cf0d1f was pending (origin checked at ~12:10 IST).
-- **Confirmation at `b1a2153`** (= 03fc993 + T6's D13 test-helper fix, no product-code change), fresh clone, Python 3.13.5: suite 652 passed, 44 skipped, 0 failed; integration 37/37; no-pyserial 31/37.
+- **Confirmation at `b1a2153`** (= 03fc993 + PM docs-only 1f3883e/83f38b7 (PROJECT_STATUS.md) + T6's D13 test-helper fix; no product-code change), fresh clone, Python 3.13.5: suite 652 passed, 44 skipped, 0 failed; integration 37/37; no-pyserial 31/37.
 - **Earlier v4 run at `1ddd6b9`** (= 479a72c + T6 tests): 651/44/0 on all three Pythons, integration 37/37 and 31/37. The provisional run at `25e308d` (before the label) is kept in TEST_RESULTS.md.
 - **Earlier v4 run at `8343656`** (edc3ee0 + T6 commits): suite 638/44/0 on all three Python versions; integration 35/35 (old A10f criterion). Kept as history in TEST_RESULTS.md.
 - **v3.x** (0c25062 / f058c9a) is kept below as history. Its L-SER acceptance is **WITHDRAWN** (superseded by D8).
