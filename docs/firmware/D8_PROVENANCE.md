@@ -5,14 +5,14 @@ Implemented in `firmware_bridge` (`identity.py`, `sample.py`, `bridge.py`). **No
 `meta` (an open object in `contracts/sample.schema.json`); `source` keeps its enum `sim | replay | hardware`.
 Evidence: source-derived + hand-built frames + simulated. Nothing here is hardware-verified.
 
-> **What `verified` means:** `provenance: "verified"` means only that the device's self-reported UID matches an administratively trusted list (`config/verified_devices.json`). It is NOT hardware authentication or proof of device identity, and NOT validation of current measurements or sensor correctness. The production allowlist stays empty. Whether the UI label for this case becomes ALLOWLISTED DEVICE is pending the Auditor's decision (no code or label change yet).
+> **What `verified` means:** `provenance: "verified"` means only that the device's self-reported UID matches an administratively trusted list (`config/verified_devices.json`). It is NOT hardware authentication or proof of device identity, and NOT validation of current measurements or sensor correctness. The production allowlist stays empty. **Display label (decided, d5374a1):** the app shows this case as **"ALLOWLISTED DEVICE (identity not authenticated)"**, not HARDWARE. Internal values are unchanged: `source: "hardware"`, `provenance: "verified"`.
 
 ## Fields on every Sample the bridge emits
 
 | Field | Values | Meaning |
 |---|---|---|
 | `source` | `sim` / `hardware` / `replay` | `sim` for the fake FC **or any device reporting `SIML`/`SIMF`**; `hardware` for any other live serial device (verified or not); `replay` for `--replay` |
-| `meta.provenance` | `"simulated"` / `"unverified"` / `"verified"` | the only field that may unlock HARDWARE; `"verified"` only on a live serial session whose UID is in `config/verified_devices.json`. Means only "self-reported UID is on the administratively trusted list": not hardware authentication, not proof of identity, not validation of measurements |
+| `meta.provenance` | `"simulated"` / `"unverified"` / `"verified"` | the only bridge field that may unlock ALLOWLISTED DEVICE (the app also re-checks the UID itself); `"verified"` only on a live serial session whose UID is in `config/verified_devices.json`. Means only "self-reported UID is on the administratively trusted list": not hardware authentication, not proof of identity, not validation of measurements |
 | `meta.provenance_reason` | short text | why (e.g. `UID not in config/verified_devices.json`, `no device UID (MSP_UID error)`) |
 | `meta.verified_device_label` | string | present only when `provenance == "verified"` (the allowlist entry's `label`) |
 | `meta.device_identity` | object, see below | what the device **reported about itself**; `self_reported: true` always. Show as "reported by device" |
@@ -34,13 +34,13 @@ everything stays `not_queried` (unverified). Older bridge output and other produ
 
 Evaluate in order:
 1. `source == "sim"` **or** `meta.provenance == "simulated"` → **SIMULATED**
-2. `source == "replay"` → the existing D6 REPLAY rules (`meta.original_source`); never live, never HARDWARE
-3. `source == "hardware"` **and** `meta.provenance == "verified"` **and** the transport is the app's own serial source → **HARDWARE**
+2. `source == "replay"` → the existing D6 REPLAY rules (`meta.original_source`); never live, never ALLOWLISTED DEVICE
+3. `source == "hardware"` **and** `meta.provenance == "verified"` **and** the transport is the app's own serial source **and** the app's own re-check finds `device_identity.uid` in the allowlist → **ALLOWLISTED DEVICE (identity not authenticated)** (formerly HARDWARE; internal values unchanged)
 4. `source == "hardware"` otherwise (provenance `unverified`, missing, or anything else; or ingest) → **UNVERIFIED SOURCE**,
    with `device_identity.board_id / fc_variant / target_name` shown as "reported by device"
 
 The bridge itself never outputs `source:"hardware"` with `provenance:"verified"` unless the UID matched, and the
-shipped allowlist is empty, so **today nothing can display HARDWARE** (D8 item 4).
+shipped allowlist is empty, so **today nothing can display ALLOWLISTED DEVICE** (D8 item 4). No badge says HARDWARE any more.
 
 ## Bridge rules (classify, `firmware_bridge/identity.py`)
 1. Fake-FC transport (`--fake-fc`) → `sim` / `simulated`. The fake FC reports variant `SIML`, board `SIMF`.
@@ -48,7 +48,7 @@ shipped allowlist is empty, so **today nothing can display HARDWARE** (D8 item 4
    **SIML/SIMF always wins**, even if that device's UID is allowlisted: a simulator can never be made "verified".
 3. Replay → `replay`. Captures/raw bytes: `simulated` if the recorded identity is SIML/SIMF, else `unverified`; the
    allowlist is **never consulted on replay**. Sample JSONL keeps the recorded `meta.provenance` as written (it is
-   never upgraded; a file can claim anything, and the source is `replay`, so it never shows HARDWARE).
+   never upgraded; a file can claim anything, and the source is `replay`, so it never shows ALLOWLISTED DEVICE).
 4. Live serial + `MSP_UID` reply whose 24-hex UID is in the allowlist → `hardware` / `verified` (allowlist match of a
    self-reported UID only; see the note at the top).
 5. Everything else live (unknown device, UID not listed, UID query error/short/bad_length/no reply, no identity at all, passive
