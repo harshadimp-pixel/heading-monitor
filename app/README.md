@@ -15,7 +15,9 @@ python -m app --source ingest                  # accept Samples POSTed to /api/s
 # open http://localhost:8080
 ```
 
-Other options: `--port 8080` (`--port 0` = OS-assigned ephemeral port, printed in the start-up log), `--host 127.0.0.1 --rate 20 --seed N --sim-duration S --declination DEG --stale 2 --calibration file.json -v`.
+Other options: `--port 8080` (`--port 0` = OS-assigned ephemeral port, printed in the start-up log), `--host 127.0.0.1 --rate 20 --seed N --sim-duration S --declination DEG --stale 2 --calibration file.json --verified-devices FILE -v`.
+`--verified-devices` (default `config/verified_devices.json`, owned by Firmware, ships empty) is the D8 allowlist; the app
+reads it AND passes the same file to `firmware_bridge --verified-devices` so both agree.
 With `--declination 0` (default) every heading is **magnetic**. A non-zero declination is passed to heading_core,
 and the UI then labels headings as true.
 
@@ -67,7 +69,7 @@ python -m pytest app/tests -q
 
 | Panel | Contents |
 |---|---|
-| Header | **DATA SOURCE badge**, derived from the latest sample's `source` field (plus `meta.original_source`; see D6 below): SIMULATED (`sim`), REPLAY (recorded hardware) (`replay` + original_source `hardware`), REPLAY (recorded simulator), REPLAY, and HARDWARE only for `hardware` samples from a live serial source. A `hardware`-labelled sample arriving any other way (ingest) shows UNVERIFIED SOURCE and is never presented as live. NO DATA when nothing current exists. The transport (CLI `--source`) is shown in small text. An evidence banner follows the badge; for replayed data it says the data is recorded, not a live sensor stream. |
+| Header | **DATA SOURCE badge**, derived from the latest sample's `source` field (plus `meta.original_source`; see D6 below): SIMULATED (`sim`), REPLAY (recorded hardware) (`replay` + original_source `hardware`), REPLAY (recorded simulator), REPLAY, and HARDWARE only for `hardware` samples from the app's serial source whose device is verified (D8: bridge `meta.provenance == "verified"` AND the reported UID is in the allowlist). Every other `hardware` sample (serial unverified, ingest) shows UNVERIFIED SOURCE and is never presented as live. Over serial, the device's board, variant, target and UID are shown under the badge, each labelled "reported by device". NO DATA when nothing current exists. The transport (CLI `--source`) is shown in small text. An evidence banner follows the badge; for replayed data it says the data is recorded, not a live sensor stream. |
 | Heading | SVG compass rose: ticks every 10°, numbers every 30°, N/E/S/W. It has three distinct indicators: measured heading needle in cyan (heading_core `heading_deg`: filtered estimate, using the calibration when one is applied), unfiltered needle in grey (heading_core `heading_raw_deg`: instantaneous, before smoothing), and the reference marker as an amber dashed line with a rim triangle. Below it: the numeric measured and unfiltered heading with a 16-point cardinal; calibration state is shown in the status panel and \|B\| raw vs calibrated in the field panel; a reference heading input with slider, "use current", clear, or click on the rose; and the signed deviation (measured − reference) wrapped to (−180, 180]. |
 | Sensor status & accuracy | Status: OK / DEGRADED / FAULT / STALE / NO DATA, with the reason. Also: last-sample age, rate, accepted/invalid counts, heading_core quality (0–1) with quality bar, short-term noise 1σ, calibration state and residual, error versus sim truth (simulated data only), and warnings. |
 | Roll / pitch | Artificial-horizon canvas plus numbers, taken from the HeadingEstimate. |
@@ -132,9 +134,25 @@ curl -X POST localhost:8080/api/sample -H 'Content-Type: application/json' \
 * `ingest` keeps `sample.source` as posted (contract), but a `hardware` sample via ingest shows UNVERIFIED SOURCE
   and a banner saying it is not a live serial source.
 
+### D8: a serial connection is not proof of hardware (ARCHITECTURE.md D8; contract docs/firmware/D8_PROVENANCE.md)
+Applied by the hub to every sample on the serial transport (`app/provenance.py`), in order:
+1. device reports `fc_variant == "SIML"` or `board_id == "SIMF"`, or `meta.provenance == "simulated"`, or `source == "sim"`
+   → SIMULATED (a `hardware` label is mapped to `sim`, `meta.source_mapped_from: "hardware"`). Wins over the allowlist.
+2. no `meta.device_identity` → UNVERIFIED SOURCE (`device_status: no_identity`)
+3. no valid UID (24 hex) → UNVERIFIED (`no_uid`)
+4. UID not in the allowlist → UNVERIFIED (`uid_not_listed`)
+5. UID listed but the bridge did not set `meta.provenance: "verified"` (or set nothing, e.g. an older bridge) →
+   UNVERIFIED (`bridge_unverified`)
+6. otherwise → HARDWARE (`verified`, `live_hardware: true`).
+The allowlist is read with `firmware_bridge.identity.load_allowlist` (fail closed: missing/malformed = empty); a
+fail-closed mirror is used only if that module is not importable. `/api/status` shows `verified_devices` (path, count,
+loader) and `source_status.command` (the bridge command line, including `--verified-devices`). Replay (D6) and ingest
+never consult the allowlist and never show HARDWARE. Records and CSV carry `device_status`, `device_verified` and the
+reported `device_board/variant/uid` (CSV `*_reported`).
+
 CSV columns: `recv_time_iso, t, source, heading_deg, heading_raw_deg, reference_deg, deviation_deg, roll_deg,
 pitch_deg, bx_uT, by_uT, bz_uT, field_raw_uT, field_cal_uT, calibrated, quality, noise_1sigma_deg, warnings,
-sensor_status, estimator_backend, truth_heading_deg_sim_only, gps_status, gps_fix, gps_num_sat, gps_hdop, mag_raw_x, mag_raw_y, mag_raw_z, original_source, transport`
+sensor_status, estimator_backend, truth_heading_deg_sim_only, gps_status, gps_fix, gps_num_sat, gps_hdop, mag_raw_x, mag_raw_y, mag_raw_z, original_source, transport, device_status, device_verified, device_board_reported, device_variant_reported, device_uid_reported`
 (the `mag_raw_*` cells are empty when the sample has no raw counts).
 
 ## Tests (run 2026-11-27, real results)
@@ -194,13 +212,14 @@ The headless-Chrome DOM tests are deterministic:
 3. **Serial path never run against a real FC.** `serial:` runs `python -m firmware_bridge --port P --baud B` (T4,
    CLI verified compatible via `--help`). It has only been exercised with a non-existent port, where it reports FAULT and no data. It
    has never been run against a real flight controller, a live firmware_bridge session or the CAN-L4-3100.
-   Everything here is virtual.
-4. **Replay labels (D6 fixed, pending the Auditor's re-run).** A replayed `hardware` sample becomes `source:"replay"`
+   Everything here is virtual. The D8 serial path was exercised only with the bridge's FakeFC on a pty (virtual
+   serial), never with a physical device.
+4. **Replay labels (D6, closed by the Auditor in a88e8d1).** A replayed `hardware` sample becomes `source:"replay"`
    with `meta.original_source:"hardware"` and shows REPLAY (recorded hardware), never live. A replayed sim log keeps
    `source:"sim"` and shows SIMULATED, with the transport shown as replay. The relabel mirrors the three fields of
    `firmware_bridge --replay` rather than importing it, because the bridge's Python helper is not an ARCHITECTURE
    interface (CLI only) and it relabels sim too. The app trusts `meta.original_source` as written in the file; a file
-   could claim anything. HARDWARE is shown only for the serial transport, which has never run against a real FC (3).
+   could claim anything. HARDWARE is shown only for a verified serial device (D8, item 11).
 5. **Stubs.** `_stubs.py` (min/max hard-iron + diagonal scale calibration, no smoothing, simple quality, simple
    simulator) is used only when the real module is missing or raises `NotImplementedError`. In the current repo state,
    heading_core (T2) and sim (T3) are real and the stubs are **inactive** (the UI shows which backend is in use).
@@ -214,3 +233,8 @@ The headless-Chrome DOM tests are deterministic:
 9. **History is in memory** (last 6000 samples ≈ 5 min at 20 Hz). Use recording for longer runs.
 10. **UI verification** is automated (HTTP/WebSocket tests plus a headless-Chrome DOM check plus screenshots).
     Human usability has not been assessed. The layout was checked at 1600 px width only.
+11. **D8 device identity is self-reported.** Board, variant, target and UID come from the device (MSP) and can be
+    spoofed; a UID is not cryptographic proof. HARDWARE needs the bridge's `provenance: "verified"` AND the UID in
+    `config/verified_devices.json`, which ships empty, so today nothing displays HARDWARE. Identity is read once at
+    connect. The `device_identity` key names follow docs/firmware/D8_PROVENANCE.md; ARCHITECTURE.md D8 does not
+    list them. The bridge's Python loader is imported directly although ARCHITECTURE lists only its CLI.

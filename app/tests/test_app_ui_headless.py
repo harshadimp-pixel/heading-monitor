@@ -92,3 +92,61 @@ def test_d6_replayed_hardware_log_shows_replay_badge_not_live(tmp_path):
 def test_d6_replayed_sim_log_still_simulated(tmp_path):
     t = _replay_page(str(tmp_path), "sim", ["sourceBadge", "evidenceBanner"])
     assert t["sourceBadge"] == "SIMULATED" and "Live" not in t["evidenceBanner"]
+
+
+def test_d8_serial_badges_and_reported_by_device_labels(tmp_path):
+    """D8 in the browser: serial + allowlisted uid -> HARDWARE; uid not listed / no identity -> UNVERIFIED SOURCE;
+    SIML/SIMF -> SIMULATED; board/variant/uid always labelled 'reported by device'. Virtual serial: an in-process hub
+    whose transport is serial, on an OS-assigned port; samples injected as the serial source emits them."""
+    import json
+    import threading
+    from app.hub import Hub
+    from app.server import serve
+    uid = "0123456789abcdef01234567"
+    allow = tmp_path / "verified_devices.json"
+    allow.write_text(json.dumps({"devices": [{"uid": uid, "label": "pytest"}]}))
+    hub = Hub("serial:/dev/virtual-ui-test", stale_after_s=30, verified_devices_path=str(allow))
+    httpd = serve(hub, "127.0.0.1", 0)
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+
+    def hw(t, ident, provenance=None):
+        s = sample(t, 150.0, source="hardware")
+        if ident is not None:
+            s["meta"] = {"device_identity": ident}
+        if provenance:
+            s.setdefault("meta", {})["provenance"] = provenance
+        return s
+    cases = [
+        ("verified", hw(0.0, {"fc_variant": "INAV", "board_id": "MKF4", "target_name": "MATEKF405", "uid": uid},
+                        "verified")),
+        ("not_listed", hw(0.1, {"fc_variant": "INAV", "board_id": "MKF4", "uid": "ffffffffffffffffffffffff"})),
+        ("no_identity", hw(0.2, None)),
+        ("simulator", hw(0.3, {"fc_variant": "SIML", "board_id": "SIMF", "uid": uid})),
+    ]
+    ids = ["sourceBadge", "evidenceBanner", "deviceBoard", "deviceVariant", "deviceTarget", "deviceUid", "deviceVerify"]
+    out = {}
+    try:
+        with HeadlessPage(base + "/") as page:
+            page.wait_for("window.__hmProbe && window.__hmProbe().connected")
+            for name, s in cases:
+                assert hub.emit(s) is None
+                page.wait_for(_rendered(get_json(base + "/api/history")["records"][-1]["seq"]))
+                out[name] = page.texts(ids)
+                out[name]["hidden"] = page.eval("document.getElementById('deviceIdentity').hidden")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+    v, n, x, sm = out["verified"], out["not_listed"], out["no_identity"], out["simulator"]
+    assert v["sourceBadge"] == "HARDWARE" and v["hidden"] is False
+    assert v["deviceBoard"] == "MKF4 (reported by device)" and v["deviceVariant"] == "INAV (reported by device)"
+    assert v["deviceTarget"] == "MATEKF405 (reported by device)" and x["deviceTarget"] == "Unknown (reported by device)"
+    assert v["deviceUid"] == f"{uid} (reported by device)" and "verified_devices.json" in v["deviceVerify"]
+    assert n["sourceBadge"] == "UNVERIFIED SOURCE" and "not proof of hardware" in n["evidenceBanner"]
+    assert "Live" not in n["evidenceBanner"] and n["deviceBoard"] == "MKF4 (reported by device)"
+    assert "UID not in verified list" in n["deviceVerify"]
+    assert x["sourceBadge"] == "UNVERIFIED SOURCE" and "Live" not in x["evidenceBanner"]
+    assert x["deviceBoard"] == "Unknown (reported by device)" and x["deviceVariant"] == "Unknown (reported by device)"
+    assert "no identity" in x["deviceVerify"]
+    assert sm["sourceBadge"] == "SIMULATED" and sm["deviceVariant"] == "SIML (reported by device)"
+    assert sm["deviceBoard"] == "SIMF (reported by device)" and "simulator" in sm["deviceVerify"]

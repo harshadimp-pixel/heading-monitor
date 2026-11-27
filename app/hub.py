@@ -15,6 +15,7 @@ import threading
 import time
 
 from .core_adapter import CoreAdapter
+from .provenance import apply_serial_provenance, load_verified_devices
 from .sources import gps_status, parse_gps, validate_sample
 from ._stubs import angle_diff_deg, wrap360
 
@@ -33,7 +34,8 @@ CSV_COLUMNS = ["recv_time_iso", "t", "source", "heading_deg", "heading_raw_deg",
                "field_raw_uT", "field_cal_uT", "calibrated", "quality", "noise_1sigma_deg",
                "warnings", "sensor_status", "estimator_backend", "truth_heading_deg_sim_only",
                "gps_status", "gps_fix", "gps_num_sat", "gps_hdop", "mag_raw_x", "mag_raw_y", "mag_raw_z",
-               "original_source", "transport"]
+               "original_source", "transport", "device_status", "device_verified",
+               "device_board_reported", "device_variant_reported", "device_uid_reported"]
 
 
 def _iso(ms: float) -> str:
@@ -57,7 +59,9 @@ def record_to_row(r: dict) -> list:
             ";".join(r.get("warnings") or []), r.get("sensor_status", ""), r.get("estimator_backend", ""),
             _num(r.get("truth_heading_deg")), r.get("gps_status", "unknown"),
             r.get("gps_fix") or "", _num(r.get("gps_num_sat")), _num(r.get("gps_hdop")), *raw,
-            r.get("original_source") or "", r.get("transport") or ""]
+            r.get("original_source") or "", r.get("transport") or "", r.get("device_status") or "",
+            "" if r.get("device_status") is None else str(bool(r.get("device_verified"))).lower(),
+            r.get("device_board") or "", r.get("device_variant") or "", r.get("device_uid") or ""]
 
 
 def safe_name(name: str, ext: str) -> str:
@@ -66,10 +70,13 @@ def safe_name(name: str, ext: str) -> str:
 
 
 class Hub:
-    def __init__(self, source_spec: str, declination_deg: float = 0.0, stale_after_s: float = STALE_AFTER_S):
+    def __init__(self, source_spec: str, declination_deg: float = 0.0, stale_after_s: float = STALE_AFTER_S,
+                 verified_devices_path: str | None = None):
         self.lock = threading.RLock()
         self.stale_after_s = float(stale_after_s)
         self.source_spec = source_spec
+        self.transport = source_spec.split(":")[0]
+        self.verified_uids, self.verified_info = load_verified_devices(verified_devices_path)
         self.core = CoreAdapter(declination_deg)
         self.history = collections.deque(maxlen=HISTORY_LEN)
         self.seq = 0
@@ -107,12 +114,15 @@ class Hub:
                 self.counts["invalid"] += 1
                 self.last_error = f"invalid sample: {err}"
                 return err
+            device = None
+            if self.transport == "serial":          # D8: serial is not proof of hardware
+                sample, device = apply_serial_provenance(sample, self.verified_uids)
             now = time.monotonic()
             if self.paused or now < self.dropout_until:
                 self.counts["dropped_by_test_control"] += 1
                 return None
             est, backend, est_err = self.core.update(sample)
-            rec = self._make_record(sample, est, backend, est_err)
+            rec = self._make_record(sample, est, backend, est_err, device)
             self.counts["accepted"] += 1
             self.last_recv_mono = now
             self.recv_times.append(now)
@@ -138,7 +148,7 @@ class Hub:
         d2 = [un[i + 1] - 2 * un[i] + un[i - 1] for i in range(1, len(un) - 1)]
         return statistics.pstdev(d2) / math.sqrt(6)
 
-    def _make_record(self, s, est, backend, est_err):
+    def _make_record(self, s, est, backend, est_err, device=None):
         self.seq += 1
         ms = time.time() * 1000
         mag = s["mag_uT"]
@@ -155,7 +165,12 @@ class Hub:
         orig = meta.get("original_source")
         r["original_source"] = orig if isinstance(orig, str) else None
         r["transport"] = self.source_spec.split(":")[0]
-        r["live_hardware"] = s["source"] == "hardware" and r["transport"] == "serial"
+        dev = device or {}
+        r["device_status"] = dev.get("status")            # serial only: verified|uid_not_listed|no_uid|no_identity|simulator
+        r["device_verified"] = bool(dev.get("verified"))
+        r["device_board"], r["device_variant"], r["device_uid"] = dev.get("board"), dev.get("variant"), dev.get("uid")
+        r["device_target"] = dev.get("target")
+        r["live_hardware"] = s["source"] == "hardware" and r["transport"] == "serial" and r["device_verified"]
         gps, gps_err = parse_gps(s.get("gps"))
         if gps_err:
             r["gps_error"] = gps_err
@@ -349,6 +364,7 @@ class Hub:
                 "server_time_ms": time.time() * 1000,
                 "source_spec": self.source_spec,
                 "source_status": self.source_status,
+                "verified_devices": dict(self.verified_info),
                 "latest_sample_source": self.latest["source"] if self.latest else None,
                 "last_sample_age_s": age,
                 "stale_after_s": self.stale_after_s,

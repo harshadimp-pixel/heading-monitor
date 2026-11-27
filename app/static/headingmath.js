@@ -9,11 +9,12 @@
   /** Displayed badge (D6). Derived from sample.source (+ meta.original_source, + the transport that delivered it).
    *  - sim                      -> SIMULATED
    *  - replay + original_source -> "REPLAY (recorded hardware)" / "REPLAY (recorded simulator)"; else "REPLAY"
-   *  - hardware via serial      -> HARDWARE (the ONLY path that shows HARDWARE / live)
-   *  - hardware via anything else (replay, ingest, unknown) -> "UNVERIFIED SOURCE" (never shown as live hardware)
+   *  - hardware via serial AND deviceVerified === true (uid in config/verified_devices.json, D8) -> HARDWARE
+   *    (the ONLY path that shows HARDWARE / live; a serial link alone is not proof of hardware)
+   *  - hardware any other way (serial unverified, replay, ingest, unknown) -> "UNVERIFIED SOURCE"
    *  - anything else            -> null (UI shows NO DATA)
    *  Returns {text, cls, live} or null. */
-  function badgeInfo(source, originalSource, transport) {
+  function badgeInfo(source, originalSource, transport, deviceVerified) {
     const base = badgeLabel(source);
     if (!base) return null;
     if (source === "replay") {
@@ -21,7 +22,7 @@
       return { text: w ? `REPLAY (recorded ${w})` : "REPLAY", cls: "replay", live: false };
     }
     if (source === "hardware") {
-      return transport === "serial" ? { text: "HARDWARE", cls: "hardware", live: true }
+      return transport === "serial" && deviceVerified === true ? { text: "HARDWARE", cls: "hardware", live: true }
                                     : { text: "UNVERIFIED SOURCE", cls: "unverified", live: false };
     }
     return { text: base, cls: source, live: false };

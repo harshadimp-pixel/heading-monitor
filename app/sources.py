@@ -247,10 +247,16 @@ class RealSimSource(SubprocessSource):
 class SerialSource(SubprocessSource):
     kind = "serial"
 
-    def __init__(self, emit, on_status, port, baud):
+    def __init__(self, emit, on_status, port, baud, verified_devices=None):
+        from .provenance import DEFAULT_ALLOWLIST, _fw
+        # D8: the app and the bridge must consult the SAME allowlist file (default config/verified_devices.json).
+        self.verified_devices = os.path.abspath(verified_devices or DEFAULT_ALLOWLIST)
         cmd = [sys.executable, "-m", "firmware_bridge", "--port", port, "--baud", str(baud)]
+        if _fw is not None:            # D8 bridge (e37430b+) knows --verified-devices; a pre-D8 bridge would reject it
+            cmd += ["--verified-devices", self.verified_devices]
         super().__init__(emit, on_status, cmd, "firmware_bridge (T4)", pace=False)
         self.port = port
+        self.status["command"] = " ".join(cmd)     # shown in /api/status source_status (D8: audit the allowlist flag)
 
     def run(self):
         if not _module_available("firmware_bridge"):
@@ -296,7 +302,7 @@ class IngestSource(Source):
 
 
 def make_source(spec: str, emit, on_status, rate=20.0, seed=None, baud=115200,
-                speed=1.0, loop=False, sim_duration=86400.0) -> Source:
+                speed=1.0, loop=False, sim_duration=86400.0, verified_devices=None) -> Source:
     kind, _, arg = spec.partition(":")
     if kind == "sim":
         scenario = arg or None
@@ -313,7 +319,7 @@ def make_source(spec: str, emit, on_status, rate=20.0, seed=None, baud=115200,
     if kind == "serial":
         if not arg:
             raise ValueError("serial needs a port: serial:<port>")
-        return SerialSource(emit, on_status, arg, baud)
+        return SerialSource(emit, on_status, arg, baud, verified_devices=verified_devices)
     if kind == "ingest":
         return IngestSource(emit, on_status)
     raise ValueError(f"unknown source {spec!r}; use sim[:scenario] | replay:<file> | serial:<port> | ingest")

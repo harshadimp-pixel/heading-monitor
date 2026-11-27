@@ -199,7 +199,7 @@ function render() {
 
   // DATA SOURCE badge — from sample.source only
   const badge = $("sourceBadge");
-  const bi = r ? badgeInfo(r.source, r.original_source, r.transport) : null;
+  const bi = r ? badgeInfo(r.source, r.original_source, r.transport, r.device_verified) : null;
   if (fresh && bi) {
     badge.textContent = bi.text; badge.className = "source-badge " + bi.cls;
     $("sourceSub").textContent = `from sample.source = "${r.source}"` +
@@ -214,10 +214,30 @@ function render() {
     else if (r.source === "replay" && r.original_source === "hardware")
       evidText = "[REPLAYED] Recorded hardware log played back from a file. This is recorded data, not a live sensor stream. Nothing here is hardware-verified.";
     else if (r.source === "replay") evidText = "[REPLAYED] Values come from a recorded log, not a live sensor stream.";
-    else if (bi.live) evidText = "Live hardware samples (serial). Accuracy is not hardware-verified until the auditor signs off a committed log.";
+    else if (bi.live) evidText = "Live hardware samples from a verified device (serial; uid listed in config/verified_devices.json). Accuracy is not hardware-verified until the auditor signs off a committed log.";
+    else if (r.transport === "serial")
+      evidText = "[UNVERIFIED] Samples arrived over a serial link, but the device is not in config/verified_devices.json (" +
+                 ({ no_identity: "no device identity reported", no_uid: "no device UID reported", uid_not_listed: "UID not in the verified list", bridge_unverified: "the bridge did not report provenance verified" }[r.device_status] || "not verified") +
+                 "). A serial connection is not proof of hardware. Board and variant are reported by device, not verified.";
     else evidText = `[UNVERIFIED] Samples are labelled "hardware" but arrived via ${r.transport || "an unknown transport"}, not a live serial source. They are not treated as live sensor data.`;
   }
   $("evidenceBanner").textContent = evidText;
+
+  // D8: device identity over serial, always labelled "reported by device" (never verified by the app)
+  const devBox = $("deviceIdentity");
+  if (r && r.transport === "serial") {
+    devBox.hidden = false;
+    const rb = (v) => `${isNum(v) || (typeof v === "string" && v) ? v : "Unknown"} (reported by device)`;
+    $("deviceBoard").textContent = rb(r.device_board);
+    $("deviceVariant").textContent = rb(r.device_variant);
+    $("deviceTarget").textContent = rb(r.device_target);
+    $("deviceUid").textContent = rb(r.device_uid);
+    $("deviceVerify").textContent = r.device_verified ? "UID listed in config/verified_devices.json"
+      : r.device_status === "simulator" ? "device reports a simulator (SIML/SIMF)"
+      : "not verified (" + ({ no_identity: "no identity", no_uid: "no UID", uid_not_listed: "UID not in verified list", bridge_unverified: "bridge provenance not verified" }[r.device_status] || "unknown") + ")";
+  } else {
+    devBox.hidden = true;
+  }
 
   // heading
   const declTxt = st && st.core.declination_deg ? "true, declination applied" : "magnetic";
@@ -318,7 +338,7 @@ function renderTable() {
   const rows = S.records.slice(-20).reverse().map((x) => {
     const m = x.mag_uT || [];
     return `<tr><td>${new Date(x.recv_ms).toLocaleTimeString([], { hour12: false })}.${String(Math.floor(x.recv_ms % 1000)).padStart(3, "0")}</td>` +
-      `<td>${(badgeInfo(x.source, x.original_source, x.transport) || {}).text || x.source}</td>` + cell(x.heading_deg, (v) => roundHeading(v).toFixed(1)) +
+      `<td>${(badgeInfo(x.source, x.original_source, x.transport, x.device_verified) || {}).text || x.source}</td>` + cell(x.heading_deg, (v) => roundHeading(v).toFixed(1)) +
       cell(x.heading_raw_deg, (v) => roundHeading(v).toFixed(1)) + cell(x.reference_deg, (v) => v.toFixed(1)) +
       cell(x.deviation_deg, (v) => v.toFixed(1)) + cell(m[0], (v) => v.toFixed(2)) + cell(m[1], (v) => v.toFixed(2)) +
       cell(m[2], (v) => v.toFixed(2)) + cell(x.field_raw_uT, (v) => v.toFixed(2)) + cell(x.quality, (v) => v.toFixed(2)) +

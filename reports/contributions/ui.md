@@ -33,6 +33,22 @@ Commits: `84fc231` (T5 → REVIEW: app, 40 tests, LIMITATIONS, screenshots), `51
 
 Demo metrics `[SIMULATED]` (from `reports/demo/demo_metrics.json`): mean |heading error vs sim truth| 21.40° before calibration (n = 161) and 0.418° after (n = 120); fit by `heading_core.Calibration.fit` on 681 samples, residual 0.0156 µT; `motor_interference` shows DEGRADED with FIELD_MAGNITUDE_OUT_OF_RANGE, HIGH_NOISE.
 
+### D8 fix (app side; ARCHITECTURE.md D8 at `1bef73e`, contract `docs/firmware/D8_PROVENANCE.md` at `e37430b`)
+- A serial connection is no longer proof of hardware. The hub runs `app/provenance.py` on every serial sample.
+  It shows HARDWARE only when all of these hold: `source == "hardware"`, the bridge set `meta.provenance == "verified"`,
+  and the reported `meta.device_identity.uid` is in `config/verified_devices.json`.
+- That file belongs to Firmware and ships empty, so today no sample shows HARDWARE.
+- SIML/SIMF (fake FC) or `provenance == "simulated"` shows SIMULATED, even if the UID is allowlisted.
+- These cases show UNVERIFIED SOURCE: no identity, no valid UID, UID not listed, or the bridge did not verify.
+- Board, variant, target and UID appear under the badge as "… (reported by device)".
+- The app passes the same file to `firmware_bridge --verified-devices`. The app flag is `--verified-devices`;
+  its default is `config/verified_devices.json`.
+- The allowlist is read with Firmware's `load_allowlist`, which fails closed. A mirror is used only if that loader
+  cannot be imported.
+- Replay (D6) and ingest are unchanged.
+- New tests: `app/tests/test_app_d8_serial_provenance.py`, which includes a pty FakeFC end-to-end run that needs
+  pyserial, plus a headless D8 badge/label test.
+
 ## 2. Tests actually executed
 All from the repo root. Environment: Python 3.13.5, pytest 9.2.0, numpy 2.5.5, jsonschema 4.26.0, google-chrome (headless), Node v24.22.1. Results copied from the console output.
 
@@ -86,6 +102,12 @@ Fresh-clone verification of `INSTALL.md` (2026-11-26/27 night IST): `git clone /
 Claims test history: `python3 -m pytest tests/test_t6_claims.py -q` gave **1 failed, 3 passed** on `8687ab8`, both before and after this file was added (ui.md adds no failure). The single failure is `test_Q1b_navigation_claims`, flagging `reports/contributions/maths.md:30` (the Mathematics & Sensor Scientist's file, not mine). No app/ or ui.md line is flagged; app/ and reports/demo lines appear only in the informational inventory because they negate position features.
 
 Screenshots in this commit were produced by `/workspace/heading-monitor-runlogs/make_t5_screenshots.py` (real app via `run_app --port 0`, headless Chrome over CDP) and checked by eye: badge SIMULATED or NO DATA as expected, GPS Available/3D/9/0.9 for the ingest sample with `gps`, all values Unknown after the sample went stale.
+
+### D8 runs (2026-11-27, 10:11–10:15 IST, real output)
+- `app/tests`, system python (no pyserial; the 3 pty end-to-end tests skip): 69 passed, 3 skipped, ×3.
+- `app/tests` in a venv with pyserial (`pip install -r requirements.txt`): 72 passed, ×3. No skips.
+- `app/tests/test_app_ui_headless.py`: 6 passed, ×5.
+- `tests/` (Auditor): 111 passed, 2 skipped.
 
 ## 3. Open limitations
 Full text in `app/README.md` → LIMITATIONS (mirrored in the T5 row):

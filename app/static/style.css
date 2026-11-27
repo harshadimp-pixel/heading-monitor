@@ -83,3 +83,4 @@ td.unk{color:var(--muted);font-style:italic}
 footer{color:var(--muted);font-size:12px;padding:6px 20px 20px}
 @media (max-width:1200px){.heading-panel,.panel.wide{grid-column:span 12}#panelStatus,#panelAttitude,#panelGps,#panelCalib,#panelRecord,#panelTest{grid-column:span 6}}
 @media (max-width:760px){.panel,.heading-panel,.panel.wide,#panelStatus,#panelAttitude,#panelGps,#panelCalib,#panelRecord,#panelTest{grid-column:span 12}.field-nums{grid-template-columns:repeat(3,1fr)}.source-badge{font-size:20px;min-width:0}.badge-wrap{margin-left:0}}
+.device-id{max-width:520px;color:var(--muted);line-height:1.35}

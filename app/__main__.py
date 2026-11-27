@@ -30,12 +30,20 @@ def main(argv=None):
     ap.add_argument("--stale", type=float, default=2.0,
                     help="seconds without samples before values show Unknown/STALE (default 2)")
     ap.add_argument("--calibration", default=None, help="calibration JSON file to load at start")
+    ap.add_argument("--verified-devices", default=None,
+                    help="allowlist of verified device UIDs (D8; default config/verified_devices.json, ships empty; "
+                         "missing or malformed = empty). Only serial samples whose meta.device_identity.uid is listed "
+                         "show HARDWARE")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
+    if a.verified_devices is None:
+        from .provenance import DEFAULT_ALLOWLIST
+        a.verified_devices = DEFAULT_ALLOWLIST     # one file for the hub AND the bridge (D8)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-    hub = Hub(a.source, declination_deg=a.declination, stale_after_s=a.stale)
+    hub = Hub(a.source, declination_deg=a.declination, stale_after_s=a.stale,
+              verified_devices_path=a.verified_devices)
     if a.calibration:
         import json
         with open(a.calibration) as f:
@@ -43,7 +51,7 @@ def main(argv=None):
     try:
         src = make_source(a.source, hub.emit, hub.on_source_status, rate=a.rate, seed=a.seed,
                           baud=a.baud, speed=a.speed, loop=a.loop,
-                          sim_duration=a.sim_duration)
+                          sim_duration=a.sim_duration, verified_devices=a.verified_devices)
     except ValueError as e:
         ap.error(str(e))
     httpd = serve(hub, a.host, a.port)

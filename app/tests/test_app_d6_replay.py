@@ -106,20 +106,24 @@ def test_ingest_hardware_label_is_kept_but_not_live():
 def _node_badge_info(cases):
     if shutil.which("node") is None:
         pytest.skip("node not available")
-    js = ("const m=require(%s);console.log(JSON.stringify(%s.map(c=>m.badgeInfo(c[0],c[1],c[2]))))"
+    js = ("const m=require(%s);console.log(JSON.stringify(%s.map(c=>m.badgeInfo(c[0],c[1],c[2],c[3]))))"
           % (json.dumps(ROOT + "/app/static/headingmath.js"), json.dumps(cases)))
     return json.loads(subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout)
 
 
 def test_frontend_badge_info_mapping():
-    cases = [["sim", None, "sim"], ["sim", None, "replay"], ["replay", "hardware", "replay"],
-             ["replay", "sim", "replay"], ["replay", None, "ingest"], ["hardware", None, "serial"],
-             ["hardware", None, "ingest"], ["hardware", None, "replay"], ["hardware", None, None],
-             ["SIM", None, "sim"], [None, None, "sim"], ["gps", "hardware", "serial"]]
+    """D6 + D8: HARDWARE only for source hardware via serial with a verified device (uid in the allowlist)."""
+    cases = [["sim", None, "sim", False], ["sim", None, "replay", False], ["replay", "hardware", "replay", False],
+             ["replay", "sim", "replay", False], ["replay", None, "ingest", False], ["hardware", None, "serial", True],
+             ["hardware", None, "ingest", True], ["hardware", None, "replay", True], ["hardware", None, None, True],
+             ["SIM", None, "sim", True], [None, None, "sim", True], ["gps", "hardware", "serial", True],
+             ["hardware", None, "serial", False], ["hardware", None, "serial", None], ["hardware", None, "serial", "true"],
+             ["sim", None, "serial", False]]
     got = _node_badge_info(cases)
     text = [g and g["text"] for g in got]
     live = [g and g["live"] for g in got]
     assert text == ["SIMULATED", "SIMULATED", "REPLAY (recorded hardware)", "REPLAY (recorded simulator)", "REPLAY",
-                    "HARDWARE", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", None, None, None]
-    assert [i for i, v in enumerate(live) if v] == [5]          # live hardware only via serial
+                    "HARDWARE", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", None, None, None,
+                    "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", "UNVERIFIED SOURCE", "SIMULATED"]
+    assert [i for i, v in enumerate(live) if v] == [5]          # live hardware only: serial + verified device
     assert all("HARDWARE" != t for i, t in enumerate(text) if i != 5)
