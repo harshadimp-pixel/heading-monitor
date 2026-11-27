@@ -409,7 +409,7 @@ def serial_case(step, root, dev, want_badge, want_live, want_sources=None, extra
         r = a.hist()
         badge, banner = (text(d, "sourceBadge"), text(d, "evidenceBanner")) if chrome else (None, None)
         srcs = sorted({x["source"] for x in r}); lives = sum(bool(x.get("live_hardware")) for x in r)
-        ok = a.pid_ok and len(r) > 10 and badge == want_badge and (lives == len(r) if want_live else lives == 0)
+        ok = a.pid_ok and len(r) > 10 and (badge in want_badge if isinstance(want_badge, tuple) else badge == want_badge) and (lives == len(r) if want_live else lives == 0)
         if want_sources is not None: ok = ok and srcs == want_sources
         summ = (f"pid_ok={a.pid_ok} port=<virtual pty> {extra} records={len(r)} sample.source={srcs} live_hardware_true={lives}/{len(r)} "
                 f"DOM sourceBadge={badge!r} (required {want_badge!r}) evidenceBanner={banner!r}")
@@ -448,8 +448,9 @@ if have_serial and hasattr(os, "openpty"):
         doc = list(uids) if isinstance(shipped, list) else {**(shipped or {}), "devices": [{"uid": uids[0], "label": "T6 temporary"}]}
         os.makedirs(os.path.join(root2, "config"), exist_ok=True)
         json.dump(doc, open(os.path.join(root2, "config", "verified_devices.json"), "w"))
-        serial_case("A10f D8: allowlisted UID (temporary allowlist copy) via serial: HARDWARE, the only path to it", root2,
-                    MSPDevice(variant="INAV", board="MKH7", uid=uid_b), "HARDWARE", True, ["hardware"], f"uid={uids[0]} listed")
+        serial_case("A10f D8/F11: virtual pty emulator INAV/MKF4 reporting an allowlisted UID (temporary allowlist copy): passes the allowlist "
+                    "-> allowlisted live badge. LIMITATION DEMONSTRATION (UID match = administrative trust, not hardware authentication); NOT hardware validation", root2,
+                    MSPDevice(variant="INAV", board="MKF4", uid=uid_b), ("ALLOWLISTED DEVICE", "HARDWARE"), True, ["hardware"], f"uid={uids[0]} listed; NO hardware")
         serial_case("A10g D8: non-allowlisted UID with a non-empty allowlist via serial: UNVERIFIED SOURCE", root2,
                     MSPDevice(variant="INAV", board="MKH7", uid=uid_b[:-1] + bytes([uid_b[-1] ^ 1])), "UNVERIFIED SOURCE", False, None, "uid one bit off")
         shutil.rmtree(tmpd, ignore_errors=True)

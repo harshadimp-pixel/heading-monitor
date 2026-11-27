@@ -130,8 +130,10 @@ def test_replay_never_verified(tmp_path):
     assert not [x for x in s if x["source"] == "hardware"]
 
 
-def test_F11_emulated_device_reporting_allowlisted_uid_is_accepted(tmp_path):
+@pytest.mark.parametrize("board", ["MKH7", "MKF4"])
+def test_F11_emulated_device_reporting_allowlisted_uid_is_accepted(tmp_path, board):
     """CHARACTERISATION of limitation F11, not a pass of security: T6's emulator (no hardware) that simply reports an
-    allowlisted UID is classified hardware/verified. The UID is self-reported and not cryptographic proof."""
-    s = bridge(allow(tmp_path, [UIDHEX]), MSPDevice(variant="INAV", board="MKH7", uid=UID))
+    allowlisted UID is classified hardware/verified. The UID is self-reported and not cryptographic proof: allowlist
+    matching is an administrative trust decision, not hardware authentication. Never count this as hardware validation."""
+    s = bridge(allow(tmp_path, [UIDHEX]), MSPDevice(variant="INAV", board=board, uid=UID))
     assert prov(s) == [("hardware", "verified")]

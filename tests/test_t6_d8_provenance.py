@@ -283,7 +283,7 @@ def test_d8_allowlisted_uid_is_hardware(allow_repo):
         dev.close()
     assert pid_ok
     assert r and all(x.get("live_hardware") for x in r[-5:]), "allowlisted device: records should be live hardware"
-    assert badge == "HARDWARE", badge
+    assert badge in ALLOWLISTED_BADGES, badge
 
 
 @pytest.mark.parametrize("uid", [OTHER_UID, None, ALLOWED_UID[:11], ALLOWED_UID + b"\x00", bytes(12),
@@ -364,3 +364,27 @@ def test_d8_ingest_with_allowlisted_uid_is_never_hardware(allow_repo, src):
         assert badge == "UNVERIFIED SOURCE", badge
     else:   # non-canonical spellings: rejected by the schema (NO DATA) or, if accepted, still not HARDWARE
         assert badge != "HARDWARE", badge
+
+
+# Badge texts that may stand for "allowlisted live serial device". T6 decision (verification_report §2d): the badge
+# SHOULD read "ALLOWLISTED DEVICE"; until UI implements it, the current "HARDWARE" text is also accepted here.
+ALLOWLISTED_BADGES = ("ALLOWLISTED DEVICE", "HARDWARE")
+
+
+def test_d8_F11_spoof_virtual_pty_inav_mkf4_with_allowlisted_uid_passes_allowlist(allow_repo):
+    """LIMITATION DEMONSTRATION (F11), NOT hardware validation.
+    A virtual pty with NO hardware behind it (T6 MSPDevice emulator) claims to be INAV on a Matek F4 board ("MKF4")
+    and reports a UID that is on the allowlist. It gets past the allowlist and the app shows the allowlisted/live badge.
+    UID matching is an ADMINISTRATIVE TRUST DECISION ("this UID passed the HV checklist"), not hardware
+    authentication: MSP identity is self-reported over the same wire and any device or script can claim any UID.
+    This test passing proves the limitation exists; it must never be counted as hardware validation."""
+    root, uid, err = allow_repo
+    assert err is None, err
+    dev = MSPDevice(variant="INAV", board="MKF4", uid=ALLOWED_UID)
+    try:
+        badge, r, txt, pid_ok, out = _run_serial(root, dev)
+    finally:
+        dev.close()
+    assert pid_ok
+    assert badge in ALLOWLISTED_BADGES, f"spoof not reproduced: badge {badge!r}"
+    assert r and r[-1].get("live_hardware") is True and r[-1].get("device_verified") is True, r[-1] if r else None
