@@ -18,6 +18,6 @@ Source: owner (Harshad Vora) instructions to PM & CTO; refined by PM. Changes re
 - N3. Every module executed and tested; independent tests by the Testing & Technical Auditor.
 - N4. Evidence labelling: `[SIMULATED]`, `[REPLAYED]`, `[DATASHEET]`, `[HARDWARE-VERIFIED]`. The last needs a committed raw hardware log plus auditor sign-off. No simulated result may be presented as hardware performance.
 - N5. All unresolved limitations documented (BLOCKERS.md and per-module LIMITATIONS sections).
-- N6. Work kept in this private repository; each bot commits its completed work.
+- N6. Work kept in this shared GitHub repository; each bot commits its completed work. Visibility: originally private; made PUBLIC by the owner on 2026-11-27 so independent reviewers (ChatGPT, Codex) can read it, and confirmed by the owner as intentional. Therefore no secrets, tokens, credentials or personal data may be committed.
 
 ## Acceptance (numeric targets set in reports/TEST_PLAN.md by the auditor, all [SIMULATED])

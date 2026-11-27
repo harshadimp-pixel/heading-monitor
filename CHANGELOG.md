@@ -19,3 +19,5 @@
 - [pm] T2 review decisions: warning codes frozen, optional kwargs approved, single-calibration rule, quantisation-aware MAG_STALE.
 - [pm] T5 review decisions: optional gps availability field, replay badge rule, ephemeral ports in tests.
 - [pm] Approved provisional quantisation-step inference in heading_core (infer_mag_quant, default on).
+
+- 2026-11-27 (PM): N6 updated. The repository is public by owner decision; no secrets or personal data may be committed.
