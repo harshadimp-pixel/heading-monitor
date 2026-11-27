@@ -32,10 +32,10 @@ def http(port, path, obj=None, raw=False):
     return b.decode() if raw else json.loads(b or b"{}")
 
 class App:
-    def __init__(self, *args):
+    def __init__(self, *args, root=None):
         self.port = free_port()
         self.cmd = [PY, "-m", "app", "--host", "127.0.0.1", "--port", str(self.port), *args]
-        self.p = subprocess.Popen(self.cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        self.p = subprocess.Popen(self.cmd, cwd=root or ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         for _ in range(75):
             time.sleep(0.2)
             if self.p.poll() is not None: break
@@ -254,12 +254,21 @@ finally:
 rec("A8 app replay of a hardware-labelled log: badge must not read HARDWARE", a.cmdline().replace(OUT + "/", "<out>/"), ok, summ, out)
 
 # ---------- A9: UI render check in headless Chrome (sim and ingest-with-warning)
-chrome = next((shutil.which(c) for c in ("google-chrome", "chromium", "chromium-browser") if shutil.which(c)), None)
+chrome = os.environ.get("CHROME") or next((shutil.which(c) for c in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser") if shutil.which(c)), None)
 def dom(url, want):
+    """Headless --dump-dom with a FRESH temporary profile (--user-data-dir) per call, removed afterwards, so a clean
+    machine / sandbox where the default profile dir cannot be created still works (Codex finding). --incognito is
+    needed: on Chrome 156 a fresh non-incognito profile did not exit after --dump-dom (30-60 s hang, no output, T6 test)."""
+    import tempfile
     d = ""
     for _ in range(5):
-        d = subprocess.run([chrome, "--headless=new", "--no-sandbox", "--disable-gpu", "--virtual-time-budget=5000", "--dump-dom", url],
-                           capture_output=True, text=True, timeout=90).stdout
+        prof = tempfile.mkdtemp(prefix="t6-chrome-")
+        try:
+            d = subprocess.run([chrome, "--headless=new", "--no-sandbox", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--incognito",
+                                f"--user-data-dir={prof}", "--virtual-time-budget=5000", "--dump-dom", url],
+                               capture_output=True, text=True, timeout=90).stdout
+        finally:
+            shutil.rmtree(prof, ignore_errors=True)
         if want(d): break
     return d
 def text(d, id_):
@@ -382,44 +391,73 @@ finally:
     out = a.close()
 rec("A10b ingest of source=hardware (+ injected transport=serial) -> UNVERIFIED SOURCE, never live", a.cmdline() + " ; POST hardware samples ; dump-dom", ok, summ, out)
 
-# A10c: serial transport over a VIRTUAL pty driven by the fake FC (no device): what does the app show?
-# Expected per design: HARDWARE (live) -- the serial path cannot tell a virtual pty from a real FC. Recorded as a limitation.
+# A10c-A10g (D8, ARCHITECTURE 1bef73e): a serial connection is NOT proof of hardware. L-SER is withdrawn.
+# A10c FAILS whenever the product fake FC on a virtual pty shows HARDWARE or any live record; it must show SIMULATED.
+# A10d/e: unknown or unidentified device -> UNVERIFIED SOURCE. A10f: allowlisted UID -> HARDWARE (the only way).
+# A10g: non-allowlisted UID with a non-empty allowlist -> UNVERIFIED SOURCE.
 try:
     import serial  # noqa: F401
     have_serial = True
 except Exception:
     have_serial = False
-if have_serial and hasattr(os, "openpty"):
-    sys.path.insert(0, ROOT)
-    from firmware_bridge.fake_fc import FakeFC
-    import tty, threading
-    master, slave = os.openpty(); tty.setraw(slave); fc = FakeFC(); stop = threading.Event()
-    def serve():
-        while not stop.is_set():
-            try: data = os.read(master, 1024)
-            except OSError: return
-            for fr in fc.parser.feed(data): os.write(master, fc.handle(fr))
-    th = threading.Thread(target=serve, daemon=True); th.start()
-    ptyname = os.ttyname(slave)
-    a = App("--source", f"serial:{ptyname}", "--stale", "60")
+
+def serial_case(step, root, dev, want_badge, want_live, want_sources=None, extra=""):
+    a = App("--source", f"serial:{dev.port}", "--stale", "60", root=root)
     try:
-        wait(lambda: len(a.hist()) > 10, 20)
-        d = dom(f"http://127.0.0.1:{a.port}/", lambda d: "source-badge hardware" in d) if chrome else ""
-        r = a.hist(); st = a.status()
+        wait(lambda: len(a.hist()) > 10, 25)
+        d = dom(f"http://127.0.0.1:{a.port}/", lambda d: (text(d, "sourceBadge") or "NO DATA") != "NO DATA") if chrome else ""
+        r = a.hist()
         badge, banner = (text(d, "sourceBadge"), text(d, "evidenceBanner")) if chrome else (None, None)
         srcs = sorted({x["source"] for x in r}); lives = sum(bool(x.get("live_hardware")) for x in r)
-        ok = a.pid_ok and len(r) > 10 and srcs == ["hardware"] and badge == "HARDWARE"
-        summ = (f"pid_ok={a.pid_ok} port={ptyname} (virtual pty + firmware_bridge FakeFC, NO device) records={len(r)} source={srcs} live_hardware_true={lives}/{len(r)} "
-                f"source_status={st['source_status'].get('state')} DOM sourceBadge={badge!r} evidenceBanner={banner!r} "
-                f"=> OBSERVATION: a virtual serial port is shown as live HARDWARE (limitation L-SER, not a pass of hardware accuracy)")
+        ok = a.pid_ok and len(r) > 10 and badge == want_badge and (lives == len(r) if want_live else lives == 0)
+        if want_sources is not None: ok = ok and srcs == want_sources
+        summ = (f"pid_ok={a.pid_ok} port=<virtual pty> {extra} records={len(r)} sample.source={srcs} live_hardware_true={lives}/{len(r)} "
+                f"DOM sourceBadge={badge!r} (required {want_badge!r}) evidenceBanner={banner!r}")
+        safe = re.sub(r"[^a-z0-9]+", "_", step.split(" ")[0].lower())
+        if chrome: open(os.path.join(OUT, f"ui_dom_{safe}.html"), "w").write(d)
     finally:
-        out = a.close(); stop.set()
-        for fd in (slave, master):
-            try: os.close(fd)
-            except OSError: pass
-    rec("A10c serial transport over a virtual pty (fake FC): HARDWARE only via serial (observation L-SER)", a.cmdline().replace(ptyname, "<pty>"), ok, summ, out)
+        out = a.close(); dev.close()
+    rec(step, a.cmdline().replace(dev.port, "<pty>"), ok, summ, out)
+
+if have_serial and hasattr(os, "openpty"):
+    sys.path.insert(0, os.path.join(ROOT, "tests")); sys.path.insert(0, ROOT)
+    from t6_msp_device import MSPDevice, ProductFakeFCOnPty
+    serial_case("A10c D8: product fake FC on a virtual pty via serial: must be SIMULATED, never HARDWARE/live", ROOT,
+                ProductFakeFCOnPty(), "SIMULATED", False, ["sim"], "device=firmware_bridge.fake_fc.FakeFC() (NO hardware)")
+    serial_case("A10d D8: unknown device (INAV/MKH7, UID not listed) via serial: UNVERIFIED SOURCE", ROOT,
+                MSPDevice(variant="INAV", board="MKH7", uid=bytes([0x99] * 12)), "UNVERIFIED SOURCE", False, None, "device=T6 MSPDevice")
+    serial_case("A10e D8: unidentified device (identity queries fail) via serial: UNVERIFIED SOURCE", ROOT,
+                MSPDevice(identity=False), "UNVERIFIED SOURCE", False, None, "device=T6 MSPDevice identity=False")
+    # allowlist in a TEMPORARY copy of the export (the shipped config/verified_devices.json is never modified)
+    uid_b = bytes([0x36, 0x54, 0x00, 0x2B, 0x11, 0x47, 0x33, 0x30, 0x39, 0x38, 0x31, 0x01])
+    dev = MSPDevice(variant="INAV", board="MKH7", uid=uid_b)
+    bp = subprocess.run([PY, "-m", "firmware_bridge", "--port", dev.port, "--count", "5"], cwd=ROOT, capture_output=True, text=True, timeout=60)
+    dev.close()
+    ids = [((json.loads(l).get("meta") or {}).get("device_identity") or {}) for l in bp.stdout.splitlines() if l.startswith("{")]
+    uids = sorted({i.get("uid") for i in ids if i.get("uid")})
+    shipped_p = os.path.join(ROOT, "config", "verified_devices.json")
+    shipped = json.load(open(shipped_p)) if os.path.exists(shipped_p) else None
+    shipped_entries = (shipped if isinstance(shipped, list) else [v for k, v in (shipped or {}).items() if isinstance(v, list) for v in v]) if shipped is not None else None
+    rec("A10h D8: shipped config/verified_devices.json exists and is empty", f"cat config/verified_devices.json", shipped_entries == [],
+        f"exists={shipped is not None} entries={shipped_entries!r}", json.dumps(shipped))
+    if len(uids) == 1:
+        import tempfile
+        tmpd = tempfile.mkdtemp(prefix="t6_d8_int_")
+        root2 = os.path.join(tmpd, "repo")
+        shutil.copytree(ROOT, root2, ignore=shutil.ignore_patterns(".git", "__pycache__", "reports", "recordings"))
+        doc = list(uids) if isinstance(shipped, list) else {**(shipped or {}), "devices": [{"uid": uids[0], "label": "T6 temporary"}]}
+        os.makedirs(os.path.join(root2, "config"), exist_ok=True)
+        json.dump(doc, open(os.path.join(root2, "config", "verified_devices.json"), "w"))
+        serial_case("A10f D8: allowlisted UID (temporary allowlist copy) via serial: HARDWARE, the only path to it", root2,
+                    MSPDevice(variant="INAV", board="MKH7", uid=uid_b), "HARDWARE", True, ["hardware"], f"uid={uids[0]} listed")
+        serial_case("A10g D8: non-allowlisted UID with a non-empty allowlist via serial: UNVERIFIED SOURCE", root2,
+                    MSPDevice(variant="INAV", board="MKH7", uid=uid_b[:-1] + bytes([uid_b[-1] ^ 1])), "UNVERIFIED SOURCE", False, None, "uid one bit off")
+        shutil.rmtree(tmpd, ignore_errors=True)
+    else:
+        rec("A10f D8: allowlisted UID via serial: HARDWARE", "-", False, f"NOT RUN: bridge reported no single meta.device_identity.uid ({uids!r}); D8 item 1 missing", bp.stderr[-1500:])
+        rec("A10g D8: non-allowlisted UID via serial: UNVERIFIED SOURCE", "-", False, "NOT RUN: depends on A10f UID discovery", "")
 else:
-    rec("A10c serial over virtual pty", "-", False, "NOT RUN: pyserial or openpty unavailable", "")
+    rec("A10c D8 serial over virtual pty", "-", False, "NOT RUN: pyserial or openpty unavailable", "")
 
 json.dump(RESULTS, open(os.path.join(OUT, "integration_results.json"), "w"), indent=1)
 print(f"TOTAL {sum(r['pass'] for r in RESULTS)}/{len(RESULTS)} passed")
