@@ -87,9 +87,14 @@ def test_U2_U3_values_badges_wrap(app_ingest):
     code = ("const H=require(process.argv[1]);const recs=JSON.parse(require('fs').readFileSync(0,'utf8'));"
             "console.log(JSON.stringify(recs.map(r=>[H.roundHeading(r.heading_deg).toFixed(1),H.badgeLabel(r.source),H.cardinal(r.heading_deg)])))")
     out = json.loads(subprocess.run(["node", "-e", code, js], input=json.dumps(recs), capture_output=True, text=True, check=True).stdout)
-    mapping = {"sim": "SIMULATED", "replay": "REPLAY", "hardware": "HARDWARE"}
+    # badgeLabel is the internal source->text mapping; it is not a pass criterion for "hardware" (D8: plain hardware is
+    # never displayed by that text). What the page DISPLAYS comes from badgeInfo and is asserted below.
+    mapping = {"sim": ("SIMULATED",), "replay": ("REPLAY",)}
     for (disp, badge, card), r in zip(out, recs):
-        assert badge == mapping[r["source"]], (badge, r["source"])
+        if r["source"] in mapping:
+            assert badge in mapping[r["source"]], (badge, r["source"])
+        else:
+            assert badge, (badge, r["source"])   # contract source -> some (internal) label, never null
         assert disp != "360.0"
         assert abs(wrapdiff(float(disp), r["heading_deg"])) <= 0.05 + 1e-9, (disp, r["heading_deg"])
     print(f"U2/U3 app vs heading_core max diff {worst_core:.2e} deg; app vs truth max {worst_truth:.3f} deg; displayed: {[o[0] for o in out]}; badges {[o[1] for o in out]}")
@@ -98,6 +103,19 @@ def test_U2_U3_values_badges_wrap(app_ingest):
         o = json.loads(subprocess.run(["node", "-e", "const H=require(process.argv[1]);console.log(JSON.stringify(H.badgeLabel(JSON.parse(process.argv[2]))))", js, json.dumps(bad)],
                                       capture_output=True, text=True, check=True).stdout)
         assert o is None, f"badge inferred from non-contract source {bad!r}"
+    # D8 label decision (d5374a1): the DISPLAYED badge (badgeInfo) for source "hardware" is never the bare word HARDWARE.
+    # Every transport / verification combination -> UNVERIFIED SOURCE, except app-own serial + verified -> the decided label.
+    combos = [[t, v] for t in ("serial", "ingest", "replay", "sim", None, "SERIAL") for v in (True, False, None, "true", 1)]
+    code = ("const H=require(process.argv[1]);const c=JSON.parse(process.argv[2]);"
+            "console.log(JSON.stringify(c.map(([t,v])=>H.badgeInfo('hardware',null,t,v))))")
+    infos = json.loads(subprocess.run(["node", "-e", code, js, json.dumps(combos)], capture_output=True, text=True, check=True).stdout)
+    label = "ALLOWLISTED DEVICE (identity not authenticated)"
+    for (t, v), bi in zip(combos, infos):
+        assert bi and bi["text"] != "HARDWARE", (t, v, bi)
+        if t == "serial" and v is True:
+            assert bi["text"] == label and bi["live"] is True, (t, v, bi)
+        else:
+            assert bi["text"] == "UNVERIFIED SOURCE" and bi["live"] is False, (t, v, bi)
 
 def test_U4_errors_and_staleness_surfaced(app_ingest):
     p, port = app_ingest

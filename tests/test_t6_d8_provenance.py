@@ -112,8 +112,12 @@ def _visible_text(d):
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", d))
 
 
+_LAST_DOM = {"d": ""}
+
+
 def _run_serial(root, dev):
-    """Start a fresh app on serial:<pty of dev>; return (badge, records, visible_text, pid_ok, app_output)."""
+    """Start a fresh app on serial:<pty of dev>; return (badge, records, visible_text, pid_ok, app_output).
+    The full DOM of the last run is kept in _LAST_DOM["d"] (badge + banner checks)."""
     a = App(root, "--source", f"serial:{dev.port}")
     try:
         got = a.wait_records(8, 25)
@@ -121,6 +125,7 @@ def _run_serial(root, dev):
         r = a.hist()
     finally:
         out = a.close()
+    _LAST_DOM["d"] = d
     return _text(d, "sourceBadge"), r, _visible_text(d), a.pid_ok, out
 
 
@@ -271,7 +276,7 @@ def allow_repo():
 
 
 def test_d8_allowlisted_uid_is_hardware(allow_repo):
-    """Only path to HARDWARE. NOTE (F11): the 'device' here is T6's emulator on a pty, i.e. a spoofer reporting an
+    """Only path to the allowlisted live badge (formerly HARDWARE; now 'ALLOWLISTED DEVICE (identity not authenticated)'). NOTE (F11): the 'device' here is T6's emulator on a pty, i.e. a spoofer reporting an
     allowlisted UID; it is accepted because the UID is self-reported. This passing is the D8 design, and it is
     also the evidence for unresolved limitation F11."""
     root, uid, err = allow_repo
@@ -282,8 +287,9 @@ def test_d8_allowlisted_uid_is_hardware(allow_repo):
     finally:
         dev.close()
     assert pid_ok
-    assert r and all(x.get("live_hardware") for x in r[-5:]), "allowlisted device: records should be live hardware"
+    assert r and all(x.get("live_hardware") for x in r[-5:]), "allowlisted device: records should be live (allowlisted)"
     assert badge in ALLOWLISTED_BADGES, badge
+    _assert_allowlisted_rendering(_LAST_DOM["d"])
 
 
 @pytest.mark.parametrize("uid", [OTHER_UID, None, ALLOWED_UID[:11], ALLOWED_UID + b"\x00", bytes(12),
@@ -363,12 +369,24 @@ def test_d8_ingest_with_allowlisted_uid_is_never_hardware(allow_repo, src):
     if src == "hardware":
         assert badge == "UNVERIFIED SOURCE", badge
     else:   # non-canonical spellings: rejected by the schema (NO DATA) or, if accepted, still not HARDWARE
-        assert badge != "HARDWARE", badge
+        assert badge not in ("HARDWARE", ALLOWLISTED_LABEL), badge
 
 
-# Badge texts that may stand for "allowlisted live serial device". T6 decision (verification_report §2d): the badge
-# SHOULD read "ALLOWLISTED DEVICE"; until UI implements it, the current "HARDWARE" text is also accepted here.
-ALLOWLISTED_BADGES = ("ALLOWLISTED DEVICE", "HARDWARE")
+# D8 label decision (T6, verification_report §2d; accepted by PM in d5374a1: R8, README rule 2, ARCHITECTURE).
+# The allowlisted live badge reads EXACTLY this; the bare word HARDWARE must never be the badge.
+ALLOWLISTED_LABEL = "ALLOWLISTED DEVICE (identity not authenticated)"
+ALLOWLISTED_BADGES = (ALLOWLISTED_LABEL,)
+ALLOWLISTED_BANNER_MUST = ("self-reported UID", "not cryptographic proof", "not hardware verification")
+
+
+def _assert_allowlisted_rendering(d):
+    badge, banner = _text(d, "sourceBadge"), (_text(d, "evidenceBanner") or "")
+    assert badge != "HARDWARE", "bare HARDWARE badge (D8 label decision): " + repr(badge)
+    assert badge == ALLOWLISTED_LABEL, badge
+    low = banner.lower()
+    missing = [m for m in ALLOWLISTED_BANNER_MUST if m.lower() not in low]
+    assert not missing, f"banner lacks {missing}: {banner!r}"
+    assert "verified device" not in low, f"banner presents the allowlist as verification: {banner!r}"
 
 
 def test_d8_F11_spoof_virtual_pty_inav_mkf4_with_allowlisted_uid_passes_allowlist(allow_repo):
@@ -386,5 +404,6 @@ def test_d8_F11_spoof_virtual_pty_inav_mkf4_with_allowlisted_uid_passes_allowlis
     finally:
         dev.close()
     assert pid_ok
-    assert badge in ALLOWLISTED_BADGES, f"spoof not reproduced: badge {badge!r}"
+    assert badge in ALLOWLISTED_BADGES, f"spoof not reproduced or label not as decided: badge {badge!r}"
+    _assert_allowlisted_rendering(_LAST_DOM["d"])
     assert r and r[-1].get("live_hardware") is True and r[-1].get("device_verified") is True, r[-1] if r else None

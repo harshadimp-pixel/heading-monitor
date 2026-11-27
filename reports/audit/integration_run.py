@@ -8,7 +8,12 @@ ROOT, OUT = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
 os.makedirs(OUT, exist_ok=True)
 PY = sys.executable
 RESULTS = []
-MAP = {"sim": "SIMULATED", "replay": "REPLAY", "hardware": "HARDWARE"}
+# Summary-text mapping only (not a pass criterion). D8: plain "hardware" is never displayed as such; it is either
+# UNVERIFIED SOURCE or, for an allowlisted device on the app's own serial source, ALLOWLISTED_LABEL.
+MAP = {"sim": "SIMULATED", "replay": "REPLAY", "hardware": "UNVERIFIED SOURCE or ALLOWLISTED DEVICE"}
+# D8 label decision (T6, accepted by PM d5374a1): the allowlisted live badge reads exactly this, never bare HARDWARE.
+ALLOWLISTED_LABEL = "ALLOWLISTED DEVICE (identity not authenticated)"
+ALLOWLISTED_BANNER_MUST = ("self-reported UID", "not cryptographic proof", "not hardware verification")
 
 def rec(step, cmd, ok, summary, raw):
     RESULTS.append({"step": step, "cmd": cmd, "pass": bool(ok), "summary": summary, "raw": raw[-3000:]})
@@ -142,7 +147,7 @@ finally:
     out = a.close()
 rec("A3b capture replay -> app", a.cmdline().replace(OUT + "/", "<out>/"), ok, summ, out)
 
-# ---------- A4: fake-FC MSP stream through firmware_bridge into the app (ingest); badge must be SIMULATED, never HARDWARE
+# ---------- A4: fake-FC MSP stream through firmware_bridge into the app (ingest); badge must be SIMULATED, never live / allowlisted / UNVERIFIED
 a = App("--source", "ingest", "--stale", "30")
 try:
     bridge = subprocess.Popen([PY, "-m", "firmware_bridge", "--fake-fc", "--count", "100"], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -216,7 +221,7 @@ try:
     r = a.hist() if alive else []
     ok = a.pid_ok and alive and st.get("source_status", {}).get("state") in ("fault", "ended", "error") and not r and st.get("sensor_status") != "OK"
     summ = (f"pid_ok={a.pid_ok} app alive={alive} source_status={st.get('source_status')} sensor_status={st.get('sensor_status')} "
-            f"records={len(r)} (no HARDWARE samples fabricated)")
+            f"records={len(r)} (no live or allowlisted samples fabricated)")
 finally:
     out = a.close()
 pb = subprocess.run([PY, "-m", "firmware_bridge", "--port", "/dev/ttyT6_DOES_NOT_EXIST"], cwd=ROOT, capture_output=True, text=True, timeout=30)
@@ -251,7 +256,7 @@ try:
             f"transport={sorted({str(x.get('transport')) for x in r})} live_hardware_true={len(lives)} -> badgeInfo (app's headingmath.js in Node)={badges}")
 finally:
     out = a.close()
-rec("A8 app replay of a hardware-labelled log: badge must not read HARDWARE", a.cmdline().replace(OUT + "/", "<out>/"), ok, summ, out)
+rec("A8 app replay of a hardware-labelled log: badge must be REPLAY (recorded hardware), never live/allowlisted", a.cmdline().replace(OUT + "/", "<out>/"), ok, summ, out)
 
 # ---------- A9: UI render check in headless Chrome (sim and ingest-with-warning)
 chrome = os.environ.get("CHROME") or next((shutil.which(c) for c in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser") if shutil.which(c)), None)
@@ -355,7 +360,7 @@ try:
     wait(lambda: a.status()["source_status"]["state"] == "ended", 15)
     r = a.hist(); st = a.status(); nb = node_badges(r)
     rows = [(x.get("t"), x.get("source"), x.get("original_source"), x.get("transport"), x.get("live_hardware"), (b or {}).get("text")) for x, b in zip(r, nb)]
-    bad = [row for row in rows if row[1] == "hardware" or row[4] or row[5] in ("HARDWARE", "UNVERIFIED SOURCE")]
+    bad = [row for row in rows if row[1] == "hardware" or row[4] or row[5] in ("HARDWARE", ALLOWLISTED_LABEL, "UNVERIFIED SOURCE")]
     ok = a.pid_ok and not bad and len(r) + st["counts"]["invalid"] == len(variants)
     summ = (f"pid_ok={a.pid_ok} lines={len(variants)} accepted={len(r)} invalid={st['counts']['invalid']} last_error={st.get('last_error')!r}; "
             f"records (t, source, original_source, transport, live_hardware, badge)={rows}; violations={bad}")
@@ -392,8 +397,8 @@ finally:
 rec("A10b ingest of source=hardware (+ injected transport=serial) -> UNVERIFIED SOURCE, never live", a.cmdline() + " ; POST hardware samples ; dump-dom", ok, summ, out)
 
 # A10c-A10g (D8, ARCHITECTURE 1bef73e): a serial connection is NOT proof of hardware. L-SER is withdrawn.
-# A10c FAILS whenever the product fake FC on a virtual pty shows HARDWARE or any live record; it must show SIMULATED.
-# A10d/e: unknown or unidentified device -> UNVERIFIED SOURCE. A10f: allowlisted UID -> HARDWARE (the only way).
+# A10c FAILS whenever the product fake FC on a virtual pty shows a live/allowlisted badge (or bare HARDWARE) or any live record; it must show SIMULATED.
+# A10d/e: unknown or unidentified device -> UNVERIFIED SOURCE. A10f: allowlisted UID -> ALLOWLISTED_LABEL (the only live path; F11 demo).
 # A10g: non-allowlisted UID with a non-empty allowlist -> UNVERIFIED SOURCE.
 try:
     import serial  # noqa: F401
@@ -401,7 +406,7 @@ try:
 except Exception:
     have_serial = False
 
-def serial_case(step, root, dev, want_badge, want_live, want_sources=None, extra=""):
+def serial_case(step, root, dev, want_badge, want_live, want_sources=None, extra="", banner_must=(), banner_must_not=()):
     a = App("--source", f"serial:{dev.port}", "--stale", "60", root=root)
     try:
         wait(lambda: len(a.hist()) > 10, 25)
@@ -411,6 +416,9 @@ def serial_case(step, root, dev, want_badge, want_live, want_sources=None, extra
         srcs = sorted({x["source"] for x in r}); lives = sum(bool(x.get("live_hardware")) for x in r)
         ok = a.pid_ok and len(r) > 10 and (badge in want_badge if isinstance(want_badge, tuple) else badge == want_badge) and (lives == len(r) if want_live else lives == 0)
         if want_sources is not None: ok = ok and srcs == want_sources
+        if banner_must or banner_must_not:
+            bl = (banner or "").lower()
+            ok = ok and all(m.lower() in bl for m in banner_must) and not any(m.lower() in bl for m in banner_must_not)
         summ = (f"pid_ok={a.pid_ok} port=<virtual pty> {extra} records={len(r)} sample.source={srcs} live_hardware_true={lives}/{len(r)} "
                 f"DOM sourceBadge={badge!r} (required {want_badge!r}) evidenceBanner={banner!r}")
         safe = re.sub(r"[^a-z0-9]+", "_", step.split(" ")[0].lower())
@@ -419,10 +427,26 @@ def serial_case(step, root, dev, want_badge, want_live, want_sources=None, extra
         out = a.close(); dev.close()
     rec(step, a.cmdline().replace(dev.port, "<pty>"), ok, summ, out)
 
+shipped_p = os.path.join(ROOT, "config", "verified_devices.json")
+try:
+    shipped = json.load(open(shipped_p)) if os.path.exists(shipped_p) else None
+except ValueError:
+    shipped = "MALFORMED"
+shipped_entries = (shipped.get("devices") if isinstance(shipped, dict) else shipped) if shipped not in (None, "MALFORMED") else None
+rec("A10h D8: shipped config/verified_devices.json exists and is empty", "cat config/verified_devices.json", shipped_entries == [],
+    f"exists={shipped is not None} entries={shipped_entries!r}", json.dumps(shipped))
+
+D8_SERIAL_STEPS = ["A10c D8: product fake FC on a virtual pty via serial: SIMULATED",
+                   "A10d D8: unknown device via serial: UNVERIFIED SOURCE",
+                   "A10e D8: unidentified device via serial: UNVERIFIED SOURCE",
+                   "A10f D8/F11: emulator reporting an allowlisted UID: allowlisted label (limitation demonstration)",
+                   "A10g D8: non-allowlisted UID: UNVERIFIED SOURCE",
+                   "A10i D8: forged ingest claims into a serial app with a non-empty allowlist: never live"]
+
 if have_serial and hasattr(os, "openpty"):
     sys.path.insert(0, os.path.join(ROOT, "tests")); sys.path.insert(0, ROOT)
     from t6_msp_device import MSPDevice, ProductFakeFCOnPty
-    serial_case("A10c D8: product fake FC on a virtual pty via serial: must be SIMULATED, never HARDWARE/live", ROOT,
+    serial_case("A10c D8: product fake FC on a virtual pty via serial: must be SIMULATED, never live/allowlisted/HARDWARE", ROOT,
                 ProductFakeFCOnPty(), "SIMULATED", False, ["sim"], "device=firmware_bridge.fake_fc.FakeFC() (NO hardware)")
     serial_case("A10d D8: unknown device (INAV/MKH7, UID not listed) via serial: UNVERIFIED SOURCE", ROOT,
                 MSPDevice(variant="INAV", board="MKH7", uid=bytes([0x99] * 12)), "UNVERIFIED SOURCE", False, None, "device=T6 MSPDevice")
@@ -435,30 +459,73 @@ if have_serial and hasattr(os, "openpty"):
     dev.close()
     ids = [((json.loads(l).get("meta") or {}).get("device_identity") or {}) for l in bp.stdout.splitlines() if l.startswith("{")]
     uids = sorted({i.get("uid") for i in ids if i.get("uid")})
-    shipped_p = os.path.join(ROOT, "config", "verified_devices.json")
-    shipped = json.load(open(shipped_p)) if os.path.exists(shipped_p) else None
-    shipped_entries = (shipped if isinstance(shipped, list) else [v for k, v in (shipped or {}).items() if isinstance(v, list) for v in v]) if shipped is not None else None
-    rec("A10h D8: shipped config/verified_devices.json exists and is empty", f"cat config/verified_devices.json", shipped_entries == [],
-        f"exists={shipped is not None} entries={shipped_entries!r}", json.dumps(shipped))
     if len(uids) == 1:
         import tempfile
         tmpd = tempfile.mkdtemp(prefix="t6_d8_int_")
         root2 = os.path.join(tmpd, "repo")
         shutil.copytree(ROOT, root2, ignore=shutil.ignore_patterns(".git", "__pycache__", "reports", "recordings"))
-        doc = list(uids) if isinstance(shipped, list) else {**(shipped or {}), "devices": [{"uid": uids[0], "label": "T6 temporary"}]}
         os.makedirs(os.path.join(root2, "config"), exist_ok=True)
-        json.dump(doc, open(os.path.join(root2, "config", "verified_devices.json"), "w"))
+        json.dump({"devices": [{"uid": uids[0], "label": "T6 temporary (emulator, NOT hardware)"}]},
+                  open(os.path.join(root2, "config", "verified_devices.json"), "w"))
         serial_case("A10f D8/F11: virtual pty emulator INAV/MKF4 reporting an allowlisted UID (temporary allowlist copy): passes the allowlist "
-                    "-> allowlisted live badge. LIMITATION DEMONSTRATION (UID match = administrative trust, not hardware authentication); NOT hardware validation", root2,
-                    MSPDevice(variant="INAV", board="MKF4", uid=uid_b), ("ALLOWLISTED DEVICE", "HARDWARE"), True, ["hardware"], f"uid={uids[0]} listed; NO hardware")
+                    f"-> badge must read exactly {ALLOWLISTED_LABEL!r} (never bare HARDWARE) with the decided banner. LIMITATION DEMONSTRATION "
+                    "(UID match = administrative trust, not hardware authentication); NOT hardware validation", root2,
+                    MSPDevice(variant="INAV", board="MKF4", uid=uid_b), ALLOWLISTED_LABEL, True, ["hardware"],
+                    f"uid={uids[0]} listed; NO hardware", banner_must=ALLOWLISTED_BANNER_MUST, banner_must_not=("verified device",))
         serial_case("A10g D8: non-allowlisted UID with a non-empty allowlist via serial: UNVERIFIED SOURCE", root2,
                     MSPDevice(variant="INAV", board="MKH7", uid=uid_b[:-1] + bytes([uid_b[-1] ^ 1])), "UNVERIFIED SOURCE", False, None, "uid one bit off")
+        # A10i: the serial app is running (unknown device feeding), and forged samples claiming the allowlisted UID,
+        # provenance 'verified', device_verified and live_hardware are POSTed to /api/sample. None may become live.
+        dev = MSPDevice(variant="INAV", board="MKH7", uid=bytes([0x99] * 12))
+        a = App("--source", f"serial:{dev.port}", "--stale", "60", root=root2)
+        posted = []; ok = False; summ = ""
+        try:
+            wait(lambda: len(a.hist()) > 5, 25)
+            for i in range(30):
+                body = {"t": 1000 + i * 0.05, "source": "hardware", "mag_uT": [25.0, -3.0, 43.0], "accel_g": [0, 0, -1],
+                        "live_hardware": True, "device_verified": True, "transport": "serial",
+                        "meta": {"provenance": "verified", "device_verified": True, "live_hardware": True,
+                                 "device_identity": {"self_reported": True, "fc_variant": "INAV", "board_id": "MKF4", "uid": uids[0]}}}
+                try: posted.append(http(a.port, "/api/sample", body))
+                except Exception as e: posted.append(repr(e))
+                time.sleep(0.03)
+            time.sleep(0.5)
+            d = dom(f"http://127.0.0.1:{a.port}/", lambda d: (text(d, "sourceBadge") or "NO DATA") != "NO DATA") if chrome else ""
+            r = a.hist()
+            forged = [x for x in r if (x.get("device_uid") or "").lower() == uids[0].lower()]
+            lives = sum(bool(x.get("live_hardware")) for x in r); ver = sum(bool(x.get("device_verified")) for x in r)
+            badge = text(d, "sourceBadge") if chrome else None
+            statuses = sorted({str(x.get("device_status")) for x in forged})
+            rejected = sum(1 for x in posted if isinstance(x, dict) and x.get("ok") is False)
+            accepted = sum(int(x.get("accepted") or 0) for x in posted if isinstance(x, dict))
+            errs = sorted({str(x.get("error"))[:90] for x in posted if isinstance(x, dict) and x.get("error")})
+            # pass = every forged POST is either refused by the app, or accepted but never verified/live/allowlisted
+            ok = a.pid_ok and len(r) > 5 and lives == 0 and ver == 0 and badge not in ("HARDWARE", ALLOWLISTED_LABEL) and rejected + accepted == len(posted)
+            summ = (f"pid_ok={a.pid_ok} posted={len(posted)} refused={rejected} accepted={accepted} refusal={errs} records={len(r)} "
+                    f"forged_records_seen={len(forged)} device_status(forged)={statuses} "
+                    f"live_hardware_true={lives} device_verified_true={ver} DOM sourceBadge={badge!r}")
+            if chrome: open(os.path.join(OUT, "ui_dom_a10i.html"), "w").write(d)
+        finally:
+            out = a.close(); dev.close()
+        rec("A10i D8: forged ingest claims (allowlisted UID + provenance verified + live_hardware) POSTed into a serial app with a non-empty allowlist: never live, never allowlisted",
+            a.cmdline().replace(dev.port, "<pty>") + " ; POST forged samples", ok, summ, out)
         shutil.rmtree(tmpd, ignore_errors=True)
     else:
-        rec("A10f D8: allowlisted UID via serial: HARDWARE", "-", False, f"NOT RUN: bridge reported no single meta.device_identity.uid ({uids!r}); D8 item 1 missing", bp.stderr[-1500:])
-        rec("A10g D8: non-allowlisted UID via serial: UNVERIFIED SOURCE", "-", False, "NOT RUN: depends on A10f UID discovery", "")
+        for st in D8_SERIAL_STEPS[3:]:
+            rec(st, "-", False, f"NOT RUN (counts as FAIL): bridge reported no single meta.device_identity.uid ({uids!r})", bp.stderr[-1500:])
 else:
-    rec("A10c D8 serial over virtual pty", "-", False, "NOT RUN: pyserial or openpty unavailable", "")
+    # pyserial / openpty missing: every D8 serial step is reported as FAIL (NOT RUN), never as a pass or a silent omission.
+    for st in D8_SERIAL_STEPS:
+        rec(st, "-", False, "NOT RUN (counts as FAIL): pyserial or os.openpty unavailable; install pyserial (requirements.txt optional entry)", "")
+
+# Global guard (D8 label decision): no rendered DOM in this run may show the bare word HARDWARE as the source badge.
+bare = []
+for fn in sorted(os.listdir(OUT)):
+    if fn.startswith("ui_dom_") and fn.endswith(".html"):
+        b = text(open(os.path.join(OUT, fn)).read(), "sourceBadge")
+        if (b or "").strip() == "HARDWARE": bare.append(fn)
+rec("A10z D8 label: no rendered sourceBadge in this run is the bare word 'HARDWARE'", "scan ui_dom_*.html", not bare,
+    f"dom_dumps_scanned={len([f for f in os.listdir(OUT) if f.startswith('ui_dom_')])} bare_HARDWARE={bare}", "")
 
 json.dump(RESULTS, open(os.path.join(OUT, "integration_results.json"), "w"), indent=1)
 print(f"TOTAL {sum(r['pass'] for r in RESULTS)}/{len(RESULTS)} passed")
