@@ -3,6 +3,7 @@ calibration wizard, recordings and reference heading. Thread-safe."""
 from __future__ import annotations
 
 import collections
+import functools
 import csv
 import datetime as dt
 import io
@@ -76,6 +77,10 @@ class Hub:
         self.stale_after_s = float(stale_after_s)
         self.source_spec = source_spec
         self.transport = source_spec.split(":")[0]
+        # D8 hardening: the ONLY trusted channel is this callable, handed to the app's own SerialSource by __main__.
+        # Anything else that calls emit() (POST /api/sample, tests, other code) is untrusted and can never verify.
+        self._serial_token = object()
+        self.source_emit = functools.partial(self.emit, _channel=self._serial_token)
         self.verified_uids, self.verified_info = load_verified_devices(verified_devices_path)
         self.core = CoreAdapter(declination_deg)
         self.history = collections.deque(maxlen=HISTORY_LEN)
@@ -101,8 +106,11 @@ class Hub:
         with self.lock:
             self.source_status = st
 
-    def emit(self, sample, error=None):
-        """Called by sources (and POST /api/sample). Returns error text or None."""
+    def emit(self, sample, error=None, _channel=None):
+        """Called by sources (and POST /api/sample). Returns error text or None.
+        Verification (device_verified / live_hardware) is computed HERE, never read from the sample: any
+        sample-supplied live_hardware, device_verified or meta.provenance claim is ignored unless the sample came
+        through self.source_emit on a serial hub AND its reported UID is in this app's own allowlist."""
         with self.lock:
             self.counts["received"] += 1
             if error:
@@ -117,6 +125,8 @@ class Hub:
             device = None
             if self.transport == "serial":          # D8: serial is not proof of hardware
                 sample, device = apply_serial_provenance(sample, self.verified_uids)
+                if _channel is not self._serial_token and device.get("verified"):
+                    device = dict(device, verified=False, status="untrusted_channel")
             now = time.monotonic()
             if self.paused or now < self.dropout_until:
                 self.counts["dropped_by_test_control"] += 1

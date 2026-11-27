@@ -217,7 +217,7 @@ function render() {
     else if (bi.live) evidText = "Live hardware samples from a verified device (serial; uid listed in config/verified_devices.json). Accuracy is not hardware-verified until the auditor signs off a committed log.";
     else if (r.transport === "serial")
       evidText = "[UNVERIFIED] Samples arrived over a serial link, but the device is not in config/verified_devices.json (" +
-                 ({ no_identity: "no device identity reported", no_uid: "no device UID reported", uid_not_listed: "UID not in the verified list", bridge_unverified: "the bridge did not report provenance verified" }[r.device_status] || "not verified") +
+                 ({ no_identity: "no device identity reported", no_uid: "no device UID reported", uid_not_listed: "UID not in the verified list", bridge_unverified: "the bridge did not report provenance verified", untrusted_channel: "the sample did not come from the app's own serial source" }[r.device_status] || "not verified") +
                  "). A serial connection is not proof of hardware. Board and variant are reported by device, not verified.";
     else evidText = `[UNVERIFIED] Samples are labelled "hardware" but arrived via ${r.transport || "an unknown transport"}, not a live serial source. They are not treated as live sensor data.`;
   }
@@ -234,7 +234,7 @@ function render() {
     $("deviceUid").textContent = rb(r.device_uid);
     $("deviceVerify").textContent = r.device_verified ? "UID listed in config/verified_devices.json"
       : r.device_status === "simulator" ? "device reports a simulator (SIML/SIMF)"
-      : "not verified (" + ({ no_identity: "no identity", no_uid: "no UID", uid_not_listed: "UID not in verified list", bridge_unverified: "bridge provenance not verified" }[r.device_status] || "unknown") + ")";
+      : "not verified (" + ({ no_identity: "no identity", no_uid: "no UID", uid_not_listed: "UID not in verified list", bridge_unverified: "bridge provenance not verified", untrusted_channel: "not from the app's own serial source" }[r.device_status] || "unknown") + ")";
   } else {
     devBox.hidden = true;
   }

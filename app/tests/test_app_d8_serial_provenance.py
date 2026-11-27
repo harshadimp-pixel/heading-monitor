@@ -144,7 +144,7 @@ def test_serial_paths_records_status_and_csv(serial_app):
              _hw(uid="ffffffffffffffffffffffff", variant="INAV", t=0.1),
              _hw(identity=False, t=0.2), _hw(variant="SIML", board="SIMF", t=0.3), _hw(variant="INAV", t=0.4)]
     for s in feeds:
-        assert hub.emit(s) is None
+        assert hub.source_emit(s) is None
     recs = get_json(serial_app.base + "/api/history")["records"]
     got = [(r["source"], r["device_status"], r["device_verified"], r["live_hardware"]) for r in recs]
     assert got == [("hardware", "verified", True, True), ("hardware", "uid_not_listed", False, False),
@@ -161,7 +161,7 @@ def test_serial_paths_records_status_and_csv(serial_app):
 def test_serial_default_allowlist_never_hardware():
     a = _InProc(None)                                   # default path: shipped empty / absent
     try:
-        a.hub.emit(_hw(uid=UID_OK, variant="INAV", board="MKF4", provenance="verified"))
+        a.hub.source_emit(_hw(uid=UID_OK, variant="INAV", board="MKF4", provenance="verified"))
         r = get_json(a.base + "/api/history")["records"][-1]
     finally:
         a.close()

@@ -144,6 +144,26 @@ Applied by the hub to every sample on the serial transport (`app/provenance.py`)
 5. UID listed but the bridge did not set `meta.provenance: "verified"` (or set nothing, e.g. an older bridge) →
    UNVERIFIED (`bridge_unverified`)
 6. otherwise → HARDWARE (`verified`, `live_hardware: true`).
+
+**Trust boundary (D8 hardening).** The sample's own claims are never trusted. `meta.provenance: "verified"`,
+`meta.live_hardware`, or top-level `live_hardware` / `device_verified` / `transport` / `device_status` in a sample
+cannot make it HARDWARE. The server builds each record from a fixed whitelist and computes `transport`,
+`device_status`, `device_verified` and `live_hardware` itself.
+
+Verification needs both of these:
+1. The sample arrived through `hub.source_emit`. That is the callable `__main__` hands only to the app's own
+   source, so for a serial hub it is the app's own `firmware_bridge` subprocess.
+2. The app re-checks the reported UID against its own allowlist (`--verified-devices`).
+
+A serial-hub sample that reaches `hub.emit` any other way gets `device_status: untrusted_channel` and is not verified.
+The bridge's `provenance: "verified"` is an extra necessary condition (rule 5). It can only remove HARDWARE, never
+grant it.
+
+The frontend's `badgeInfo` takes only the server-computed `record.transport` and `record.device_verified`. It never
+reads `meta`, `provenance` or `live_hardware`.
+
+The badge text is a single constant, `HARDWARE_LABEL` in `static/headingmath.js`. The Auditor is still deciding
+between HARDWARE and e.g. ALLOWLISTED DEVICE, so the label is unchanged for now.
 The allowlist is read with `firmware_bridge.identity.load_allowlist` (fail closed: missing/malformed = empty); a
 fail-closed mirror is used only if that module is not importable. `/api/status` shows `verified_devices` (path, count,
 loader) and `source_status.command` (the bridge command line, including `--verified-devices`). Replay (D6) and ingest
@@ -184,6 +204,26 @@ The headless smoke tests need no browser:
   replay is unchanged; ingest `hardware` is not live; the frontend `badgeInfo` mapping in Node. In headless Chrome:
   badge `REPLAY (recorded hardware)` with a banner that does not contain "Live"
   (`test_d6_replayed_hardware_log_shows_replay_badge_not_live`), and a replayed sim log stays SIMULATED.
+* D8 (`test_app_d8_serial_provenance.py`):
+  * allowlist loader fails closed; the shipped allowlist is empty;
+  * every serial rule: verified, `uid_not_listed`, `no_uid`, `no_identity`, `bridge_unverified`, and SIML/SIMF → sim;
+  * records and CSV;
+  * the default allowlist never gives HARDWARE;
+  * replay and ingest are unchanged;
+  * the bridge command line carries `--verified-devices <same file>`;
+  * end-to-end over a pty with the bridge's FakeFC (3 cases; these skip without pyserial).
+* D8 hardening (`test_app_d8_forged_claims.py`): samples claiming `provenance:"verified"` and `live_hardware:true`,
+  with an allowlisted UID:
+  * ingested → UNVERIFIED SOURCE;
+  * replayed hardware → `REPLAY (recorded hardware)`;
+  * simulated (ingest, replay or serial) → SIMULATED;
+  * serial with a UID not in the app's allowlist → UNVERIFIED;
+  * serial outside the app's own source → `untrusted_channel`;
+  * serial with an allowlisted UID → HARDWARE.
+  It also checks that the record never copies sample claims, that `app.js` reads no sample-claim fields, and that the
+  label is a single constant.
+* Headless Chrome D8 checks: `test_d8_serial_badges_and_reported_by_device_labels` and
+  `test_d8_forged_ingest_claims_show_unverified`.
 * `mag_raw` optional (`test_mag_raw_is_optional`), Unknown/stale (`test_ingest_unknown_until_data_then_stale_...`),
   replay + CSV export, JSONL recording, serial without hardware gives FAULT with no fabricated data, heading maths and
   wrap/deviation, stub fallback versus real-module errors.
@@ -235,6 +275,10 @@ The headless-Chrome DOM tests are deterministic:
     Human usability has not been assessed. The layout was checked at 1600 px width only.
 11. **D8 device identity is self-reported.** Board, variant, target and UID come from the device (MSP) and can be
     spoofed; a UID is not cryptographic proof. HARDWARE needs the bridge's `provenance: "verified"` AND the UID in
-    `config/verified_devices.json`, which ships empty, so today nothing displays HARDWARE. Identity is read once at
+    `config/verified_devices.json`, which ships empty, so today nothing displays HARDWARE.
+    "Verified" means only that a self-reported UID is on an administratively trusted list. It is not
+    authentication and not a check that the measurements are valid. Forged claims in the sample itself
+    (`provenance`, `live_hardware`) are ignored (tests: `test_app_d8_forged_claims.py`). A process that controls the
+    serial device can still report an allowlisted UID; that is outside what the app can detect. Identity is read once at
     connect. The `device_identity` key names follow docs/firmware/D8_PROVENANCE.md; ARCHITECTURE.md D8 does not
     list them. The bridge's Python loader is imported directly although ARCHITECTURE lists only its CLI.

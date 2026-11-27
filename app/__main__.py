@@ -49,7 +49,7 @@ def main(argv=None):
         with open(a.calibration) as f:
             hub.load_calibration(doc=json.load(f))
     try:
-        src = make_source(a.source, hub.emit, hub.on_source_status, rate=a.rate, seed=a.seed,
+        src = make_source(a.source, hub.source_emit, hub.on_source_status, rate=a.rate, seed=a.seed,
                           baud=a.baud, speed=a.speed, loop=a.loop,
                           sim_duration=a.sim_duration, verified_devices=a.verified_devices)
     except ValueError as e:

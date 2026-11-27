@@ -49,6 +49,18 @@ Demo metrics `[SIMULATED]` (from `reports/demo/demo_metrics.json`): mean |headin
 - New tests: `app/tests/test_app_d8_serial_provenance.py`, which includes a pty FakeFC end-to-end run that needs
   pyserial, plus a headless D8 badge/label test.
 
+### D8 hardening (after external review of `e538cea`)
+- The badge never trusts a sample's own claims: `meta.provenance: "verified"`, `meta.live_hardware`, or top-level
+  `live_hardware` / `device_verified` / `transport`.
+- The server builds each record from a whitelist and computes verification itself. A sample counts as verified only
+  when it arrived through `hub.source_emit`, the callable handed only to the app's own source, on a serial hub, AND
+  the app re-checks the reported UID against its own allowlist.
+- Any other caller gets `untrusted_channel`.
+- The frontend uses only the server's `transport` and `device_verified` fields.
+- The label is the single constant `HARDWARE_LABEL`. The Auditor is still deciding on the text.
+- Tests: `app/tests/test_app_d8_forged_claims.py` (12), plus the headless test
+  `test_d8_forged_ingest_claims_show_unverified`.
+
 ## 2. Tests actually executed
 All from the repo root. Environment: Python 3.13.5, pytest 9.2.0, numpy 2.5.5, jsonschema 4.26.0, google-chrome (headless), Node v24.22.1. Results copied from the console output.
 
@@ -108,6 +120,17 @@ Screenshots in this commit were produced by `/workspace/heading-monitor-runlogs/
 - `app/tests` in a venv with pyserial (`pip install -r requirements.txt`): 72 passed, ×3. No skips.
 - `app/tests/test_app_ui_headless.py`: 6 passed, ×5.
 - `tests/` (Auditor): 111 passed, 2 skipped.
+
+### D8 hardening runs (2026-11-27, 10:28–10:38 IST, real output)
+- `app/tests`, system python: 82 passed, 3 skipped, ×3. The 3 pty end-to-end tests skip because pyserial is missing.
+- `app/tests`, pyserial venv: 85 passed, ×3.
+- `app/tests/test_app_ui_headless.py`: 7 passed, ×5.
+- `tests/`: 111 passed, 2 skipped.
+- Whole repo, system python: 584 passed, 51 skipped.
+- `reports/audit/integration_run.py`, output to /tmp:
+  - pyserial venv: 35/35. A10a–A10h all passed, including A10f, the allowlisted-UID spoof demonstration.
+  - System python: 29/30. A10c did not run because pyserial is missing.
+- This is my own run of the Auditor's script, not the Auditor's sign-off.
 
 ## 3. Open limitations
 Full text in `app/README.md` → LIMITATIONS (mirrored in the T5 row):

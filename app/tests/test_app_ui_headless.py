@@ -130,7 +130,7 @@ def test_d8_serial_badges_and_reported_by_device_labels(tmp_path):
         with HeadlessPage(base + "/") as page:
             page.wait_for("window.__hmProbe && window.__hmProbe().connected")
             for name, s in cases:
-                assert hub.emit(s) is None
+                assert hub.source_emit(s) is None
                 page.wait_for(_rendered(get_json(base + "/api/history")["records"][-1]["seq"]))
                 out[name] = page.texts(ids)
                 out[name]["hidden"] = page.eval("document.getElementById('deviceIdentity').hidden")
@@ -150,3 +150,28 @@ def test_d8_serial_badges_and_reported_by_device_labels(tmp_path):
     assert "no identity" in x["deviceVerify"]
     assert sm["sourceBadge"] == "SIMULATED" and sm["deviceVariant"] == "SIML (reported by device)"
     assert sm["deviceBoard"] == "SIMF (reported by device)" and "simulator" in sm["deviceVerify"]
+
+
+def test_d8_forged_ingest_claims_show_unverified(tmp_path):
+    """D8 hardening in the browser: an ingested 'hardware' sample that claims meta.provenance 'verified',
+    live_hardware true and an allowlisted UID (in the app's own --verified-devices file) still shows
+    UNVERIFIED SOURCE, never HARDWARE or a 'Live' banner, and no device-identity box (not a serial sample)."""
+    import json
+    uid = "0123456789abcdef01234567"
+    allow = tmp_path / "verified_devices.json"
+    allow.write_text(json.dumps({"devices": [{"uid": uid, "label": "pytest"}]}))
+    s = sample(0.0, 200.0, source="hardware")
+    s["meta"] = {"provenance": "verified", "live_hardware": True, "device_verified": True,
+                 "device_identity": {"uid": uid, "fc_variant": "INAV", "board_id": "MKF4"}}
+    s.update(live_hardware=True, device_verified=True, transport="serial")
+    with run_app("--source", "ingest", "--stale", "30", "--verified-devices", str(allow)) as (base, _):
+        with HeadlessPage(base + "/") as page:
+            page.wait_for("window.__hmProbe && window.__hmProbe().connected")
+            code, body = post_json(base + "/api/sample", s)
+            assert code == 200 and body["ok"], body
+            page.wait_for(_rendered(get_json(base + "/api/history")["records"][-1]["seq"]))
+            t = page.texts(["sourceBadge", "evidenceBanner"])
+            hidden = page.eval("document.getElementById('deviceIdentity').hidden")
+    assert t["sourceBadge"] == "UNVERIFIED SOURCE"
+    assert "HARDWARE" not in t["sourceBadge"].replace("UNVERIFIED SOURCE", "") and "Live" not in t["evidenceBanner"]
+    assert "not treated as live" in t["evidenceBanner"] and hidden is True

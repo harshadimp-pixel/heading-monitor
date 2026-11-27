@@ -2,13 +2,17 @@
 (function (root) {
   "use strict";
   const CARD16 = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
-  const SOURCE_LABEL = { sim: "SIMULATED", replay: "REPLAY", hardware: "HARDWARE" };
+  /** Text of the one badge that means "allowlisted device on the app's own serial link" (D8). Single constant so the
+   *  pending Auditor decision (HARDWARE vs e.g. "ALLOWLISTED DEVICE") is a one-line change. */
+  const HARDWARE_LABEL = "HARDWARE";
+  const SOURCE_LABEL = { sim: "SIMULATED", replay: "REPLAY", hardware: HARDWARE_LABEL };
   /** DATA SOURCE badge text: a pure mapping of sample.source; anything else -> null (UI shows NO DATA) */
   function badgeLabel(source) { return Object.prototype.hasOwnProperty.call(SOURCE_LABEL, source) ? SOURCE_LABEL[source] : null; }
   const ORIGIN_WORD = { hardware: "hardware", sim: "simulator" };
   /** Displayed badge (D6). Derived from sample.source (+ meta.original_source, + the transport that delivered it).
    *  - sim                      -> SIMULATED
    *  - replay + original_source -> "REPLAY (recorded hardware)" / "REPLAY (recorded simulator)"; else "REPLAY"
+   *  Inputs must be SERVER-computed record fields (record.transport, record.device_verified); never sample/meta claims.
    *  - hardware via serial AND deviceVerified === true (uid in config/verified_devices.json, D8) -> HARDWARE
    *    (the ONLY path that shows HARDWARE / live; a serial link alone is not proof of hardware)
    *  - hardware any other way (serial unverified, replay, ingest, unknown) -> "UNVERIFIED SOURCE"
@@ -22,7 +26,7 @@
       return { text: w ? `REPLAY (recorded ${w})` : "REPLAY", cls: "replay", live: false };
     }
     if (source === "hardware") {
-      return transport === "serial" && deviceVerified === true ? { text: "HARDWARE", cls: "hardware", live: true }
+      return transport === "serial" && deviceVerified === true ? { text: HARDWARE_LABEL, cls: "hardware", live: true }
                                     : { text: "UNVERIFIED SOURCE", cls: "unverified", live: false };
     }
     return { text: base, cls: source, live: false };
@@ -37,6 +41,6 @@
   /** level heading (NED body: x fwd, y right, z down) = atan2(-By, Bx) */
   function levelHeading(bx, by) { return wrap360(Math.atan2(-by, bx) * 180 / Math.PI); }
   function cardinal(h) { return isNum(h) ? CARD16[Math.round(roundHeading(h) / 22.5) % 16] : ""; }
-  const api = { SOURCE_LABEL, badgeLabel, badgeInfo, wrap360, angleDiff, roundHeading, levelHeading, cardinal, isNum };
+  const api = { HARDWARE_LABEL, SOURCE_LABEL, badgeLabel, badgeInfo, wrap360, angleDiff, roundHeading, levelHeading, cardinal, isNum };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.HeadingMath = api;
 })(this);
